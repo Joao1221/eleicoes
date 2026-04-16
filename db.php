@@ -2,7 +2,7 @@
 $host = 'sql308.infinityfree.com';
 $user = 'if0_41682016';
 $pass = 'egTva023SR';
-$db = 'eleicoes';
+$db = 'if0_41682016_eleicoes';
 
 /*
 $host = 'localhost';

@@ -777,12 +777,75 @@
             color: var(--text);
         }
 
-        .summary-card.positive { border-left: 3px solid var(--success); }
         .summary-card.negative { border-left: 3px solid var(--danger); }
         .summary-card.accent { border-left: 3px solid var(--highlight); }
+
+        /* ========== LOADING OVERLAY ========== */
+        #loadingOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 12, 20, 0.75);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        #loadingOverlay.visible {
+            display: flex;
+            opacity: 1;
+        }
+        .loading-spinner {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 0%, var(--highlight) 100%);
+            mask: radial-gradient(farthest-side, transparent calc(100% - 6px), black calc(100% - 6px));
+            -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), black calc(100% - 6px));
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loading-bar {
+            width: 200px;
+            height: 3px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+        .loading-bar-inner {
+            height: 100%;
+            width: 40%;
+            background: linear-gradient(90deg, var(--highlight), var(--accent));
+            border-radius: 99px;
+            animation: loadbar 1.2s ease-in-out infinite;
+        }
+        @keyframes loadbar {
+            0%   { transform: translateX(-100%); }
+            100% { transform: translateX(350%); }
+        }
+        .loading-text {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.5);
+            letter-spacing: 0.05em;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-bar"><div class="loading-bar-inner"></div></div>
+        <div class="loading-text" id="loadingText">Carregando dados...</div>
+    </div>
+
     <header class="header">
         <h1>Painel Estatístico - Eleições Sergipe 2022</h1>
         <p>Resultados detalhados por candidato, partido e município | Dados TSE</p>
@@ -961,6 +1024,7 @@
             }
 
             const url = parts.join('&');
+            showLoading('Buscando candidatos...');
             fetch(url)
                 .then(r => r.json())
                 .then(data => {
@@ -976,6 +1040,7 @@
                 })
                 .catch(() => {})
                 .finally(() => {
+                    hideLoading();
                     // After loading candidates for the cargo, refresh the main view
                     loadData();
                 });
@@ -1671,6 +1736,23 @@
             return new Intl.NumberFormat('pt-BR').format(num);
         }
 
+        let _loadingCount = 0;
+        function showLoading(msg) {
+            _loadingCount++;
+            const overlay = document.getElementById('loadingOverlay');
+            document.getElementById('loadingText').textContent = msg || 'Carregando dados...';
+            overlay.style.display = 'flex';
+            requestAnimationFrame(() => overlay.classList.add('visible'));
+        }
+        function hideLoading() {
+            _loadingCount = Math.max(0, _loadingCount - 1);
+            if (_loadingCount === 0) {
+                const overlay = document.getElementById('loadingOverlay');
+                overlay.classList.remove('visible');
+                setTimeout(() => { if (!overlay.classList.contains('visible')) overlay.style.display = 'none'; }, 200);
+            }
+        }
+
         async function loadData() {
             const paramsObj = {
                 cargo: document.getElementById('cargoFilter').value,
@@ -1686,6 +1768,8 @@
 
             const cargoVal = paramsObj.cargo;
             const candidatoVal = paramsObj.candidato;
+
+            showLoading(cargoVal ? 'Carregando ' + cargoVal + '...' : 'Carregando dados...');
 
             // PERFORMANCE & FEATURE FIX: Allow viewing an unelected specific candidate without bogging down the database.
             if (!isEleitos && candidatoVal && candidatoVal !== 'Todos') {
@@ -1716,6 +1800,7 @@
                     if (document.getElementById('municipiosStatsSection')) {
                         document.getElementById('municipiosStatsSection').style.display = 'none';
                     }
+                    hideLoading();
                     return;
                 }
 
@@ -1747,8 +1832,10 @@
                 );
                 updateDetalheCandidato(data.detalheCandidato, data.votosPorMunicipio || []);
 
+                hideLoading();
                 // Titles handled by server UI payload when needed
             } catch (error) {
+                hideLoading();
                 console.error(error);
                 updateStats({});
                 updateModePanel({}, []);
