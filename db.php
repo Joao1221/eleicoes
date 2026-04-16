@@ -1,8 +1,15 @@
 <?php
+$host = 'sql308.infinityfree.com';
+$user = 'if0_41682016';
+$pass = 'egTva023SR';
+$db = 'eleicoes';
+
+/*
 $host = 'localhost';
 $user = 'root';
 $pass = '';
 $db = 'eleicoes';
+*/
 
 // Conexão com opções de performance
 $conn = new mysqli($host, $user, $pass, $db);

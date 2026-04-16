@@ -2,7 +2,8 @@
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 
-$conn = new mysqli('localhost', 'root', '', 'eleicoes');
+require_once __DIR__ . '/db.php';
+
 if ($conn->connect_error) {
     http_response_code(500);
     echo json_encode([
@@ -12,7 +13,6 @@ if ($conn->connect_error) {
     exit;
 }
 
-$conn->set_charset('utf8mb4');
 
 function queryAll(mysqli $conn, string $sql): array {
     $result = $conn->query($sql);
