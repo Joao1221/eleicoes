@@ -1,0 +1,11 @@
+# Ignore system/IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Ignore logs
+*.log
+
+# Ignore local config overrides
+config.local.php
