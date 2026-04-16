@@ -101,6 +101,8 @@
             border-radius: 8px;
             color: var(--text);
             font-size: 0.95rem;
+            width: 100%;
+            max-width: 100%;
             cursor: pointer;
             transition: all 0.3s ease;
         }
@@ -902,6 +904,19 @@
             .table-header h3 {
                 font-size: 1rem;
             }
+            td {
+                font-size: 0.75rem; /* Smaller font for tables on mobile */
+                padding: 0.5rem 0.75rem;
+            }
+            th {
+                font-size: 0.65rem;
+                padding: 0.5rem 0.75rem;
+            }
+            .insight-name { font-size: 0.9rem; }
+            .insight-total { font-size: 1.1rem; }
+            .highlight-item { font-size: 0.8rem; }
+            .detalhe-candidato-card h2 { font-size: 1.2rem; }
+            .detalhe-candidato-card h3 { font-size: 1rem; }
         }
 
         @media (max-width: 480px) {
