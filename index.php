@@ -837,6 +837,132 @@
             letter-spacing: 0.05em;
             font-weight: 500;
         }
+
+        /* ========== RESPONSIVE / MOBILE OPTIMIZATION ========== */
+        @media (max-width: 1024px) {
+            .container {
+                padding: 1.5rem;
+            }
+            .regioes-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 1.5rem 1rem;
+            }
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            .container {
+                padding: 1rem;
+            }
+            .filters {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            .insights-grid {
+                grid-template-columns: 1fr;
+            }
+            .detalhe-header {
+                flex-direction: column;
+                text-align: center;
+                gap: 1rem;
+            }
+            .detalhe-avatar {
+                margin: 0 auto;
+            }
+            .voto-municipio-item {
+                grid-template-columns: 1fr auto;
+                gap: 0.5rem;
+            }
+            .voto-mun-bar {
+                display: none; /* Hide bars on very small screens to save space */
+            }
+            .filter-summary-cards {
+                flex-wrap: wrap;
+                justify-content: center;
+                width: 100%;
+            }
+            .summary-card {
+                flex: 1 1 calc(50% - 0.75rem);
+                min-width: 140px;
+            }
+            
+            /* Comparative Table Adjustments */
+            .table-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            .table-header h3 {
+                font-size: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.25rem;
+                gap: 0.5rem;
+            }
+            .header h1::before {
+                height: 24px;
+                width: 6px;
+            }
+            .stat-card .value {
+                font-size: 1.5rem;
+            }
+            .summary-card {
+                flex: 1 1 100%;
+            }
+            .turno-tab {
+                padding: 0.6rem 1rem;
+                font-size: 0.8rem;
+                flex: 1;
+                text-align: center;
+            }
+            .turno-tabs {
+                width: 100%;
+            }
+        }
+
+        /* Touch Optimizations */
+        select, button, .turno-tab, .municipio-card {
+            min-height: 44px; /* Standard touch target height */
+        }
+
+        /* Dynamic Grid and Flex Utilities */
+        .insight-grid-dynamic {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1rem;
+        }
+
+        .comparison-filters {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 1.5rem;
+            flex-wrap: wrap; /* Changed from nowrap to wrap for mobile */
+        }
+
+        @media (max-width: 768px) {
+            .insight-grid-dynamic {
+                grid-template-columns: 1fr;
+            }
+            .comparison-filters {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            .comparison-filters > div {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1333,9 +1459,9 @@
             });
             html += '</div>'; // end grid
 
-            // Análise por candidato (mais detalhada) - use insights from 1º turno
+            // Massificação: por região, calcular diferença de votos (2º - 1º) por candidato
             html += '<div style="margin-top:1rem"><h3>Análise Detalhada por Candidato</h3>'; 
-            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem">';
+            html += '<div class="insight-grid-dynamic">';
             const insights1 = data1.candidateInsights || [];
             const insights2 = data2.candidateInsights || [];
             [winner, runner].forEach(c => {
@@ -1385,7 +1511,7 @@
                 html += '</div>';
 
                 // two columns for winner and runner with vote differences
-                html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-top:0.75rem">';
+                html += '<div class="insight-grid-dynamic" style="grid-template-columns:repeat(2,1fr);margin-top:0.75rem">'; // Uses utility but forces 2 col on large, stacks on mobile via media query override if needed
                 [winner, runner].forEach(cand => {
                     if (!cand) return;
                     const name = cand.nm_candidato;
@@ -1434,7 +1560,7 @@
                 const candB = runner ? runner.nm_candidato : null;
                 html += '<div style="margin-top:1rem; margin-bottom: 100px;"><h3>Tabela — Votos por Município (1º vs 2º turno)</h3>';
                 // filtros para a tabela (usam .filter-group para herdar estilos)
-                html += '<div style="margin-top:0.75rem; display:flex; justify-content:space-between; align-items:flex-end; gap:1.5rem; flex-wrap:nowrap;">';
+                html += '<div class="comparison-filters" style="margin-top:0.75rem;">';
                 html += '<div style="display:flex; gap:0.75rem; align-items:flex-end;">';
                 html += '<div class="filter-group" style="margin:0">';
                 html += '<label>Candidato</label>';
