@@ -783,61 +783,105 @@
         .summary-card.negative { border-left: 3px solid var(--danger); }
         .summary-card.accent { border-left: 3px solid var(--highlight); }
 
-        /* ========== LOADING OVERLAY ========== */
+        /* ========== MODERN LOADING OVERLAY ========== */
         #loadingOverlay {
             position: fixed;
             inset: 0;
-            background: rgba(10, 12, 20, 0.75);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
+            background: linear-gradient(135deg, #0a0a14 0%, #1a1a2e 50%, #0f1219 100%);
             z-index: 9999;
             display: none;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 1.5rem;
+            gap: 0;
             opacity: 0;
-            transition: opacity 0.2s ease;
+            transition: opacity 0.3s ease;
         }
         #loadingOverlay.visible {
             display: flex;
             opacity: 1;
         }
-        .loading-spinner {
-            width: 56px;
-            height: 56px;
+        .loader-container {
+            position: relative;
+            width: 120px;
+            height: 120px;
+        }
+        .loader-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
             border-radius: 50%;
-            background: conic-gradient(from 0deg, transparent 0%, var(--highlight) 100%);
-            mask: radial-gradient(farthest-side, transparent calc(100% - 6px), black calc(100% - 6px));
-            -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), black calc(100% - 6px));
-            animation: spin 0.8s linear infinite;
+            border: 3px solid transparent;
+        }
+        .loader-ring-1 {
+            border-top-color: var(--highlight);
+            border-right-color: var(--highlight);
+            animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+        .loader-ring-2 {
+            top: 15px;
+            left: 15px;
+            width: 90px;
+            height: 90px;
+            border-top-color: var(--accent);
+            border-right-color: var(--accent);
+            animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite reverse;
+        }
+        .loader-ring-3 {
+            top: 30px;
+            left: 30px;
+            width: 60px;
+            height: 60px;
+            border-top-color: var(--success);
+            animation: spin 0.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+        .loader-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            background: var(--highlight);
+            border-radius: 50%;
+            box-shadow: 0 0 20px var(--highlight), 0 0 40px var(--highlight);
+            animation: pulse 1.5s ease-in-out infinite;
         }
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
-        .loading-bar {
-            width: 200px;
-            height: 3px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 99px;
-            overflow: hidden;
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.7; }
         }
-        .loading-bar-inner {
-            height: 100%;
-            width: 40%;
-            background: linear-gradient(90deg, var(--highlight), var(--accent));
-            border-radius: 99px;
-            animation: loadbar 1.2s ease-in-out infinite;
+        .loading-content {
+            margin-top: 2rem;
+            text-align: center;
         }
-        @keyframes loadbar {
-            0%   { transform: translateX(-100%); }
-            100% { transform: translateX(350%); }
+        .loading-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.02em;
         }
-        .loading-text {
-            font-size: 0.85rem;
-            color: rgba(255,255,255,0.5);
-            letter-spacing: 0.05em;
-            font-weight: 500;
+        .loading-dots {
+            display: inline-flex;
+            gap: 0.3rem;
+        }
+        .loading-dots span {
+            width: 6px;
+            height: 6px;
+            background: var(--highlight);
+            border-radius: 50%;
+            animation: dotPulse 1.4s ease-in-out infinite;
+        }
+        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotPulse {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1); opacity: 1; }
         }
 
         /* ========== RESPONSIVE / MOBILE OPTIMIZATION ========== */
@@ -983,14 +1027,28 @@
 <body>
     <!-- Loading Overlay -->
     <div id="loadingOverlay">
-        <div class="loading-spinner"></div>
-        <div class="loading-bar"><div class="loading-bar-inner"></div></div>
-        <div class="loading-text" id="loadingText">Carregando dados...</div>
+        <div class="loader-container">
+            <div class="loader-ring loader-ring-1"></div>
+            <div class="loader-ring loader-ring-2"></div>
+            <div class="loader-ring loader-ring-3"></div>
+            <div class="loader-center"></div>
+        </div>
+        <div class="loading-content">
+            <div class="loading-title" id="loadingText">Carregando dados</div>
+            <div class="loading-dots">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
     </div>
 
     <header class="header">
         <h1>Painel Estatístico - Eleições Sergipe 2022</h1>
         <p>Resultados detalhados por candidato, partido e município | Dados TSE</p>
+        <p style="margin-top: 1rem;">
+            <a href="eleicoes_municipais_se.php" style="display:inline-flex;align-items:center;gap:.6rem;padding:.85rem 1.2rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:999px;color:#fff;text-decoration:none;font-weight:600;backdrop-filter:blur(8px);">
+                Eleições municipais - SE
+            </a>
+        </p>
     </header>
 
     <div class="container">
@@ -1017,6 +1075,12 @@
                 <select id="candidatoFilter" onchange="loadData()">
                     <option value="">Selecione</option>
                     <option value="Todos">Todos</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Partido</label>
+                <select id="partidoFilter" onchange="loadData()">
+                    <option value="">Todos os Partidos</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -1195,7 +1259,7 @@
             document.getElementById('totalPartidos').textContent = formatNumber(stats.total_partidos || 0);
         }
 
-        function updateCandidatosTable(candidatos) {
+        function updateCandidatosTable(candidatos, insights = []) {
             const tbody = document.getElementById('candidatosTable');
             if (!candidatos || candidatos.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">Nenhum resultado encontrado</td></tr>';
@@ -1231,8 +1295,11 @@
                     const rankClass = idx + 1 <= 3 ? 'rank-' + (idx + 1) : 'rank-other';
                     const statusClass = c.situacao && c.situacao.includes('ELEITO') ? 'status-electo' : 'status-nao-electo';
                     
+                    const insight = insights.find(i => i.nm_candidato === c.nm_candidato && i.cargo === c.cargo);
+                    const strongestCity = insight && insight.strongest_city ? insight.strongest_city.municipio : '-';
+                    
                     html += '<tr>';
-                    html += '<td><span class="rank-number ' + rankClass + '">' + (idx + 1) + '</span></td>';
+                    html += '<td><span class="rank-number ' + rankClass + '">' + (idx + 1) + '</span> • ' + strongestCity + '</td>';
                     html += '<td>' + (c.nm_urna_candidato || c.nm_candidato) + '</td>';
                     html += '<td><span class="party-badge">' + (c.sg_partido || '-') + '</span></td>';
                     html += '<td style="font-size: 0.75rem; color: var(--text-muted);">' + c.cargo + '</td>';
@@ -1895,11 +1962,35 @@
             }
         }
 
+        async function loadPartidos() {
+            const partidoSelect = document.getElementById('partidoFilter');
+            if (!partidoSelect) return;
+            
+            try {
+                const response = await fetch('api.php?only_partidos=1');
+                const data = await response.json();
+                
+                partidoSelect.innerHTML = '<option value="">Todos os Partidos</option>';
+                
+                if (data.partidos) {
+                    data.partidos.forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = p.sg_partido;
+                        option.textContent = p.sg_partido + ' (' + formatNumber(p.votos) + ')';
+                        partidoSelect.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                console.error('Erro ao carregar partidos:', e);
+            }
+        }
+
         async function loadData() {
             const paramsObj = {
                 cargo: document.getElementById('cargoFilter').value,
                 candidato: document.getElementById('candidatoFilter').value,
-                municipio: document.getElementById('municipioFilter').value
+                municipio: document.getElementById('municipioFilter').value,
+                partido: document.getElementById('partidoFilter').value
             };
             const eleitosEl = document.getElementById('eleitosFilter');
             const isEleitos = (eleitosEl && eleitosEl.checked);
@@ -1913,32 +2004,27 @@
 
             showLoading(cargoVal ? 'Carregando ' + cargoVal + '...' : 'Carregando dados...');
 
-            // PERFORMANCE & FEATURE FIX: Allow viewing an unelected specific candidate without bogging down the database.
             if (!isEleitos && candidatoVal && candidatoVal !== 'Todos') {
                 params.append('any', '1');
             }
 
             try {
-                // Special case: Governor overview -> need both turno 1 and 2
                 if (cargoVal === 'Governador' && (!candidatoVal || candidatoVal === 'Todos')) {
                     const situacaoParam = isEleitos ? '&situacao=ELEITO' : '';
                     const p1 = fetch('api.php?turno=1&cargo=' + encodeURIComponent(cargoVal) + situacaoParam).then(r => r.json());
                     const p2 = fetch('api.php?turno=2&cargo=' + encodeURIComponent(cargoVal) + situacaoParam).then(r => r.json());
                     const [data1, data2] = await Promise.all([p1, p2]);
 
-                    // Update general stats using combined data1 (1st turno) + data2 (2nd turno)
                     updateStats(data1.stats || {});
                     updateModePanel(data1.ui || {}, data1.modeHighlights || []);
-                    updateCandidatosTable(data1.candidatos || []);
+                    updateCandidatosTable(data1.candidatos || [], data1.candidateInsights || []);
                     updateCandidateInsights(data1.candidateInsights || [], data1.candidatosGovernador || []);
                     updateGovernorRace(data1.candidatosGovernador || []);
 
                     renderGovernorComparative(data1, data2);
-                    // Clear detalheCandidato and votosPorRegiao specific views
                     updateDetalheCandidato(null, []);
                     updateVotosPorRegiao([]);
                     
-                    // Hide the standard municipios grid as it's redundant/unfitted for governor overview
                     if (document.getElementById('municipiosStatsSection')) {
                         document.getElementById('municipiosStatsSection').style.display = 'none';
                     }
@@ -1946,7 +2032,6 @@
                     return;
                 }
 
-                // Show the standard municipios grid for other views
                 if (document.getElementById('municipiosStatsSection')) {
                     document.getElementById('municipiosStatsSection').style.display = 'block';
                 }
@@ -1963,11 +2048,10 @@
 
                 updateStats(data.stats || {});
                 updateModePanel(data.ui || {}, data.modeHighlights || []);
-                updateCandidatosTable(data.candidatos || []);
+                updateCandidatosTable(data.candidatos || [], data.candidateInsights || []);
                 updateMunicipios(data.municipios || []);
                 updateCandidateInsights(data.candidateInsights || [], data.candidatosGovernador || []);
                 updateGovernorRace(data.detalheCandidato ? [] : (data.candidatosGovernador || []));
-                // Invert order: primeiro regiões, depois votos por município quando for detalhe de candidato
                 updateVotosPorRegiao(
                     data.detalheCandidato ? (data.votosPorRegiaoCandidato || []) : (data.votosPorRegiao || []),
                     data.detalheCandidato
@@ -1975,7 +2059,6 @@
                 updateDetalheCandidato(data.detalheCandidato, data.votosPorMunicipio || []);
 
                 hideLoading();
-                // Titles handled by server UI payload when needed
             } catch (error) {
                 hideLoading();
                 console.error(error);
@@ -1991,6 +2074,7 @@
         }
 
         // Inicializar - carregar dados do Geral ao abrir a página
+        loadPartidos();
         loadData();
     </script>
 </body>

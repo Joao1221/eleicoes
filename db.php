@@ -1,40 +1,43 @@
 <?php
-$host = 'sql308.infinityfree.com';
-$user = 'if0_41682016';
-$pass = 'egTva023SR';
-$db = 'if0_41682016_eleicoes';
 
-/*
-$host = 'localhost';
-$user = 'root';
-$pass = '';
-$db = 'eleicoes';
-*/
+mysqli_report(MYSQLI_REPORT_OFF);
 
-// Conexão com opções de performance
-$conn = new mysqli($host, $user, $pass, $db);
-$conn->set_charset('utf8mb4');
+$host = getenv('DB_HOST') ?: 'localhost';
+$user = getenv('DB_USER') ?: 'root';
+$pass = getenv('DB_PASS') ?: '';
+$db = getenv('DB_NAME') ?: 'eleicoes';
+$port = (int) (getenv('DB_PORT') ?: 3306);
 
-// Otimizações de performance
+$conn = mysqli_init();
 $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
-$conn->options(MYSQLI_OPT_READ_TIMEOUT, 30);
 
-if ($conn->connect_error) {
-    die("Conexão falhou: " . $conn->connect_error);
+if (!$conn->real_connect($host, $user, $pass, $db, $port)) {
+    die('Conexão falhou: ' . mysqli_connect_error());
 }
 
-function query($conn, $sql) {
+$conn->set_charset('utf8mb4');
+
+function query(mysqli $conn, string $sql): array
+{
     $result = $conn->query($sql);
-    if (!$result) return [];
+    if (!$result) {
+        return [];
+    }
+
     $data = [];
     while ($row = $result->fetch_assoc()) {
         $data[] = $row;
     }
+
     return $data;
 }
 
-function querySingle($conn, $sql) {
+function querySingle(mysqli $conn, string $sql): array
+{
     $result = $conn->query($sql);
-    if (!$result) return [];
-    return $result->fetch_assoc();
+    if (!$result) {
+        return [];
+    }
+
+    return $result->fetch_assoc() ?: [];
 }

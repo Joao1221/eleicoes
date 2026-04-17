@@ -377,9 +377,23 @@ try {
     }
 
     $only_candidatos = isset($_GET['only_candidatos']) && $_GET['only_candidatos'] === '1';
+    $only_partidos = isset($_GET['only_partidos']) && $_GET['only_partidos'] === '1';
 
     $municipios = [];
     $partidos = [];
+
+    if ($only_partidos) {
+        $partidos = queryAll($conn, "
+            SELECT sg_partido, SUM(qt_votos_nominais) AS votos
+            FROM votacao_2022
+            WHERE sg_partido != ''
+            GROUP BY sg_partido
+            ORDER BY votos DESC
+        ");
+        echo json_encode(['partidos' => $partidos], JSON_UNESCAPED_UNICODE);
+        $conn->close();
+        exit;
+    }
 
     if (!$only_candidatos) {
         $municipios = queryAll($conn, "
