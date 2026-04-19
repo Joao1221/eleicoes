@@ -778,6 +778,22 @@
             padding: 1rem;
         }
 
+        .candidate-card-link {
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+
+        .candidate-card-link:hover,
+        .candidate-card-link:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .candidate-card-link:focus-visible {
+            outline: 2px solid var(--highlight);
+            outline-offset: 2px;
+        }
+
         .insight-card.runoff {
             border-color: var(--warning);
             box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.2);
@@ -1431,7 +1447,8 @@
             loadCandidatesForCargo();
         }
 
-        function loadCandidatesForCargo() {
+        async function loadCandidatesForCargo(options = {}) {
+            const autoLoad = options.autoLoad !== false;
             const cargo = document.getElementById('cargoFilter').value;
             const candidatoSelect = document.getElementById('candidatoFilter');
             candidatoSelect.innerHTML = '<option value="">Selecione</option><option value="Todos">Todos</option>';
@@ -1454,10 +1471,10 @@
 
             const url = parts.join('&');
             showLoading('Buscando candidatos...');
-            fetch(url)
-                .then(r => r.json())
-                .then(data => {
-                    if (!data.candidatos) return;
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.candidatos) {
                     data.candidatos.sort((a, b) => b.total_votos - a.total_votos);
                     data.candidatos.forEach(c => {
                         const option = document.createElement('option');
@@ -1467,14 +1484,89 @@
                         candidatoSelect.appendChild(option);
                     });
                     candidatoSelect.value = '';
-                })
-                .catch(() => {})
-                .finally(() => {
-                    hideLoading();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar candidatos do cargo:', error);
+            } finally {
+                hideLoading();
+                if (autoLoad) {
                     // After loading candidates for the cargo, refresh the main view
                     loadData();
-                });
+                }
+            }
         }
+
+        async function focusCandidateCard(cargo, candidato) {
+            const cargoFilter = document.getElementById('cargoFilter');
+            const candidatoFilter = document.getElementById('candidatoFilter');
+            if (!cargoFilter || !candidatoFilter) {
+                return;
+            }
+
+            const targetCargo = cargo || '';
+            const targetCandidate = candidato || '';
+            const cargoChanged = cargoFilter.value !== targetCargo;
+            cargoFilter.value = targetCargo;
+
+            if (cargoChanged) {
+                await loadCandidatesForCargo({ autoLoad: false });
+            }
+
+            if (targetCandidate) {
+                let candidateExists = false;
+                for (const option of candidatoFilter.options) {
+                    if (option.value === targetCandidate) {
+                        candidateExists = true;
+                        break;
+                    }
+                }
+                if (!candidateExists) {
+                    const option = document.createElement('option');
+                    option.value = targetCandidate;
+                    option.textContent = targetCandidate;
+                    candidatoFilter.appendChild(option);
+                }
+                candidatoFilter.value = targetCandidate;
+            } else {
+                candidatoFilter.value = '';
+            }
+
+            await loadData();
+        }
+
+        function initCandidateCardLinks() {
+            if (window.__candidateCardLinksBound) {
+                return;
+            }
+            window.__candidateCardLinksBound = true;
+
+            document.addEventListener('click', (event) => {
+                const card = event.target.closest('[data-candidate-card="1"]');
+                if (!card) {
+                    return;
+                }
+
+                const cargo = decodeURIComponent(card.dataset.cargo || '');
+                const candidato = decodeURIComponent(card.dataset.candidato || '');
+                focusCandidateCard(cargo, candidato);
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                    return;
+                }
+
+                const card = event.target.closest('[data-candidate-card="1"]');
+                if (!card) {
+                    return;
+                }
+
+                event.preventDefault();
+                card.click();
+            });
+        }
+
+        initCandidateCardLinks();
 
         function updateStats(stats) {
             document.getElementById('totalVotos').textContent = formatNumber(stats.total_votos || 0);
@@ -1611,7 +1703,7 @@
                 if (candidate.nm_candidato.includes('FABIO') || candidate.nm_candidato.includes('FÁBIO')) borderColor = 'var(--success)';
                 else if (candidate.nm_candidato.includes('ROGERIO') || candidate.nm_candidato.includes('ROGÉRIO')) borderColor = 'var(--highlight)';
 
-                html += '<div class="insight-card ' + (isRunoff ? 'runoff' : '') + '"' + (borderColor ? ' style="border-color: ' + borderColor + ' !important;"' : '') + '>';
+                html += '<div class="insight-card candidate-card-link ' + (isRunoff ? 'runoff' : '') + '" data-candidate-card="1" data-cargo="' + encodeURIComponent(candidate.cargo) + '" data-candidato="' + encodeURIComponent(candidate.nm_candidato) + '" role="button" tabindex="0" title="Clique para ver apenas este candidato"' + (borderColor ? ' style="border-color: ' + borderColor + ' !important;"' : '') + '>';
                 html += '<div class="insight-header">';
                 html += '<div><div class="insight-name">' + (candidate.nm_urna_candidato || candidate.nm_candidato) + '</div>';
                 html += '<div class="insight-meta">' + candidate.cargo + ' | ' + (candidate.sg_partido || '-') + ' | ' + (candidate.situacao || '-') + '</div></div>';
@@ -1668,7 +1760,7 @@
             
             governors.forEach((g, index) => {
                 const isWinner = index === 0;
-                html += '<div class="candidate-race ' + (isWinner ? 'winner' : '') + '">';
+                html += '<div class="candidate-race candidate-card-link ' + (isWinner ? 'winner' : '') + '" data-candidate-card="1" data-cargo="' + encodeURIComponent(g.cargo) + '" data-candidato="' + encodeURIComponent(g.nm_candidato) + '" role="button" tabindex="0" title="Clique para ver apenas este candidato">';
                 html += '<div class="position">' + (index + 1) + 'º</div>';
                 html += '<div class="info">';
                 html += '<div class="name">' + (g.nm_urna_candidato || g.nm_candidato) + '</div>';
@@ -1733,7 +1825,7 @@
                 if (g2 && g2.length) {
                     const elected = g2[0];
                     let bannerHtml = '';
-                    bannerHtml += '<div class="detalhe-candidato-card" style="border-color: var(--success); margin:0 0 1rem 0">';
+                    bannerHtml += '<div class="detalhe-candidato-card candidate-card-link" data-candidate-card="1" data-cargo="' + encodeURIComponent(elected.cargo) + '" data-candidato="' + encodeURIComponent(elected.nm_candidato) + '" role="button" tabindex="0" title="Clique para ver apenas este candidato" style="border-color: var(--success); margin:0 0 1rem 0">';
                     bannerHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0">';
                     bannerHtml += '<div><h2 style="margin:0">Governador Eleito: ' + (elected.nm_urna_candidato || elected.nm_candidato) + '</h2><div style="color:var(--text-muted)">' + (elected.sg_partido||'-') + '</div></div>';
                     bannerHtml += '<div style="text-align:right"><div style="font-weight:800;font-size:1.4rem;color:var(--success)">' + formatVotesAndPercent(elected.total_votos, totalVotesTurn2) + '</div><div style="font-size:0.9rem;color:var(--text-muted)">Votos no 2º turno</div></div>';
@@ -1758,7 +1850,7 @@
                 if (name.includes('FABIO') || name.includes('FÁBIO')) borderColor = 'var(--success)';
                 else if (name.includes('ROGERIO') || name.includes('ROGÉRIO')) borderColor = 'var(--highlight)';
 
-                html += '<div class="detalhe-candidato-card"' + (borderColor ? ' style="border-color: ' + borderColor + ' !important;"' : '') + '>';
+                html += '<div class="detalhe-candidato-card candidate-card-link" data-candidate-card="1" data-cargo="' + encodeURIComponent(c.cargo) + '" data-candidato="' + encodeURIComponent(name) + '" role="button" tabindex="0" title="Clique para ver apenas este candidato"' + (borderColor ? ' style="border-color: ' + borderColor + ' !important;"' : '') + '>';
                 html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">';
                 const displayName = c.nm_urna_candidato || name;
                 html += '<div><h3 style="margin:0">' + displayName + '</h3><div style="color:var(--text-muted)">' + (c.sg_partido||'-') + '</div></div>';
