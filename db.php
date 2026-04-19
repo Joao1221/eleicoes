@@ -16,6 +16,10 @@ if (!$conn->real_connect($host, $user, $pass, $db, $port)) {
 }
 
 $conn->set_charset('utf8mb4');
+// Best-effort: some hosts impose a very small statement timeout.
+// If the server allows it, relax the limit for this session.
+@$conn->query('SET SESSION max_statement_time = 0');
+@$conn->query('SET SESSION max_execution_time = 0');
 
 function query(mysqli $conn, string $sql): array
 {

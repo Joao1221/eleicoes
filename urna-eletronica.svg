@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 576" role="img" aria-labelledby="title desc">
+  <title>Urna eletronica</title>
+  <desc>Ilustracao de uma urna eletronica sobre pedestal metalico com brilho suave.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#05141f"/>
+      <stop offset="45%" stop-color="#071b26"/>
+      <stop offset="100%" stop-color="#02070b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6ef3c5" stop-opacity=".8"/>
+      <stop offset="35%" stop-color="#5bd9ff" stop-opacity=".32"/>
+      <stop offset="100%" stop-color="#5bd9ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f3f5f7"/>
+      <stop offset="18%" stop-color="#d4d9dd"/>
+      <stop offset="52%" stop-color="#adb5bc"/>
+      <stop offset="100%" stop-color="#eef1f3"/>
+    </linearGradient>
+    <linearGradient id="metalDark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6f7880"/>
+      <stop offset="50%" stop-color="#3a424a"/>
+      <stop offset="100%" stop-color="#8f979e"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#12212c"/>
+      <stop offset="100%" stop-color="#071018"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f2f3f4"/>
+      <stop offset="25%" stop-color="#c9cfd3"/>
+      <stop offset="68%" stop-color="#8c949c"/>
+      <stop offset="100%" stop-color="#eceff1"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8cf8d5"/>
+      <stop offset="100%" stop-color="#28c8ff"/>
+    </linearGradient>
+    <linearGradient id="pedestal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a8b0b8"/>
+      <stop offset="100%" stop-color="#5f6870"/>
+    </linearGradient>
+    <linearGradient id="buttonGreen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5ef29e"/>
+      <stop offset="100%" stop-color="#1dbf63"/>
+    </linearGradient>
+    <linearGradient id="buttonOrange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffb26d"/>
+      <stop offset="100%" stop-color="#ff7b3e"/>
+    </linearGradient>
+    <linearGradient id="buttonRed" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff8b8b"/>
+      <stop offset="100%" stop-color="#e74a4a"/>
+    </linearGradient>
+    <filter id="blur40" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <filter id="blur20" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="22" stdDeviation="18" flood-color="#000" flood-opacity=".55"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="576" fill="url(#bg)"/>
+  <ellipse cx="180" cy="110" rx="250" ry="90" fill="url(#glow)" filter="url(#blur40)" opacity=".7"/>
+  <ellipse cx="840" cy="170" rx="250" ry="100" fill="url(#glow)" filter="url(#blur40)" opacity=".55"/>
+  <path d="M-30 455 C180 390, 330 405, 522 454 S860 520, 1080 430" fill="none" stroke="#8ff2d7" stroke-opacity=".35" stroke-width="6" filter="url(#blur20)"/>
+  <path d="M-10 495 C175 430, 360 444, 528 492 S853 552, 1085 458" fill="none" stroke="#6bd7ff" stroke-opacity=".16" stroke-width="4" filter="url(#blur20)"/>
+
+  <g transform="translate(162 72)" filter="url(#shadow)">
+    <ellipse cx="360" cy="360" rx="285" ry="42" fill="#000" opacity=".42" filter="url(#blur40)"/>
+
+    <rect x="74" y="260" width="620" height="104" rx="24" fill="url(#pedestal)"/>
+    <rect x="96" y="246" width="576" height="18" rx="9" fill="#cfd4d8" opacity=".9"/>
+    <rect x="118" y="280" width="532" height="52" rx="10" fill="#83919b" opacity=".35"/>
+
+    <g transform="translate(152 22)">
+      <rect x="12" y="0" width="390" height="348" rx="34" fill="url(#metal)" stroke="#8cf3df" stroke-width="3"/>
+      <rect x="38" y="22" width="258" height="152" rx="18" fill="url(#screen)" stroke="#b0b8bf" stroke-width="2"/>
+      <rect x="48" y="32" width="238" height="132" rx="12" fill="#0d1620" stroke="#173042" stroke-width="1.5"/>
+
+      <rect x="51" y="35" width="232" height="28" rx="8" fill="#1b2730"/>
+      <text x="167" y="53" text-anchor="middle" fill="#d9e4ea" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="700" letter-spacing=".2">JUSTICA ELEITORAL - ELEICOES 0825</text>
+      <text x="167" y="79" text-anchor="middle" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">VOTO PARA PRESIDENTE</text>
+
+      <text x="71" y="111" fill="#e3ebf0" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700">CANDIDATO</text>
+      <text x="71" y="149" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="700">99</text>
+      <circle cx="190" cy="126" r="24" fill="url(#accent)" opacity=".85"/>
+      <circle cx="190" cy="118" r="11" fill="#0f2230"/>
+      <path d="M173 153 C180 141, 201 141, 208 153 C210 156, 213 164, 213 170 H168 C168 164, 171 156, 173 153Z" fill="#0f2230"/>
+      <path d="M218 112 C234 118, 247 129, 254 145 C234 138, 221 126, 218 112Z" fill="#3cc7ff" opacity=".75" filter="url(#blur20)"/>
+      <text x="167" y="194" text-anchor="middle" fill="#6cf3a8" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">VOTO CONFIRMADO</text>
+
+      <rect x="34" y="184" width="270" height="126" rx="16" fill="#d7dbdf" stroke="#aeb6bd" stroke-width="2"/>
+      <rect x="44" y="194" width="132" height="106" rx="12" fill="#c3c9ce"/>
+      <rect x="186" y="194" width="108" height="106" rx="12" fill="#c3c9ce"/>
+
+      <g fill="#2e3942">
+        <rect x="58" y="207" width="28" height="18" rx="5"/>
+        <rect x="92" y="207" width="28" height="18" rx="5"/>
+        <rect x="126" y="207" width="28" height="18" rx="5"/>
+        <rect x="58" y="230" width="28" height="18" rx="5"/>
+        <rect x="92" y="230" width="28" height="18" rx="5"/>
+        <rect x="126" y="230" width="28" height="18" rx="5"/>
+        <rect x="58" y="253" width="28" height="18" rx="5"/>
+        <rect x="92" y="253" width="28" height="18" rx="5"/>
+        <rect x="126" y="253" width="28" height="18" rx="5"/>
+      </g>
+
+      <g fill="#2a333b" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="700">
+        <text x="72" y="220" text-anchor="middle" fill="#fff">1</text>
+        <text x="106" y="220" text-anchor="middle" fill="#fff">2</text>
+        <text x="140" y="220" text-anchor="middle" fill="#fff">3</text>
+        <text x="72" y="243" text-anchor="middle" fill="#fff">4</text>
+        <text x="106" y="243" text-anchor="middle" fill="#fff">5</text>
+        <text x="140" y="243" text-anchor="middle" fill="#fff">6</text>
+        <text x="72" y="266" text-anchor="middle" fill="#fff">7</text>
+        <text x="106" y="266" text-anchor="middle" fill="#fff">8</text>
+        <text x="140" y="266" text-anchor="middle" fill="#fff">9</text>
+      </g>
+
+      <rect x="192" y="206" width="74" height="20" rx="6" fill="url(#buttonGreen)"/>
+      <rect x="192" y="232" width="74" height="20" rx="6" fill="url(#buttonOrange)"/>
+      <rect x="192" y="258" width="34" height="20" rx="6" fill="url(#buttonRed)"/>
+      <rect x="232" y="258" width="34" height="20" rx="6" fill="#e0e6ea"/>
+      <text x="229" y="220" text-anchor="middle" fill="#0b2616" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700">CONFIRMA</text>
+      <text x="229" y="246" text-anchor="middle" fill="#301700" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700">CORRIGE</text>
+      <text x="209" y="272" text-anchor="middle" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700">BRANCO</text>
+      <text x="249" y="272" text-anchor="middle" fill="#18303f" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700">APAGA</text>
+
+      <rect x="28" y="320" width="286" height="76" rx="12" fill="#10191f" stroke="#2f3d45" stroke-width="2"/>
+      <rect x="36" y="328" width="270" height="60" rx="8" fill="#16363d"/>
+      <path d="M49 357 C83 332, 120 328, 154 340 S226 365, 286 344" fill="none" stroke="#9ae3ff" stroke-opacity=".35" stroke-width="2"/>
+      <path d="M56 368 C92 360, 126 362, 152 371 S206 385, 282 367" fill="none" stroke="#77ffb8" stroke-opacity=".3" stroke-width="2"/>
+      <text x="52" y="341" fill="#d9f0ff" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="700">ESTADO DE SERGIPE - ARACAJU</text>
+      <text x="242" y="341" fill="#d9f0ff" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700">ZONA 1 - SECAO 102</text>
+    </g>
+
+    <g transform="translate(588 36)">
+      <rect x="0" y="10" width="182" height="322" rx="32" fill="url(#panel)" stroke="#8cf3df" stroke-width="3"/>
+      <rect x="13" y="24" width="156" height="294" rx="24" fill="none" stroke="#ffffff" stroke-opacity=".28" stroke-width="2"/>
+      <circle cx="91" cy="106" r="28" fill="#1f8f53" opacity=".9"/>
+      <circle cx="91" cy="106" r="18" fill="#ffd24a" opacity=".95"/>
+      <path d="M91 84 L95 98 L109 98 L97 107 L102 121 L91 112 L80 121 L85 107 L73 98 L87 98 Z" fill="#0d6637"/>
+      <text x="91" y="180" text-anchor="middle" fill="#0f4c26" font-family="Arial, Helvetica, sans-serif" font-size="33" font-weight="800">BRASIL</text>
+      <text x="91" y="211" text-anchor="middle" fill="#172026" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">URNA ELETRONICA</text>
+    </g>
+
+    <path d="M32 26 C48 10, 78 6, 96 12" fill="none" stroke="#e9fffb" stroke-opacity=".55" stroke-width="6" filter="url(#blur20)"/>
+    <path d="M34 24 C54 9, 86 7, 98 11" fill="none" stroke="#8df3df" stroke-opacity=".7" stroke-width="2"/>
+  </g>
+</svg>

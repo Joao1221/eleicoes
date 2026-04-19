@@ -35,6 +35,8 @@ CREATE TABLE votacao_secao_2024_se (
     KEY idx_turno_cargo_municipio (nr_turno, ds_cargo, cd_municipio),
     KEY idx_turno_cargo_zona (nr_turno, ds_cargo, cd_municipio, nr_zona),
     KEY idx_turno_cargo_votavel (nr_turno, ds_cargo, nr_votavel),
+    KEY idx_turno_cargo_municipio_nome (nr_turno, ds_cargo, nm_municipio, nr_zona, nr_secao),
+    KEY idx_turno_cargo_zona_only (nr_turno, ds_cargo, nr_zona),
     KEY idx_tipo_voto (tipo_voto),
     KEY idx_nm_votavel (nm_votavel(100)),
     KEY idx_secao (cd_municipio, nr_zona, nr_secao)
@@ -55,7 +57,9 @@ CREATE TABLE resumo_votacao_2024_se (
     UNIQUE KEY uniq_resumo (nr_turno, ds_cargo, cd_municipio, nr_zona, nr_votavel, tipo_voto),
     KEY idx_rank (nr_turno, ds_cargo, tipo_voto, total_votos),
     KEY idx_municipio (nr_turno, ds_cargo, cd_municipio, tipo_voto),
-    KEY idx_votavel (nr_turno, ds_cargo, nr_votavel)
+    KEY idx_votavel (nr_turno, ds_cargo, nr_votavel),
+    KEY idx_municipio_nome (nr_turno, ds_cargo, nm_municipio),
+    KEY idx_zona (nr_turno, ds_cargo, nr_zona)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE resumo_municipio_2024_se (
@@ -74,5 +78,6 @@ CREATE TABLE resumo_municipio_2024_se (
     votos_nulo INT NOT NULL,
     UNIQUE KEY uniq_resumo_municipio (nr_turno, ds_cargo, cd_municipio),
     KEY idx_total (nr_turno, ds_cargo, total_votos),
-    KEY idx_nome (nm_municipio)
+    KEY idx_nome (nm_municipio),
+    KEY idx_lookup (nr_turno, ds_cargo, nm_municipio)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

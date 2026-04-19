@@ -3,7 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="favicon.png">
+    <meta name="color-scheme" content="dark light">
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem('eleicoes-theme');
+                var theme = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'dark';
+                document.documentElement.dataset.theme = theme;
+                document.documentElement.style.colorScheme = theme;
+            } catch (error) {}
+        })();
+    </script>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
     <title>Eleições Sergipe 2022 - Painel Estatístico</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -21,6 +32,25 @@
             --danger: #ff4757;
         }
 
+        html {
+            color-scheme: dark;
+        }
+
+        html[data-theme="light"] {
+            color-scheme: light;
+            --primary: #f5f8fc;
+            --secondary: #e7eef6;
+            --accent: #dbeafe;
+            --highlight: #2563eb;
+            --text: #0f172a;
+            --text-muted: #5b6473;
+            --card-bg: #ffffff;
+            --border: #d7e0ea;
+            --success: #0f9d58;
+            --warning: #d97706;
+            --danger: #dc2626;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -34,10 +64,95 @@
             min-height: 100vh;
         }
 
+        html[data-theme="light"] body {
+            background: linear-gradient(180deg, #f8fbff 0%, #edf3f9 100%);
+        }
+
+        .theme-switcher {
+            display: inline-flex;
+            gap: 6px;
+            padding: 4px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(10px);
+        }
+
+        .theme-switcher button {
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--text-muted);
+            padding: 8px 12px;
+            font: inherit;
+            font-size: 0.8rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+        }
+
+        .theme-switcher button:hover {
+            transform: translateY(-1px);
+        }
+
+        .theme-switcher button.active {
+            background: var(--highlight);
+            color: #fff;
+        }
+
+        html[data-theme="light"] .theme-switcher {
+            background: rgba(255, 255, 255, 0.72);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        @media (max-width: 720px) {
+            .header-actions {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
         .header {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(280px, 380px);
+            gap: 1.5rem;
+            align-items: center;
             background: linear-gradient(135deg, var(--secondary) 0%, var(--accent) 100%);
             padding: 2rem;
             border-bottom: 3px solid var(--highlight);
+        }
+
+        .header-copy {
+            min-width: 0;
+        }
+
+        .header-visual {
+            position: relative;
+            padding: 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(6, 10, 20, 0.26);
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+            overflow: hidden;
+        }
+
+        html[data-theme="light"] .header-visual {
+            border-color: rgba(15, 23, 42, 0.08);
+            background: rgba(255, 255, 255, 0.82);
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+        }
+
+        .header-visual img {
+            display: block;
+            width: 100%;
+            height: auto;
         }
 
         .header h1 {
@@ -61,6 +176,21 @@
         .header p {
             color: var(--text-muted);
             font-size: 0.95rem;
+        }
+
+        .page-context {
+            margin-top: 0.8rem;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        @media (max-width: 920px) {
+            .header {
+                grid-template-columns: 1fr;
+            }
         }
 
         .container {
@@ -179,6 +309,10 @@
             box-shadow: 0 10px 30px rgba(233, 69, 96, 0.15);
         }
 
+        html[data-theme="light"] .stat-card:hover {
+            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.12);
+        }
+
         .stat-card .label {
             font-size: 0.8rem;
             color: var(--text-muted);
@@ -257,6 +391,10 @@
 
         tbody tr:hover {
             background: rgba(233, 69, 96, 0.05);
+        }
+
+        html[data-theme="light"] tbody tr:hover {
+            background: rgba(37, 99, 235, 0.05);
         }
 
         .party-badge {
@@ -783,6 +921,30 @@
         .summary-card.negative { border-left: 3px solid var(--danger); }
         .summary-card.accent { border-left: 3px solid var(--highlight); }
 
+        html[data-theme="light"] .insight-strong-item {
+            background: rgba(15, 23, 42, 0.03);
+        }
+
+        html[data-theme="light"] .summary-card {
+            background: rgba(255, 255, 255, 0.82);
+        }
+
+        html[data-theme="light"] .summary-card:hover {
+            background: rgba(255, 255, 255, 0.96);
+        }
+
+        html[data-theme="light"] .insight-list-row {
+            border-bottom-color: rgba(15, 23, 42, 0.08);
+        }
+
+        html[data-theme="light"] #loadingOverlay {
+            background: linear-gradient(135deg, #f7fbff 0%, #edf3f9 50%, #f4f7fb 100%);
+        }
+
+        html[data-theme="light"] .loading-title {
+            color: var(--text);
+        }
+
         /* ========== MODERN LOADING OVERLAY ========== */
         #loadingOverlay {
             position: fixed;
@@ -1042,13 +1204,23 @@
     </div>
 
     <header class="header">
+        <div class="header-copy">
         <h1>Painel Estatístico - Eleições Sergipe 2022</h1>
         <p>Resultados detalhados por candidato, partido e município | Dados TSE</p>
-        <p style="margin-top: 1rem;">
-            <a href="eleicoes_municipais_se.php" style="display:inline-flex;align-items:center;gap:.6rem;padding:.85rem 1.2rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:999px;color:#fff;text-decoration:none;font-weight:600;backdrop-filter:blur(8px);">
-                Eleições municipais - SE
+        <p class="page-context">Base oficial TSE • Sergipe 2022</p>
+        <div class="header-actions">
+            <div class="theme-switcher" role="group" aria-label="Selecionar tema">
+                <button type="button" data-theme-choice="dark">Modo escuro</button>
+                <button type="button" data-theme-choice="light">Modo claro</button>
+            </div>
+            <a href="eleicoes_municipais_se.php" style="display:inline-flex;align-items:center;gap:.6rem;padding:.85rem 1.2rem;background:linear-gradient(135deg,#d9f0ff 0%,#9fd7ff 100%);border:1px solid rgba(79,161,234,.35);border-radius:999px;color:#0f2d4d;text-decoration:none;font-weight:600;backdrop-filter:blur(8px);box-shadow:0 8px 22px rgba(79,161,234,.18);">
+                Ir para Eleições municipais 2024 - SE
             </a>
-        </p>
+        </div>
+        </div>
+        <div class="header-visual" aria-hidden="true">
+            <img src="assets/urna-eletronica.png" alt="">
+        </div>
     </header>
 
     <div class="container">
@@ -1196,6 +1368,47 @@
     </footer>
 
     <script>
+        const THEME_STORAGE_KEY = 'eleicoes-theme';
+
+        function getPreferredTheme() {
+            try {
+                const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+                if (savedTheme === 'light' || savedTheme === 'dark') {
+                    return savedTheme;
+                }
+            } catch (error) {}
+
+            return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+        }
+
+        function applyTheme(theme) {
+            const nextTheme = theme === 'light' ? 'light' : 'dark';
+            document.documentElement.dataset.theme = nextTheme;
+            document.documentElement.style.colorScheme = nextTheme;
+
+            document.querySelectorAll('[data-theme-choice]').forEach((button) => {
+                const isActive = button.dataset.themeChoice === nextTheme;
+                button.classList.toggle('active', isActive);
+                button.setAttribute('aria-pressed', String(isActive));
+            });
+        }
+
+        function initThemeSwitcher() {
+            applyTheme(getPreferredTheme());
+
+            document.querySelectorAll('[data-theme-choice]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const nextTheme = button.dataset.themeChoice === 'light' ? 'light' : 'dark';
+                    try {
+                        localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+                    } catch (error) {}
+                    applyTheme(nextTheme);
+                });
+            });
+        }
+
+        initThemeSwitcher();
+
         // Removed explicit turno control; cargo selection now defines the view
 
         // Carregar candidatos quando selecionar cargo
