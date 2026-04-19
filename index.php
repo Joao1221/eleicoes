@@ -808,6 +808,14 @@
             white-space: nowrap;
         }
 
+        .insight-turn-share {
+            margin-top: 0.2rem;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
         .insight-strong {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1120,6 +1128,7 @@
             }
             .insight-name { font-size: 0.9rem; }
             .insight-total { font-size: 1.1rem; }
+            .insight-turn-share { font-size: 0.72rem; }
             .highlight-item { font-size: 0.8rem; }
             .detalhe-candidato-card h2 { font-size: 1.2rem; }
             .detalhe-candidato-card h3 { font-size: 1rem; }
@@ -1338,6 +1347,7 @@
                     <thead>
                         <tr>
                             <th>#</th>
+                            <th>Maior votação</th>
                             <th>Candidato</th>
                             <th>Partido</th>
                             <th>Cargo</th>
@@ -1347,7 +1357,7 @@
                         </tr>
                     </thead>
                     <tbody id="candidatosTable">
-                        <tr><td colspan="7" class="loading">Carregando...</td></tr>
+                        <tr><td colspan="8" class="loading">Carregando...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1364,7 +1374,7 @@
     </div>
 
     <footer class="footer">
-        <p>Dados originários do Tribunal Superior Eleitoral (TSE) | Arquivo: votacao_candidato_munzona_2022_SE.csv</p>
+        <p>Dados originários do Tribunal Superior Eleitoral (TSE)</p>
     </footer>
 
     <script>
@@ -1419,13 +1429,13 @@
         function onEleitosChange() {
             // When eleitos filter changes, reload candidate list for current cargo
             loadCandidatesForCargo();
-            loadData();
         }
 
         function loadCandidatesForCargo() {
             const cargo = document.getElementById('cargoFilter').value;
             const candidatoSelect = document.getElementById('candidatoFilter');
             candidatoSelect.innerHTML = '<option value="">Selecione</option><option value="Todos">Todos</option>';
+            candidatoSelect.value = '';
 
             if (!cargo) {
                 return;
@@ -1456,6 +1466,7 @@
                         option.textContent = urna + ' (' + (c.sg_partido || '-') + ') - ' + formatNumber(c.total_votos) + ' votos';
                         candidatoSelect.appendChild(option);
                     });
+                    candidatoSelect.value = '';
                 })
                 .catch(() => {})
                 .finally(() => {
@@ -1475,7 +1486,7 @@
         function updateCandidatosTable(candidatos, insights = []) {
             const tbody = document.getElementById('candidatosTable');
             if (!candidatos || candidatos.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">Nenhum resultado encontrado</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">Nenhum resultado encontrado</td></tr>';
                 return;
             }
 
@@ -1502,17 +1513,22 @@
                 if (!grouped[cargo] || grouped[cargo].length === 0) return;
                 
                 const label = cargoLabels[cargo] || cargo;
-                html += '<tr><td colspan="7" style="background: var(--accent); color: white; font-weight: 600; padding: 0.75rem 1rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px;">' + label + '</td></tr>';
+                html += '<tr style="display:none"><td colspan="8" style="background: var(--accent); color: white; font-weight: 600; padding: 0.75rem 1rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px;">' + label + '</td></tr>';
                 
                 grouped[cargo].forEach((c, idx) => {
                     const rankClass = idx + 1 <= 3 ? 'rank-' + (idx + 1) : 'rank-other';
                     const statusClass = c.situacao && c.situacao.includes('ELEITO') ? 'status-electo' : 'status-nao-electo';
                     
                     const insight = insights.find(i => i.nm_candidato === c.nm_candidato && i.cargo === c.cargo);
-                    const strongestCity = insight && insight.strongest_city ? insight.strongest_city.municipio : '-';
+                    const strongestCityVotes = insight && insight.strongest_city ? Number(insight.strongest_city.total_votos || 0) : 0;
+                    const candidateTotalVotes = Number(c.total_votos || 0);
+                    const strongestCity = insight && insight.strongest_city
+                        ? insight.strongest_city.municipio + ' ' + formatNumber(strongestCityVotes) + ' (' + (candidateTotalVotes ? formatPercent((strongestCityVotes / candidateTotalVotes) * 100) : '-') + ')'
+                        : '-';
                     
                     html += '<tr>';
-                    html += '<td><span class="rank-number ' + rankClass + '">' + (idx + 1) + '</span> • ' + strongestCity + '</td>';
+                    html += '<td><span class="rank-number ' + rankClass + '">' + (idx + 1) + '</span></td>';
+                    html += '<td>' + strongestCity + '</td>';
                     html += '<td>' + (c.nm_urna_candidato || c.nm_candidato) + '</td>';
                     html += '<td><span class="party-badge">' + (c.sg_partido || '-') + '</span></td>';
                     html += '<td style="font-size: 0.75rem; color: var(--text-muted);">' + c.cargo + '</td>';
@@ -1567,7 +1583,7 @@
                 .join('');
         }
 
-        function updateCandidateInsights(insights, governors) {
+        function updateCandidateInsights(insights, governors, groupTotals = null) {
             const grid = document.getElementById('candidateInsightsGrid');
             if (!insights || insights.length === 0) {
                 grid.innerHTML = '<div class="highlight-item">Nenhum candidato encontrado para o recorte selecionado.</div>';
@@ -1575,15 +1591,20 @@
             }
 
             const runoffNames = new Set((governors || []).slice(0, 2).map(item => item.nm_candidato));
+            const candidateGroupTotals = (groupTotals && Object.keys(groupTotals).length > 0)
+                ? groupTotals
+                : buildCandidateGroupTotals(insights || []);
             let html = '';
 
             insights.forEach(candidate => {
                 const isRunoff = candidate.cargo === 'Governador' && runoffNames.has(candidate.nm_candidato);
+                const candidateTotal = Number(candidate.total_votos || 0);
+                const candidateShareText = getCandidateShareText(candidate, candidateGroupTotals);
                 const topCities = (candidate.topCities || []).map(city =>
-                    '<div class="insight-list-row"><span>' + city.municipio + '</span><strong>' + formatNumber(city.total_votos) + '</strong></div>'
+                    '<div class="insight-list-row"><span>' + city.municipio + '</span><strong>' + formatVotesAndPercent(city.total_votos, candidateTotal) + '</strong></div>'
                 ).join('');
                 const topRegions = (candidate.topRegions || []).map(region =>
-                    '<div class="insight-list-row"><span>' + region.nome + '</span><strong>' + formatNumber(region.total_votos) + '</strong></div>'
+                    '<div class="insight-list-row"><span>' + region.nome + '</span><strong>' + formatVotesAndPercent(region.total_votos, candidateTotal) + '</strong></div>'
                 ).join('');
 
                 let borderColor = '';
@@ -1594,14 +1615,19 @@
                 html += '<div class="insight-header">';
                 html += '<div><div class="insight-name">' + (candidate.nm_urna_candidato || candidate.nm_candidato) + '</div>';
                 html += '<div class="insight-meta">' + candidate.cargo + ' | ' + (candidate.sg_partido || '-') + ' | ' + (candidate.situacao || '-') + '</div></div>';
+                html += '<div style="text-align:right">';
                 html += '<div class="insight-total">' + formatNumber(candidate.total_votos) + '</div>';
+                if (candidateShareText) {
+                    html += '<div class="insight-turn-share">' + candidateShareText + '</div>';
+                }
+                html += '</div>';
                 html += '</div>';
                 html += '<div class="insight-strong">';
                 html += '<div class="insight-strong-item"><div class="label">Cidade Mais Forte</div><div class="value">' +
-                    (candidate.strongest_city ? candidate.strongest_city.municipio + ' (' + formatNumber(candidate.strongest_city.total_votos) + ')' : 'Sem dados') +
+                    (candidate.strongest_city ? candidate.strongest_city.municipio + ' (' + formatVotesAndPercent(candidate.strongest_city.total_votos, candidateTotal) + ')' : 'Sem dados') +
                     '</div></div>';
                 html += '<div class="insight-strong-item"><div class="label">Região Mais Forte</div><div class="value">' +
-                    (candidate.strongest_region ? candidate.strongest_region.nome + ' (' + formatNumber(candidate.strongest_region.total_votos) + ')' : 'Sem dados') +
+                    (candidate.strongest_region ? candidate.strongest_region.nome + ' (' + formatVotesAndPercent(candidate.strongest_region.total_votos, candidateTotal) + ')' : 'Sem dados') +
                     '</div></div>';
                 html += '</div>';
                 if (isRunoff) {
@@ -1615,7 +1641,7 @@
             grid.innerHTML = html;
         }
 
-        function updateGovernorRace(candidatos) {
+        function updateGovernorRace(candidatos, groupTotals = null) {
             const section = document.getElementById('governorRaceSection');
             
             if (!candidatos || candidatos.length === 0) {
@@ -1631,6 +1657,10 @@
             }
 
             governors.sort((a, b) => b.total_votos - a.total_votos);
+            const raceTotalKey = getCandidateGroupKey(governors[0]);
+            const raceTotal = (groupTotals && raceTotalKey && groupTotals[raceTotalKey])
+                ? Number(groupTotals[raceTotalKey])
+                : sumCandidateVotes(governors);
 
             let html = '<div class="governor-race">';
             html += '<h3>Resultado 2º Turno - Governador</h3>';
@@ -1644,7 +1674,7 @@
                 html += '<div class="name">' + (g.nm_urna_candidato || g.nm_candidato) + '</div>';
                 html += '<div class="party">Partido: ' + (g.sg_partido || '-') + '</div>';
                 html += '</div>';
-                html += '<div class="votes">' + formatNumber(g.total_votos) + '</div>';
+                html += '<div class="votes">' + formatVotesAndPercent(g.total_votos, raceTotal) + '</div>';
                 html += '</div>';
             });
             
@@ -1661,6 +1691,13 @@
 
             const g1 = data1.candidatosGovernador || data1.candidatos || [];
             const g2 = data2.candidatosGovernador || data2.candidatos || [];
+            const totalVotesTurn1 = (data1.cargoTurnTotals && data1.cargoTurnTotals['Governador|1'])
+                ? Number(data1.cargoTurnTotals['Governador|1'])
+                : sumCandidateVotes(g1);
+            const totalVotesTurn2 = (data2.cargoTurnTotals && data2.cargoTurnTotals['Governador|2'])
+                ? Number(data2.cargoTurnTotals['Governador|2'])
+                : sumCandidateVotes(g2);
+            const comparativeTurnTotal = totalVotesTurn2 || totalVotesTurn1;
             // choose top two: prefer 2nd-turn winners if available
             const top2 = g2.length >= 2 ? g2.slice(0,2) : (g1.slice(0,2));
             const winner = top2[0] || null;
@@ -1699,7 +1736,7 @@
                     bannerHtml += '<div class="detalhe-candidato-card" style="border-color: var(--success); margin:0 0 1rem 0">';
                     bannerHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0">';
                     bannerHtml += '<div><h2 style="margin:0">Governador Eleito: ' + (elected.nm_urna_candidato || elected.nm_candidato) + '</h2><div style="color:var(--text-muted)">' + (elected.sg_partido||'-') + '</div></div>';
-                    bannerHtml += '<div style="text-align:right"><div style="font-weight:800;font-size:1.4rem;color:var(--success)">' + formatNumber(elected.total_votos) + '</div><div style="font-size:0.9rem;color:var(--text-muted)">Votos no 2º turno</div></div>';
+                    bannerHtml += '<div style="text-align:right"><div style="font-weight:800;font-size:1.4rem;color:var(--success)">' + formatVotesAndPercent(elected.total_votos, totalVotesTurn2) + '</div><div style="font-size:0.9rem;color:var(--text-muted)">Votos no 2º turno</div></div>';
                     bannerHtml += '</div></div>';
                     bannerEl.innerHTML = bannerHtml;
                 } else {
@@ -1725,24 +1762,24 @@
                 html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">';
                 const displayName = c.nm_urna_candidato || name;
                 html += '<div><h3 style="margin:0">' + displayName + '</h3><div style="color:var(--text-muted)">' + (c.sg_partido||'-') + '</div></div>';
-                html += '<div style="text-align:right"><div style="font-weight:700;font-size:1.25rem">' + formatNumber(total2 || total1) + '</div><div style="font-size:0.85rem;color:var(--text-muted)">Total (2º/1º)</div></div>';
+                html += '<div style="text-align:right"><div style="font-weight:700;font-size:1.25rem">' + formatVotesAndPercent(total2 || total1, comparativeTurnTotal) + '</div><div style="font-size:0.85rem;color:var(--text-muted)">(2º turno)</div></div>';
                 html += '</div>';
 
                 html += '<div style="display:flex;gap:0.5rem;flex-wrap:wrap">';
-                html += '<div style="flex:1;min-width:180px"><div class="label">Regiões mais votado - 1º Turno</div>';
+                html += '<div style="flex:1;min-width:180px"><div class="label">Regiões mais fortes - 1º turno</div>';
                 if (regions1.length) {
                     regions1.slice(0,4).forEach(r=>{
-                        html += '<div style="margin-top:0.4rem">' + r.nome + ': <strong>' + formatNumber(r.total_votos) + '</strong></div>';
+                        html += '<div style="margin-top:0.4rem">' + r.nome + ': <strong>' + formatVotesAndPercent(r.total_votos, total1) + '</strong></div>';
                     });
                 } else {
                     html += '<div style="color:var(--text-muted);margin-top:0.4rem">Sem dados</div>';
                 }
                 html += '</div>';
 
-                html += '<div style="flex:1;min-width:180px"><div class="label">Regiões mais votado - 2º Turno</div>';
+                html += '<div style="flex:1;min-width:180px"><div class="label">Regiões mais fortes - 2º turno</div>';
                 if (regions2.length) {
                     regions2.slice(0,4).forEach(r=>{
-                        html += '<div style="margin-top:0.4rem">' + r.nome + ': <strong>' + formatNumber(r.total_votos) + '</strong></div>';
+                        html += '<div style="margin-top:0.4rem">' + r.nome + ': <strong>' + formatVotesAndPercent(r.total_votos, total2) + '</strong></div>';
                     });
                 } else {
                     html += '<div style="color:var(--text-muted);margin-top:0.4rem">Sem dados</div>';
@@ -1754,7 +1791,7 @@
             });
             html += '</div>'; // end grid
 
-            // Massificação: por região, calcular diferença de votos (2º - 1º) por candidato
+            // Análise detalhada por candidato: comparação entre 1º e 2º turno
             html += '<div style="margin-top:1rem"><h3>Análise Detalhada por Candidato</h3>'; 
             html += '<div class="insight-grid-dynamic">';
             const insights1 = data1.candidateInsights || [];
@@ -1776,18 +1813,18 @@
                 // Destacar 2º turno: número maior, cor de sucesso e posicionado acima do 1º turno
                 html += '<div style="text-align:right">';
                 html += '<div style="font-size:0.85rem;color:var(--text-muted)">2º Turno</div>';
-                html += '<div style="font-weight:900;font-size:1.35rem;color:var(--success);margin-bottom:6px">' + formatNumber(totalT2) + '</div>';
+                html += '<div style="font-weight:900;font-size:1.35rem;color:var(--success);margin-bottom:6px">' + formatVotesAndPercent(totalT2, totalVotesTurn2) + '</div>';
                 html += '<div style="font-size:0.75rem;color:var(--text-muted)">1º Turno</div>';
-                html += '<div style="font-size:1rem;color:var(--text-muted)">' + formatNumber(totalT1) + '</div>';
+                html += '<div style="font-size:1rem;color:var(--text-muted)">' + formatVotesAndPercent(totalT1, totalVotesTurn1) + '</div>';
                 html += '</div>';
                 html += '</div>';
-                html += '<div class="insight-list-title">Cidades mais votado (1º Turno)</div>';
+                html += '<div class="insight-list-title">Cidades mais fortes (1º turno)</div>';
                 const topC1 = (i1.topCities||[]).slice(0,4);
-                if (topC1.length) topC1.forEach(ci=> html += '<div class="insight-list-row"><span>' + ci.municipio + '</span><strong>' + formatNumber(ci.total_votos) + '</strong></div>');
+                if (topC1.length) topC1.forEach(ci=> html += '<div class="insight-list-row"><span>' + ci.municipio + '</span><strong>' + formatVotesAndPercent(ci.total_votos, totalT1) + '</strong></div>');
                 else html += '<div style="color:var(--text-muted)">Sem dados</div>';
-                html += '<div class="insight-list-title" style="margin-top:0.6rem">Cidades mais votado (2º Turno)</div>';
+                html += '<div class="insight-list-title" style="margin-top:0.6rem">Cidades mais fortes (2º turno)</div>';
                 const topC2 = (i2.topCities||[]).slice(0,4);
-                if (topC2.length) topC2.forEach(ci=> html += '<div class="insight-list-row"><span>' + ci.municipio + '</span><strong>' + formatNumber(ci.total_votos) + '</strong></div>');
+                if (topC2.length) topC2.forEach(ci=> html += '<div class="insight-list-row"><span>' + ci.municipio + '</span><strong>' + formatVotesAndPercent(ci.total_votos, totalT2) + '</strong></div>');
                 else html += '<div style="color:var(--text-muted)">Sem dados</div>';
                 html += '</div>';
             });
@@ -1826,8 +1863,10 @@
                     html += '<div class="highlight-item"' + (boxColor ? ' style="border-color: ' + boxColor + ' !important;"' : '') + '>';
                     const displayName = cand.nm_urna_candidato || name;
                     html += '<div style="font-weight:700">' + displayName + '</div>';
-                    html += '<div style="margin-top:0.4rem">1º turno: <strong>' + formatNumber(v1) + '</strong></div>';
-                    html += '<div>2º turno: <strong>' + formatNumber(v2) + '</strong></div>';
+                    const regionTotal1 = Number((r.t1 && r.t1.total_votos) || 0);
+                    const regionTotal2 = Number((r.t2 && r.t2.total_votos) || 0);
+                    html += '<div style="margin-top:0.4rem">1º turno: <strong>' + formatVotesAndPercent(v1, regionTotal1) + '</strong></div>';
+                    html += '<div>2º turno: <strong>' + formatVotesAndPercent(v2, regionTotal2) + '</strong></div>';
                     html += '<div style="margin-top:0.4rem">Dif (2º-1º): <strong>' + (diff >= 0 ? '+' : '') + formatNumber(diff) + '</strong></div>';
                     html += '</div>';
                 });
@@ -1896,6 +1935,8 @@
                     const b1 = Number((row[candB] && row[candB].t1) || 0);
                     const a2 = Number((row[candA] && row[candA].t2) || 0);
                     const b2 = Number((row[candB] && row[candB].t2) || 0);
+                    const cityTotal1 = Object.values(row).reduce((sum, entry) => sum + Number(entry.t1 || 0), 0);
+                    const cityTotal2 = Object.values(row).reduce((sum, entry) => sum + Number(entry.t2 || 0), 0);
                     
                     // Default differences used for initial render
                     const dif1 = a1 - b1;
@@ -1906,8 +1947,8 @@
                     const win1 = (a1 === b1) ? 'Empate' : (a1 > b1 ? candA : candB);
                     const win2 = (a2 === b2) ? 'Empate' : (a2 > b2 ? candA : candB);
                     html += '<tr data-a1="' + a1 + '" data-b1="' + b1 + '" data-a2="' + a2 + '" data-b2="' + b2 + '"><td>' + city + '</td>';
-                    html += '<td>' + formatNumber(a1) + '</td><td>' + formatNumber(b1) + '</td><td class="col-dif1">' + pre1 + formatNumber(Math.abs(dif1)) + '</td><td>' + win1 + '</td>';
-                    html += '<td>' + formatNumber(a2) + '</td><td>' + formatNumber(b2) + '</td><td class="col-dif2">' + pre2 + formatNumber(Math.abs(dif2)) + '</td><td>' + win2 + '</td>';
+                    html += '<td>' + (cityTotal1 ? formatNumber(a1) + ' (' + formatPercent((a1 / cityTotal1) * 100) + ')' : formatNumber(a1)) + '</td><td>' + (cityTotal1 ? formatNumber(b1) + ' (' + formatPercent((b1 / cityTotal1) * 100) + ')' : formatNumber(b1)) + '</td><td class="col-dif1">' + pre1 + formatNumber(Math.abs(dif1)) + '</td><td>' + win1 + '</td>';
+                    html += '<td>' + (cityTotal2 ? formatNumber(a2) + ' (' + formatPercent((a2 / cityTotal2) * 100) + ')' : formatNumber(a2)) + '</td><td>' + (cityTotal2 ? formatNumber(b2) + ' (' + formatPercent((b2 / cityTotal2) * 100) + ')' : formatNumber(b2)) + '</td><td class="col-dif2">' + pre2 + formatNumber(Math.abs(dif2)) + '</td><td>' + win2 + '</td>';
                     html += '</tr>';
                 });
                 html += '</tbody></table></div></div>';
@@ -2060,7 +2101,7 @@
         }
 
 
-        function updateDetalheCandidato(candidato, votosPorMunicipio) {
+        function updateDetalheCandidato(candidato, votosPorMunicipio, groupTotals = null) {
             const container = document.getElementById('detalheCandidatoSection');
             
             if (!candidato) {
@@ -2072,15 +2113,19 @@
             
             // Info do candidato
             const dispName = candidato.nm_urna_candidato || candidato.nm_candidato;
+            const candidateGroupKey = getCandidateGroupKey(candidato);
+            const candidateGroupTotal = (groupTotals && candidateGroupKey && groupTotals[candidateGroupKey])
+                ? Number(groupTotals[candidateGroupKey])
+                : Number(candidato.total_votos || 0);
             document.getElementById('detalheAvatar').textContent = dispName.charAt(0);
             document.getElementById('detalheNome').textContent = dispName;
             document.getElementById('detalhePartido').textContent = candidato.sg_partido;
             document.getElementById('detalheCargo').textContent = candidato.cargo;
-            document.getElementById('detalheVotos').textContent = formatNumber(candidato.total_votos);
+            document.getElementById('detalheVotos').textContent = formatVotesAndPercent(candidato.total_votos, candidateGroupTotal);
             document.getElementById('detalheSituacao').textContent = candidato.situacao;
             document.getElementById('detalheDestaques').textContent =
-                'Cidade mais forte: ' + (candidato.strongest_city ? candidato.strongest_city.municipio + ' (' + formatNumber(candidato.strongest_city.total_votos) + ')' : 'Sem dados') +
-                ' | Região mais forte: ' + (candidato.strongest_region ? candidato.strongest_region.nome + ' (' + formatNumber(candidato.strongest_region.total_votos) + ')' : 'Sem dados');
+                'Cidade mais forte: ' + (candidato.strongest_city ? candidato.strongest_city.municipio + ' (' + formatVotesAndPercent(candidato.strongest_city.total_votos, candidato.total_votos) + ')' : 'Sem dados') +
+                ' | Região mais forte: ' + (candidato.strongest_region ? candidato.strongest_region.nome + ' (' + formatVotesAndPercent(candidato.strongest_region.total_votos, candidato.total_votos) + ')' : 'Sem dados');
             
             // Votos por município
             const votosContainer = document.getElementById('detalheVotosMunicipios');
@@ -2109,6 +2154,10 @@
             }
 
             container.style.display = 'block';
+            const candidatoTotal = Number(candidatoSelecionado?.total_votos || 0);
+            const totalRegioes = (votosPorRegiao || []).reduce((sum, regiao) => {
+                return sum + Number(regiao.total_votos || 0);
+            }, 0);
             
             let html = '<div class="regioes-container">';
             
@@ -2116,10 +2165,10 @@
                 html += '<div class="regiao-card">';
                 html += '<div class="regiao-header">';
                 html += '<h3>' + regiao.nome + '</h3>';
-                html += '<div class="regiao-total">Total: ' + formatNumber(regiao.total_votos) + ' votos</div>';
+                html += '<div class="regiao-total">Total: ' + formatVotesAndPercent(regiao.total_votos, totalRegioes) + '</div>';
                 html += '</div>';
                 if (candidatoSelecionado && regiao.strongest_city) {
-                    html += '<div class="highlight-item" style="margin-bottom: 0.75rem;">Cidade mais forte: ' + regiao.strongest_city.municipio + ' (' + formatNumber(regiao.strongest_city.total_votos) + ' votos)</div>';
+                    html += '<div class="highlight-item" style="margin-bottom: 0.75rem;">Cidade mais forte: ' + regiao.strongest_city.municipio + ' (' + formatVotesAndPercent(regiao.strongest_city.total_votos, candidatoTotal) + ')</div>';
                 }
                 
                 // Candidatos na região
@@ -2129,7 +2178,7 @@
                         html += '<div class="regiao-cand">';
                         const dispCName = c.nm_urna_candidato || c.nm_candidato;
                         html += '<span class="regiao-cand-name">' + dispCName + ' (' + c.sg_partido + ')</span>';
-                        html += '<span class="regiao-cand-votos">' + formatNumber(c.total_votos) + '</span>';
+                        html += '<span class="regiao-cand-votos">' + formatVotesAndPercent(c.total_votos, regiao.total_votos) + '</span>';
                         html += '</div>';
                     });
                     html += '</div>';
@@ -2141,7 +2190,7 @@
                     html += '<h4>Cidades:</h4>';
                     html += '<div class="regiao-cidades-list">';
                     regiao.cidades.forEach(c => {
-                        html += '<span class="cidade-badge">' + c.municipio + ': ' + formatNumber(c.total_votos) + '</span>';
+                        html += '<span class="cidade-badge">' + c.municipio + ': ' + formatVotesAndPercent(c.total_votos, regiao.total_votos) + '</span>';
                     });
                     html += '</div>';
                     html += '</div>';
@@ -2156,6 +2205,63 @@
 
         function formatNumber(num) {
             return new Intl.NumberFormat('pt-BR').format(num);
+        }
+
+        function formatPercent(num) {
+            if (!Number.isFinite(num)) {
+                return '-';
+            }
+
+            return new Intl.NumberFormat('pt-BR', {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1
+            }).format(num) + '%';
+        }
+
+        function getCandidateGroupKey(candidate) {
+            if (!candidate) return '';
+            return String(candidate.cargo || '') + '|' + String(candidate.nr_turno || '');
+        }
+
+        function buildCandidateGroupTotals(candidates) {
+            return (candidates || []).reduce((totals, candidate) => {
+                const key = getCandidateGroupKey(candidate);
+                if (!key) return totals;
+                totals[key] = (totals[key] || 0) + Number(candidate.total_votos || 0);
+                return totals;
+            }, {});
+        }
+
+        function sumCandidateVotes(candidates) {
+            return (candidates || []).reduce((sum, candidate) => {
+                return sum + Number(candidate.total_votos || 0);
+            }, 0);
+        }
+
+        function formatVotesAndPercent(votes, total, separator = ' | ') {
+            const value = Number(votes || 0);
+            const reference = Number(total || 0);
+            if (!reference) {
+                return formatNumber(value);
+            }
+
+            const pct = (value / reference) * 100;
+            return formatNumber(value) + separator + formatPercent(pct);
+        }
+
+        function getTurnLabel(turn) {
+            return String(turn) === '2' ? '2º turno' : '1º turno';
+        }
+
+        function getCandidateShareText(candidate, totalsByGroup) {
+            if (!candidate || !totalsByGroup) return '';
+
+            const key = getCandidateGroupKey(candidate);
+            const groupTotal = Number(totalsByGroup[key] || 0);
+            if (!groupTotal) return '';
+
+            const pct = (Number(candidate.total_votos || 0) / groupTotal) * 100;
+            return getTurnLabel(candidate.nr_turno) + ' (' + formatPercent(pct) + ')';
         }
 
         let _loadingCount = 0;
@@ -2223,16 +2329,44 @@
 
             try {
                 if (cargoVal === 'Governador' && (!candidatoVal || candidatoVal === 'Todos')) {
-                    const situacaoParam = isEleitos ? '&situacao=ELEITO' : '';
-                    const p1 = fetch('api.php?turno=1&cargo=' + encodeURIComponent(cargoVal) + situacaoParam).then(r => r.json());
-                    const p2 = fetch('api.php?turno=2&cargo=' + encodeURIComponent(cargoVal) + situacaoParam).then(r => r.json());
-                    const [data1, data2] = await Promise.all([p1, p2]);
+                    const fetchGovernorPair = async (includeFilters) => {
+                        const governorParams = new URLSearchParams();
+                        governorParams.set('cargo', cargoVal);
+                        if (includeFilters) {
+                            if (paramsObj.municipio) {
+                                governorParams.set('municipio', paramsObj.municipio);
+                            }
+                            if (paramsObj.partido) {
+                                governorParams.set('partido', paramsObj.partido);
+                            }
+                        }
+
+                        const paramsTurn1 = new URLSearchParams(governorParams.toString());
+                        paramsTurn1.set('turno', '1');
+                        const paramsTurn2 = new URLSearchParams(governorParams.toString());
+                        paramsTurn2.set('turno', '2');
+
+                        const p1 = fetch('api.php?' + paramsTurn1.toString()).then(r => r.json());
+                        const p2 = fetch('api.php?' + paramsTurn2.toString()).then(r => r.json());
+                        return Promise.all([p1, p2]);
+                    };
+
+                    let [data1, data2] = await fetchGovernorPair(true);
+                    const governorCount1 = (data1.candidatosGovernador || []).length;
+                    const governorCount2 = (data2.candidatosGovernador || []).length;
+                    if (governorCount1 === 0 || governorCount2 === 0) {
+                        [data1, data2] = await fetchGovernorPair(false);
+                    }
 
                     updateStats(data1.stats || {});
                     updateModePanel(data1.ui || {}, data1.modeHighlights || []);
                     updateCandidatosTable(data1.candidatos || [], data1.candidateInsights || []);
-                    updateCandidateInsights(data1.candidateInsights || [], data1.candidatosGovernador || []);
-                    updateGovernorRace(data1.candidatosGovernador || []);
+                    updateCandidateInsights(
+                        data1.candidateInsights || [],
+                        data1.candidatosGovernador || [],
+                        data1.cargoTurnTotals || data1.governorTurnTotals || {}
+                    );
+                    updateGovernorRace(data1.candidatosGovernador || [], data1.cargoTurnTotals || data1.governorTurnTotals || {});
 
                     renderGovernorComparative(data1, data2);
                     updateDetalheCandidato(null, []);
@@ -2263,13 +2397,24 @@
                 updateModePanel(data.ui || {}, data.modeHighlights || []);
                 updateCandidatosTable(data.candidatos || [], data.candidateInsights || []);
                 updateMunicipios(data.municipios || []);
-                updateCandidateInsights(data.candidateInsights || [], data.candidatosGovernador || []);
-                updateGovernorRace(data.detalheCandidato ? [] : (data.candidatosGovernador || []));
+                updateCandidateInsights(
+                    data.candidateInsights || [],
+                    data.candidatosGovernador || [],
+                    data.cargoTurnTotals || data.governorTurnTotals || {}
+                );
+                updateGovernorRace(
+                    data.detalheCandidato ? [] : (data.candidatosGovernador || []),
+                    data.cargoTurnTotals || data.governorTurnTotals || {}
+                );
                 updateVotosPorRegiao(
                     data.detalheCandidato ? (data.votosPorRegiaoCandidato || []) : (data.votosPorRegiao || []),
                     data.detalheCandidato
                 );
-                updateDetalheCandidato(data.detalheCandidato, data.votosPorMunicipio || []);
+                updateDetalheCandidato(
+                    data.detalheCandidato,
+                    data.votosPorMunicipio || [],
+                    data.cargoTurnTotals || data.governorTurnTotals || {}
+                );
 
                 hideLoading();
             } catch (error) {

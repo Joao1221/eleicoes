@@ -475,6 +475,34 @@ try {
         $votosPorRegiao = buildRegionSummary($governorCityRows, $governorCandidates, $regionLookup);
     }
 
+    $governorTurnTotals = [];
+    $governorTurnRows = queryAll($conn, "
+        SELECT
+            nr_turno,
+            SUM(qt_votos_nominais) AS total_votos
+        FROM votacao_2022
+        WHERE cargo = 'Governador'
+        GROUP BY nr_turno
+        ORDER BY nr_turno
+    ");
+    foreach ($governorTurnRows as $row) {
+        $governorTurnTotals[(string) $row['nr_turno']] = (int) $row['total_votos'];
+    }
+
+    $cargoTurnTotals = [];
+    $cargoTurnRows = queryAll($conn, "
+        SELECT
+            cargo,
+            nr_turno,
+            SUM(qt_votos_nominais) AS total_votos
+        FROM votacao_2022
+        GROUP BY cargo, nr_turno
+        ORDER BY cargo, nr_turno
+    ");
+    foreach ($cargoTurnRows as $row) {
+        $cargoTurnTotals[(string) $row['cargo'] . '|' . (string) $row['nr_turno']] = (int) $row['total_votos'];
+    }
+
     $modeHighlights = [];
     if ($turno === '1' && count($governorCandidates) >= 2) {
         $modeHighlights[] = 'Os dois candidatos classificados ao 2º turno são ' . $governorCandidates[0]['nm_candidato'] . ' e ' . $governorCandidates[1]['nm_candidato'] . '.';
@@ -483,7 +511,7 @@ try {
         $modeHighlights[] = 'A disputa do 2º turno está concentrada entre ' . $governorCandidates[0]['nm_candidato'] . ' e ' . $governorCandidates[1]['nm_candidato'] . '.';
     }
     if ($turno === 'todos') {
-        $modeHighlights[] = 'Este modo considera somente os candidatos eleitos.';
+        $modeHighlights[] = 'Este modo exibe somente os candidatos eleitos.';
     }
 
     $detalheCandidato = null;
@@ -532,6 +560,8 @@ try {
         'cityCandidateVotes' => $cityVoteRows,
         'candidateInsights' => $candidateInsights,
         'candidatosGovernador' => $governorCandidates,
+        'governorTurnTotals' => $governorTurnTotals,
+        'cargoTurnTotals' => $cargoTurnTotals,
         'detalheCandidato' => $detalheCandidato,
         'votosPorMunicipio' => $votosPorMunicipio,
         'votosPorRegiaoCandidato' => $votosPorRegiaoCandidato,
