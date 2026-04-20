@@ -626,6 +626,7 @@ function premium_render_leaf_card(array $leader): string
 {
     $leaderId = (int) ($leader['id'] ?? 0);
     $yesChecked = !empty($leader['aligned_with_executive']) ? ' checked' : '';
+    $leaderName = (string) ($leader['leader_display_name'] ?? $leader['leader_name'] ?? 'Liderança');
     $transferRate = number_format((float) ($leader['transfer_rate'] ?? 40), 2, '.', '');
     $marginPercent = number_format((float) ($leader['margin_percent'] ?? 0), 2, '.', '');
     $visibilityScore = number_format((float) ($leader['visibility_score'] ?? 50), 2, '.', '');
@@ -649,7 +650,7 @@ function premium_render_leaf_card(array $leader): string
     $html[] = '<form class="leader-form" method="post" action="premium_actions.php">';
     $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html(premium_csrf_token()) . '">';
     $html[] = '<input type="hidden" name="action" value="update_leader">';
-    $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SxSSION['premium_campaign_id'] ?? 0) . '">';
+    $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SESSION['premium_campaign_id'] ?? 0) . '">';
     $html[] = '<input type="hidden" name="leader_id" value="' . $leaderId . '">';
     $html[] = '<div class="form-grid compact">';
     $html[] = '<label>Região<input type="text" name="region_name" value="' . premium_escape_html((string) ($leader['region_name'] ?? '')) . '"></label>';
@@ -671,7 +672,7 @@ function premium_render_leaf_card(array $leader): string
     $html[] = '<form method="post" action="premium_actions.php" onsubmit="return confirm(\'Remover esta liderança da campanha?\');">';
     $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html(premium_csrf_token()) . '">';
     $html[] = '<input type="hidden" name="action" value="delete_leader">';
-    $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SxSSION['premium_campaign_id'] ?? 0) . '">';
+    $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SESSION['premium_campaign_id'] ?? 0) . '">';
     $html[] = '<input type="hidden" name="leader_id" value="' . $leaderId . '">';
     $html[] = '<button class="btn danger" type="submit">Excluir liderança</button>';
     $html[] = '</form>';
@@ -690,7 +691,7 @@ function premium_render_agenda_card(array $item): string
     $html[] = '<article class="agenda-card">';
     $html[] = '<form method="post" action="premium_actions.php" class="agenda-form">';
     $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html(premium_csrf_token()) . '">';
-    $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SxSSION['premium_campaign_id'] ?? 0) . '">';
+    $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SESSION['premium_campaign_id'] ?? 0) . '">';
     $html[] = '<input type="hidden" name="agenda_id" value="' . $agendaId . '">';
     $html[] = '<div class="agenda-top">';
     $html[] = '<label>Título<input type="text" name="title" value="' . premium_escape_html((string) ($item['title'] ?? '')) . '"></label>';
@@ -706,7 +707,7 @@ function premium_render_agenda_card(array $item): string
     $html[] = '<form method="post" action="premium_actions.php" onsubmit="return confirm(\'Remover esta tarefa da agenda?\');">';
     $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html(premium_csrf_token()) . '">';
     $html[] = '<input type="hidden" name="action" value="delete_agenda">';
-    $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SxSSION['premium_campaign_id'] ?? 0) . '">';
+    $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SESSION['premium_campaign_id'] ?? 0) . '">';
     $html[] = '<input type="hidden" name="agenda_id" value="' . $agendaId . '">';
     $html[] = '<button class="btn danger" type="submit">Excluir tarefa</button>';
     $html[] = '</form>';
@@ -1454,6 +1455,7 @@ function premium_render_agenda_list_modal(array $items): string
             background: rgba(6, 18, 24, 0.96);
             color: var(--text);
             padding: 12px 14px;
+            min-height: 44px;
             font: inherit;
         }
 
@@ -2471,6 +2473,7 @@ function premium_render_agenda_list_modal(array $items): string
 
         .table-wrap {
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         table {
@@ -2653,6 +2656,302 @@ function premium_render_agenda_list_modal(array $items): string
                 justify-content: flex-start;
             }
         }
+
+        @media (max-width: 768px) {
+            .shell {
+                width: calc(100vw - 24px);
+                padding: 14px 12px 28px;
+            }
+
+            .topbar {
+                flex-direction: column;
+                align-items: stretch;
+                margin-bottom: 16px;
+            }
+
+            .topbar-right {
+                width: 100%;
+                justify-items: end;
+            }
+
+            .topbar-actions {
+                width: auto;
+                justify-content: flex-end;
+            }
+
+            .topbar-actions > * {
+                width: auto;
+                flex: 0 0 auto;
+            }
+
+            .theme-switch {
+                width: auto;
+                justify-content: center;
+            }
+
+            .panel {
+                padding: 16px;
+                border-radius: 18px;
+            }
+
+            .hero {
+                grid-template-columns: 1fr;
+                gap: 14px;
+            }
+
+            .auth-grid,
+            .grid-2,
+            .grid-3,
+            .stats-grid,
+            .search-grid,
+            .form-grid,
+            .form-grid.compact,
+            .leaders-summary,
+            .scope-summary-grid,
+            .comparison-summary-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .dashboard-panels-split,
+            .forecast-agenda-split {
+                grid-template-columns: 1fr;
+            }
+
+            .section-title,
+            .leader-modal__header,
+            .agenda-modal__header,
+            .leader-head,
+            .agenda-head,
+            .leader-batch-toolbar,
+            .campaign-shortcuts {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .section-title {
+                gap: 10px;
+            }
+
+            .section-title h2 {
+                font-size: 1.2rem;
+            }
+
+            .section-title > div {
+                width: 100%;
+            }
+
+            .section-title .comparison-cta,
+            .section-title .comparison-report-btn,
+            .leader-modal__header .btn,
+            .agenda-modal__header .btn,
+            .campaign-shortcuts__actions .btn,
+            .leader-batch-toolbar__actions .btn,
+            .modal-header-actions .btn,
+            .action-row .btn {
+                width: 100%;
+                white-space: normal;
+            }
+
+            .leader-modal,
+            .agenda-modal {
+                padding: 8px;
+                align-items: stretch;
+                justify-content: center;
+            }
+
+            .leader-modal__panel,
+            .agenda-modal__panel {
+                width: 100%;
+                max-height: calc(100vh - 16px);
+                padding: 16px;
+                border-radius: 18px;
+            }
+
+            .agenda-modal__panel--wide,
+            .city-comparison-modal__panel {
+                width: 100%;
+            }
+
+            .leader-modal__summary,
+            .agenda-modal__summary,
+            .campaign-shortcuts__actions,
+            .leader-batch-toolbar__actions,
+            .modal-header-actions,
+            .action-row,
+            .pill-row,
+            .agenda-filter-bar,
+            .scope-summary-meta {
+                width: 100%;
+            }
+
+            .leader-modal__summary,
+            .agenda-modal__summary,
+            .campaign-shortcuts__actions,
+            .leader-batch-toolbar__actions,
+            .modal-header-actions,
+            .action-row {
+                align-items: stretch;
+            }
+
+            .leader-batch-toolbar {
+                padding: 12px;
+            }
+
+            .leader-batch-form {
+                width: 100%;
+                display: block;
+            }
+
+            .leader-batch-toolbar__actions {
+                justify-content: flex-start;
+            }
+
+            .leader-batch-toolbar__actions > *,
+            .campaign-shortcuts__actions > * {
+                width: 100%;
+            }
+
+            .btn-small {
+                width: auto;
+            }
+
+            .agenda-filter-bar {
+                gap: 8px;
+            }
+
+            .agenda-filter-btn {
+                width: calc(50% - 4px);
+            }
+
+            .pill-row {
+                gap: 8px;
+            }
+
+            .pill,
+            .table-pill,
+            .comparison-mode-pill,
+            .user-status {
+                max-width: 100%;
+                white-space: normal;
+            }
+
+            .leader-card,
+            .agenda-card {
+                padding: 14px;
+                border-radius: 16px;
+            }
+
+            .leader-head,
+            .agenda-head {
+                gap: 10px;
+            }
+
+            .leader-head p,
+            .agenda-head p,
+            .panel-note,
+            .field-help {
+                line-height: 1.45;
+            }
+
+            .table-wrap {
+                margin-left: -2px;
+                margin-right: -2px;
+            }
+
+            table,
+            .leaders-table,
+            .scope-modal-table,
+            .comparison-modal-table,
+            .admin-user-table,
+            .admin-campaign-table {
+                min-width: 760px;
+            }
+
+            .leaders-table-shell,
+            .agenda-table-shell {
+                max-height: none;
+            }
+
+            .agenda-table--full {
+                min-width: 820px;
+            }
+
+            .leader-search-table thead th:first-child,
+            .leader-search-table tbody td:first-child {
+                width: 44px;
+            }
+        }
+
+        @media (max-width: 540px) {
+            .shell {
+                width: calc(100vw - 20px);
+                padding: 12px 10px 24px;
+            }
+
+            .panel {
+                padding: 14px;
+                border-radius: 16px;
+            }
+
+            .topbar h1 {
+                font-size: clamp(1.55rem, 9vw, 2.25rem);
+            }
+
+            .eyebrow {
+                font-size: 0.66rem;
+                padding: 6px 10px;
+            }
+
+            .stat-card {
+                padding: 14px;
+                min-height: 104px;
+            }
+
+            .stat-value {
+                font-size: clamp(1.35rem, 8vw, 2rem);
+            }
+
+            .summary-metric {
+                padding: 12px 14px;
+            }
+
+            .summary-metric__label,
+            .stat-label {
+                font-size: 0.66rem;
+            }
+
+            .summary-metric__sub,
+            .stat-sub {
+                font-size: 0.78rem;
+            }
+
+            .leader-modal__header h3,
+            .agenda-modal__header h3 {
+                font-size: clamp(1.3rem, 7vw, 1.7rem);
+            }
+
+            .agenda-filter-btn {
+                width: 100%;
+            }
+
+            .leader-batch-toolbar__sub {
+                font-size: 0.72rem;
+            }
+
+            .field-help {
+                font-size: 0.7rem;
+            }
+
+            .panel-note {
+                font-size: 0.84rem;
+            }
+
+            .table-wrap {
+                margin-left: -4px;
+                margin-right: -4px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -2728,7 +3027,7 @@ function premium_render_agenda_list_modal(array $items): string
                         </label>
                     </div>
                     <div class="action-row">
-                        <button class="btn primary" type="submit">xntrar no premium</button>
+                        <button class="btn primary" type="submit">Entrar no premium</button>
                     </div>
                 </form>
             </div>
