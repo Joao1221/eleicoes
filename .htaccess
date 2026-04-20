@@ -1,0 +1,20 @@
+# Clean URLs for public pages.
+# The home already resolves at "/" via DirectoryIndex.
+
+<IfModule mod_negotiation.c>
+    Options -MultiViews
+</IfModule>
+
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Redirect direct .php access to the clean URL.
+    RewriteCond %{THE_REQUEST} \s.+/(premium|eleicoes_municipais_se)\.php[\s?] [NC]
+    RewriteRule ^ %1 [R=301,L,QSA]
+
+    # Map clean URLs to the PHP files.
+    RewriteRule ^premium/?$ premium.php [L,QSA]
+    RewriteRule ^eleicoes_municipais_se/?$ eleicoes_municipais_se.php [L,QSA]
+</IfModule>

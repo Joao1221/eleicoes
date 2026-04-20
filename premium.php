@@ -75,7 +75,7 @@ function premium_render_region_select(string $name, string $id, string $selected
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'login') {
     if (!premium_validate_csrf($_POST['csrf'] ?? null)) {
         premium_flash('error', 'Sua sessão expirou. Recarregue a página e tente novamente.');
-        header('Location: premium.php');
+        header('Location: premium');
         exit;
     }
 
@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
         premium_flash('error', 'Credenciais inválidas ou conta inativa.');
     }
 
-    header('Location: premium.php');
+    header('Location: premium');
     exit;
 }
 
@@ -568,7 +568,7 @@ function premium_render_city_comparison_modal(array $forecast): string
     $html[] = '            <th>Região</th>';
     $html[] = '            <th>2022</th>';
     $html[] = '            <th>Lideranças</th>';
-    $html[] = '            <th>Votos liderança</th>';
+    $html[] = '            <th>Votos Liderança</th>';
     $html[] = '            <th>Votos independentes</th>';
     $html[] = '            <th>Projeção 2026</th>';
     $html[] = '            <th>Delta</th>';
@@ -1018,6 +1018,22 @@ function premium_render_agenda_list_modal(array $items): string
             --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
         }
 
+        html[data-theme="dark"] {
+            color-scheme: dark;
+            --bg: #06111c;
+            --bg-soft: #0c1828;
+            --panel: rgba(11, 20, 34, 0.92);
+            --panel-strong: rgba(15, 25, 42, 0.98);
+            --line: rgba(145, 159, 181, 0.16);
+            --text: #f5f7fb;
+            --muted: #9aa8ba;
+            --accent: #8fd3ff;
+            --accent-2: #f3c67c;
+            --accent-3: #74a7ff;
+            --danger: #ff7e8d;
+            --shadow: 0 30px 90px rgba(2, 8, 20, 0.46);
+        }
+
         * { box-sizing: border-box; }
         html {
             color-scheme: dark;
@@ -1046,6 +1062,14 @@ function premium_render_agenda_list_modal(array $items): string
             min-height: 100vh;
         }
 
+        html[data-theme="dark"] body {
+            background:
+                radial-gradient(circle at top left, rgba(143, 211, 255, 0.16), transparent 28%),
+                radial-gradient(circle at top right, rgba(243, 198, 124, 0.12), transparent 24%),
+                radial-gradient(circle at 50% 100%, rgba(116, 167, 255, 0.08), transparent 30%),
+                linear-gradient(180deg, #06111c 0%, #081522 40%, #040b13 100%);
+        }
+
         html[data-theme="light"] body {
             background:
                 radial-gradient(circle at top left, rgba(14, 165, 233, 0.10), transparent 26%),
@@ -1063,6 +1087,12 @@ function premium_render_agenda_list_modal(array $items): string
                 linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
             background-size: 32px 32px;
             mask-image: radial-gradient(circle at center, black 42%, transparent 95%);
+        }
+
+        html[data-theme="dark"] body::before {
+            background-image:
+                linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
         }
 
         html[data-theme="light"] body::before {
@@ -1100,6 +1130,52 @@ function premium_render_agenda_list_modal(array $items): string
             font-weight: 800;
             letter-spacing: .08em;
             text-transform: uppercase;
+        }
+
+        .topbar .eyebrow,
+        .report-brand {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.48);
+            background:
+                linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 205, 0.98) 28%, rgba(143, 211, 255, 0.94) 58%, rgba(110, 243, 197, 0.92) 82%, rgba(255, 217, 138, 0.96));
+            color: #03111d;
+            font-size: 0.92rem;
+            font-weight: 900;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.65);
+            box-shadow:
+                0 18px 40px rgba(2, 8, 20, 0.18),
+                0 0 0 1px rgba(255,255,255,0.40) inset,
+                0 0 26px rgba(143, 211, 255, 0.22),
+                0 0 22px rgba(110, 243, 197, 0.18);
+            backdrop-filter: blur(10px);
+        }
+
+        html[data-theme="dark"] .topbar .eyebrow,
+        html[data-theme="dark"] .report-brand {
+            border-color: rgba(255, 255, 255, 0.52);
+            background:
+                linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 251, 214, 0.98) 28%, rgba(143, 211, 255, 0.96) 58%, rgba(110, 243, 197, 0.94) 82%, rgba(255, 217, 138, 0.98));
+            box-shadow:
+                0 18px 44px rgba(2, 8, 20, 0.50),
+                0 0 0 1px rgba(255,255,255,0.22) inset,
+                0 0 34px rgba(143, 211, 255, 0.30),
+                0 0 28px rgba(110, 243, 197, 0.24);
+        }
+
+        html[data-theme="light"] .topbar .eyebrow,
+        html[data-theme="light"] .report-brand {
+            border-color: rgba(15, 23, 42, 0.08);
+            box-shadow:
+                0 14px 30px rgba(12, 40, 52, 0.16),
+                0 0 0 1px rgba(255,255,255,0.24) inset,
+                0 0 24px rgba(143, 211, 255, 0.16);
         }
 
         h1, h2, h3, h4 {
@@ -1229,6 +1305,182 @@ function premium_render_agenda_list_modal(array $items): string
 
         .panel + .panel { margin-top: 18px; }
 
+        html[data-theme="dark"] .panel {
+            background: linear-gradient(180deg, rgba(13, 23, 38, 0.96), rgba(8, 14, 24, 0.98));
+            border-color: rgba(145, 159, 181, 0.14);
+            box-shadow: 0 24px 72px rgba(2, 8, 20, 0.40);
+        }
+
+        .panel-tint {
+            position: relative;
+            overflow: hidden;
+            isolation: isolate;
+            --panel-spot-1: rgba(110, 243, 197, 0.14);
+            --panel-spot-2: rgba(100, 210, 255, 0.08);
+            --panel-border-tint: rgba(110, 243, 197, 0.22);
+            --panel-shadow-tint: rgba(110, 243, 197, 0.10);
+            --panel-label-tint: var(--accent);
+            --panel-toggle-text: var(--panel-label-tint);
+            --panel-toggle-border: var(--panel-border-tint);
+            --panel-toggle-hover-bg: rgba(110, 243, 197, 0.12);
+            --panel-toggle-hover-border: rgba(110, 243, 197, 0.30);
+        }
+
+        .panel-tint::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at top right, var(--panel-spot-1), transparent 34%),
+                radial-gradient(circle at bottom left, var(--panel-spot-2), transparent 40%);
+            opacity: 0.92;
+            z-index: 0;
+        }
+
+        .panel-tint::after {
+            content: '';
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 3px;
+            pointer-events: none;
+            background: linear-gradient(90deg, var(--panel-spot-1), var(--panel-spot-2));
+            opacity: 0.95;
+            z-index: 0;
+        }
+
+        .panel-tint > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        html[data-theme="dark"] .panel-tint {
+            background:
+                radial-gradient(circle at top right, var(--panel-spot-1), transparent 34%),
+                radial-gradient(circle at bottom left, var(--panel-spot-2), transparent 40%),
+                linear-gradient(180deg, rgba(13, 23, 38, 0.98), rgba(8, 14, 24, 0.98));
+            border-color: var(--panel-border-tint);
+            box-shadow: 0 24px 72px var(--panel-shadow-tint);
+        }
+
+        html[data-theme="light"] .panel-tint {
+            background:
+                radial-gradient(circle at top right, var(--panel-spot-1), transparent 34%),
+                radial-gradient(circle at bottom left, var(--panel-spot-2), transparent 40%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 248, 252, 0.96));
+            border-color: var(--panel-border-tint);
+            box-shadow: 0 24px 60px var(--panel-shadow-tint);
+        }
+
+        .panel-tint .eyebrow {
+            color: var(--panel-label-tint);
+            border-color: var(--panel-border-tint);
+        }
+
+        html[data-theme="dark"] .panel-tint .eyebrow {
+            background: rgba(8, 15, 26, 0.70);
+        }
+
+        html[data-theme="light"] .panel-tint .eyebrow {
+            background: rgba(255, 255, 255, 0.90);
+        }
+
+        .panel-tint .panel-tint__toggle {
+            font-weight: 900;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        html[data-theme="dark"] .panel-tint .panel-tint__toggle {
+            background: rgba(8, 15, 26, 0.64);
+            color: var(--panel-toggle-text);
+            border-color: var(--panel-toggle-border);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+        }
+
+        html[data-theme="dark"] .panel-tint .panel-tint__toggle:hover {
+            background: var(--panel-toggle-hover-bg);
+            border-color: var(--panel-toggle-hover-border);
+            color: var(--panel-toggle-text);
+        }
+
+        html[data-theme="light"] .panel-tint .panel-tint__toggle {
+            background: rgba(255, 255, 255, 0.94);
+            color: var(--panel-toggle-text);
+            border-color: var(--panel-toggle-border);
+        }
+
+        html[data-theme="light"] .panel-tint .panel-tint__toggle:hover {
+            background: var(--panel-toggle-hover-bg);
+            border-color: var(--panel-toggle-hover-border);
+            color: var(--panel-toggle-text);
+        }
+
+        .panel-tint--baseline {
+            --panel-spot-1: rgba(116, 167, 255, 0.18);
+            --panel-spot-2: rgba(143, 211, 255, 0.10);
+            --panel-border-tint: rgba(116, 167, 255, 0.24);
+            --panel-shadow-tint: rgba(116, 167, 255, 0.12);
+            --panel-label-tint: #8fd3ff;
+            --panel-toggle-text: #8fd3ff;
+            --panel-toggle-border: rgba(116, 167, 255, 0.34);
+            --panel-toggle-hover-bg: rgba(116, 167, 255, 0.12);
+            --panel-toggle-hover-border: rgba(116, 167, 255, 0.44);
+        }
+
+        .panel-tint--model {
+            --panel-spot-1: rgba(243, 198, 124, 0.18);
+            --panel-spot-2: rgba(116, 167, 255, 0.10);
+            --panel-border-tint: rgba(243, 198, 124, 0.24);
+            --panel-shadow-tint: rgba(243, 198, 124, 0.12);
+            --panel-label-tint: #f3c67c;
+            --panel-toggle-text: #f3c67c;
+            --panel-toggle-border: rgba(243, 198, 124, 0.34);
+            --panel-toggle-hover-bg: rgba(243, 198, 124, 0.12);
+            --panel-toggle-hover-border: rgba(243, 198, 124, 0.44);
+        }
+
+        .panel-tint--leaders-search {
+            --panel-spot-1: rgba(110, 243, 197, 0.18);
+            --panel-spot-2: rgba(110, 243, 197, 0.10);
+            --panel-border-tint: rgba(110, 243, 197, 0.22);
+            --panel-shadow-tint: rgba(110, 243, 197, 0.12);
+            --panel-label-tint: #6ef3c5;
+            --panel-toggle-text: #6ef3c5;
+            --panel-toggle-border: rgba(110, 243, 197, 0.34);
+            --panel-toggle-hover-bg: rgba(110, 243, 197, 0.12);
+            --panel-toggle-hover-border: rgba(110, 243, 197, 0.44);
+        }
+
+        .panel-tint--leaders-active {
+            --panel-spot-1: rgba(100, 210, 255, 0.16);
+            --panel-spot-2: rgba(243, 198, 124, 0.10);
+            --panel-border-tint: rgba(100, 210, 255, 0.22);
+            --panel-shadow-tint: rgba(100, 210, 255, 0.10);
+            --panel-label-tint: #64d2ff;
+            --panel-toggle-text: #64d2ff;
+            --panel-toggle-border: rgba(100, 210, 255, 0.34);
+            --panel-toggle-hover-bg: rgba(100, 210, 255, 0.12);
+            --panel-toggle-hover-border: rgba(100, 210, 255, 0.44);
+        }
+
+        .panel-tint--regions {
+            --panel-spot-1: rgba(116, 167, 255, 0.16);
+            --panel-spot-2: rgba(100, 210, 255, 0.08);
+            --panel-border-tint: rgba(116, 167, 255, 0.22);
+            --panel-shadow-tint: rgba(116, 167, 255, 0.10);
+            --panel-label-tint: #74a7ff;
+        }
+
+        .panel-tint--cities {
+            --panel-spot-1: rgba(243, 198, 124, 0.14);
+            --panel-spot-2: rgba(143, 211, 255, 0.10);
+            --panel-border-tint: rgba(243, 198, 124, 0.22);
+            --panel-shadow-tint: rgba(243, 198, 124, 0.10);
+            --panel-label-tint: #f3c67c;
+        }
+
         .hero {
             display: grid;
             grid-template-columns: minmax(0, 1.2fr) minmax(280px, 380px);
@@ -1236,6 +1488,15 @@ function premium_render_agenda_list_modal(array $items): string
             align-items: stretch;
             margin-bottom: 18px;
             background: linear-gradient(135deg, rgba(11, 29, 38, 0.95), rgba(7, 36, 49, 0.92));
+        }
+
+        html[data-theme="dark"] .hero.panel {
+            background:
+                radial-gradient(circle at top right, rgba(243, 198, 124, 0.12), transparent 30%),
+                radial-gradient(circle at bottom left, rgba(143, 211, 255, 0.10), transparent 32%),
+                linear-gradient(135deg, rgba(12, 21, 34, 0.98), rgba(7, 14, 24, 0.98));
+            border-color: rgba(143, 211, 255, 0.14);
+            box-shadow: 0 28px 72px rgba(2, 8, 20, 0.44);
         }
 
         .hero .copy p {
@@ -1261,6 +1522,11 @@ function premium_render_agenda_list_modal(array $items): string
             color: var(--text);
             font-size: .8rem;
             font-weight: 700;
+        }
+
+        html[data-theme="dark"] .pill {
+            background: rgba(8, 15, 26, 0.72);
+            border-color: rgba(145, 159, 181, 0.16);
         }
 
         .btn {
@@ -1318,6 +1584,40 @@ function premium_render_agenda_list_modal(array $items): string
             transform: translateY(-1px);
             border-color: rgba(110, 243, 197, 0.34);
             background: rgba(110, 243, 197, 0.10);
+        }
+
+        html[data-theme="dark"] .btn.primary {
+            background: linear-gradient(135deg, #8fd3ff 0%, #6aa5ff 100%);
+            color: #06111c;
+            box-shadow: 0 14px 28px rgba(106, 165, 255, 0.22);
+        }
+
+        html[data-theme="dark"] .btn.ghost {
+            background: rgba(8, 15, 26, 0.72);
+            color: var(--text);
+            border-color: rgba(145, 159, 181, 0.16);
+        }
+
+        html[data-theme="dark"] .btn.comparison-cta {
+            background: linear-gradient(135deg, #8fd3ff 0%, #f3c67c 100%);
+            color: #06111c;
+            border-color: rgba(143, 211, 255, 0.34);
+            box-shadow: 0 16px 34px rgba(143, 211, 255, 0.18), 0 0 0 1px rgba(243, 198, 124, 0.12);
+        }
+
+        html[data-theme="dark"] .btn.comparison-cta:hover {
+            box-shadow: 0 20px 40px rgba(143, 211, 255, 0.24), 0 0 0 1px rgba(243, 198, 124, 0.18);
+        }
+
+        html[data-theme="dark"] .btn.comparison-report-btn {
+            background: rgba(8, 15, 26, 0.72);
+            color: var(--text);
+            border-color: rgba(143, 211, 255, 0.20);
+        }
+
+        html[data-theme="dark"] .btn.comparison-report-btn:hover {
+            background: rgba(143, 211, 255, 0.10);
+            border-color: rgba(143, 211, 255, 0.28);
         }
 
         html[data-theme="light"] .btn.comparison-report-btn {
@@ -1479,6 +1779,11 @@ function premium_render_agenda_list_modal(array $items): string
             color: #ecfff8;
         }
 
+        html[data-theme="dark"] select option {
+            background: #08131f;
+            color: #f5f7fb;
+        }
+
         html[data-theme="light"] select option {
             background: #ffffff;
             color: #0f172a;
@@ -1490,6 +1795,20 @@ function premium_render_agenda_list_modal(array $items): string
             outline: none;
             border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(110,243,197,0.12);
+        }
+
+        html[data-theme="dark"] input,
+        html[data-theme="dark"] select,
+        html[data-theme="dark"] textarea {
+            background: rgba(8, 16, 28, 0.96);
+            border-color: rgba(145, 159, 181, 0.16);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+        }
+
+        html[data-theme="dark"] input:focus,
+        html[data-theme="dark"] select:focus,
+        html[data-theme="dark"] textarea:focus {
+            box-shadow: 0 0 0 3px rgba(143, 211, 255, 0.12);
         }
 
         .checkbox {
@@ -1564,6 +1883,12 @@ function premium_render_agenda_list_modal(array $items): string
             border-color: rgba(110, 243, 197, 0.3);
         }
 
+        html[data-theme="dark"] .agenda-filter-btn.is-active {
+            background: rgba(143, 211, 255, 0.14);
+            color: var(--accent);
+            border-color: rgba(143, 211, 255, 0.28);
+        }
+
         .campaign-shortcuts {
             display: flex;
             flex-wrap: wrap;
@@ -1575,6 +1900,12 @@ function premium_render_agenda_list_modal(array $items): string
             border: 1px solid rgba(110, 243, 197, 0.22);
             border-radius: 18px;
             background: linear-gradient(135deg, rgba(12, 34, 46, 0.98), rgba(8, 21, 29, 0.96));
+        }
+
+        html[data-theme="dark"] .campaign-shortcuts {
+            background: linear-gradient(135deg, rgba(13, 23, 38, 0.96), rgba(8, 14, 24, 0.98));
+            border-color: rgba(143, 211, 255, 0.16);
+            box-shadow: 0 18px 48px rgba(2, 8, 20, 0.34);
         }
 
         html[data-theme="light"] .campaign-shortcuts {
@@ -1717,12 +2048,23 @@ function premium_render_agenda_list_modal(array $items): string
             border-color: rgba(110, 243, 197, 0.3);
         }
 
+        html[data-theme="dark"] .accordion-panel[open] .accordion-summary__badge {
+            background: rgba(143, 211, 255, 0.14);
+            color: var(--accent);
+            border-color: rgba(143, 211, 255, 0.28);
+        }
+
         .leaders-table-shell {
             max-height: 620px;
             overflow: auto;
             border: 1px solid var(--line);
             border-radius: 18px;
             background: rgba(255,255,255,0.03);
+        }
+
+        html[data-theme="dark"] .leaders-table-shell {
+            background: rgba(8, 15, 26, 0.72);
+            border-color: rgba(145, 159, 181, 0.14);
         }
 
         html[data-theme="light"] .leaders-table-shell {
@@ -1803,10 +2145,88 @@ function premium_render_agenda_list_modal(array $items): string
             border-color: rgba(15, 23, 42, 0.10);
         }
 
+        html[data-theme="dark"] .scope-summary-grid .summary-metric,
+        html[data-theme="dark"] .comparison-summary-grid .summary-metric,
+        html[data-theme="dark"] .summary-metric {
+            background: linear-gradient(180deg, rgba(13, 23, 38, 0.96), rgba(8, 14, 24, 0.98));
+            border-color: rgba(145, 159, 181, 0.14);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+        }
+
+        html[data-theme="dark"] .scope-summary-grid .summary-metric--primary,
+        html[data-theme="dark"] .comparison-summary-grid .summary-metric--primary,
+        html[data-theme="dark"] .summary-metric--primary {
+            background: linear-gradient(135deg, rgba(143, 211, 255, 0.14), rgba(243, 198, 124, 0.08));
+            border-color: rgba(143, 211, 255, 0.28);
+        }
+
+        html[data-theme="dark"] .summary-metric--delta {
+            background: linear-gradient(135deg, rgba(20, 31, 49, 0.98), rgba(10, 16, 27, 0.98));
+            border-color: rgba(243, 198, 124, 0.22);
+        }
+
+        html[data-theme="dark"] .scope-summary-grid .summary-metric:nth-child(3),
+        html[data-theme="dark"] .comparison-summary-grid .summary-metric:nth-child(3),
+        html[data-theme="dark"] .comparison-summary-grid .summary-metric:nth-child(4) {
+            background: linear-gradient(180deg, rgba(12, 21, 34, 0.96), rgba(7, 14, 24, 0.98));
+        }
+
         .comparison-modal-table {
             width: 100%;
-            min-width: 1520px;
+            min-width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
+            font-size: .70rem;
+        }
+
+        .comparison-modal-table th,
+        .comparison-modal-table td {
+            padding: 8px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            vertical-align: top;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            line-height: 1.15;
+        }
+
+        .comparison-modal-table thead th {
+            background: rgba(8, 21, 29, 0.96);
+            backdrop-filter: blur(8px);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-size: .67rem;
+            color: var(--muted);
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .comparison-modal-table th:nth-child(1),
+        .comparison-modal-table td:nth-child(1) { width: 16%; }
+        .comparison-modal-table th:nth-child(2),
+        .comparison-modal-table td:nth-child(2) { width: 11%; }
+        .comparison-modal-table th:nth-child(3),
+        .comparison-modal-table td:nth-child(3) { width: 6%; }
+        .comparison-modal-table th:nth-child(4),
+        .comparison-modal-table td:nth-child(4) { width: 8%; }
+        .comparison-modal-table th:nth-child(5),
+        .comparison-modal-table td:nth-child(5) { width: 10%; }
+        .comparison-modal-table th:nth-child(6),
+        .comparison-modal-table td:nth-child(6) { width: 12%; }
+        .comparison-modal-table th:nth-child(7),
+        .comparison-modal-table td:nth-child(7) { width: 10%; }
+        .comparison-modal-table th:nth-child(8),
+        .comparison-modal-table td:nth-child(8) { width: 6%; }
+        .comparison-modal-table th:nth-child(9),
+        .comparison-modal-table td:nth-child(9) { width: 11%; }
+        .comparison-modal-table th:nth-child(10),
+        .comparison-modal-table td:nth-child(10) { width: 10%; }
+
+        .comparison-modal-table .comparison-mode-pill {
+            white-space: normal;
+            line-height: 1.1;
+            max-width: 100%;
         }
 
         .comparison-mode-pill {
@@ -1912,6 +2332,44 @@ function premium_render_agenda_list_modal(array $items): string
             border-bottom-color: rgba(110, 243, 197, 0.18);
         }
 
+        html[data-theme="dark"] .comparison-mode-pill--leaders {
+            background: rgba(143, 211, 255, 0.16);
+            color: var(--accent);
+            border-color: rgba(143, 211, 255, 0.22);
+        }
+
+        html[data-theme="dark"] .comparison-mode-pill--fallback {
+            background: rgba(116, 167, 255, 0.12);
+            color: var(--accent-3);
+            border-color: rgba(116, 167, 255, 0.20);
+        }
+
+        html[data-theme="dark"] .comparison-row--leaders {
+            background: rgba(143, 211, 255, 0.04);
+        }
+
+        html[data-theme="dark"] .comparison-row--fallback {
+            background: rgba(116, 167, 255, 0.03);
+        }
+
+        html[data-theme="dark"] .scope-rank-badge--top {
+            background: linear-gradient(135deg, rgba(243, 198, 124, 0.94), rgba(143, 211, 255, 0.88));
+            color: #06111c;
+            box-shadow: 0 12px 24px rgba(143, 211, 255, 0.14);
+        }
+
+        html[data-theme="dark"] .scope-row--top {
+            background: rgba(143, 211, 255, 0.06);
+        }
+
+        html[data-theme="dark"] .scope-row--top td {
+            border-bottom-color: rgba(143, 211, 255, 0.18);
+        }
+
+        html[data-theme="dark"] .leaders-table tbody tr:hover {
+            background: rgba(143, 211, 255, 0.05);
+        }
+
         .summary-metric {
             border: 1px solid var(--line);
             border-radius: 16px;
@@ -1932,7 +2390,7 @@ function premium_render_agenda_list_modal(array $items): string
         }
 
         .summary-metric__value {
-            margin-top: 8px;
+            margin-top: 16px;
             font-size: clamp(1.35rem, 2.8vw, 1.9rem);
             font-family: 'Space Grotesk', sans-serif;
             font-weight: 700;
@@ -1943,6 +2401,10 @@ function premium_render_agenda_list_modal(array $items): string
             color: var(--muted);
             font-size: .8rem;
             line-height: 1.45;
+        }
+
+        html[data-theme="dark"] .summary-metric__value {
+            color: var(--text);
         }
 
         .leaders-table thead th {
@@ -1978,6 +2440,11 @@ function premium_render_agenda_list_modal(array $items): string
             color: var(--text);
             font-size: 0.75rem;
             font-weight: 700;
+        }
+
+        html[data-theme="dark"] .table-pill {
+            background: rgba(8, 15, 26, 0.72);
+            border-color: rgba(145, 159, 181, 0.16);
         }
 
         html[data-theme="light"] .table-pill {
@@ -2022,6 +2489,31 @@ function premium_render_agenda_list_modal(array $items): string
             border-radius: 16px;
             border: 1px solid var(--line);
             background: rgba(255,255,255,0.04);
+        }
+
+        html[data-theme="dark"] .agenda-mini-card {
+            background: linear-gradient(135deg, rgba(12, 22, 36, 0.96), rgba(8, 14, 24, 0.98));
+            border-color: rgba(145, 159, 181, 0.14);
+        }
+
+        html[data-theme="dark"] .agenda-mini-card--done {
+            background: linear-gradient(135deg, rgba(9, 23, 34, 0.98), rgba(7, 14, 24, 0.98));
+            border-color: rgba(143, 211, 255, 0.24);
+        }
+
+        html[data-theme="dark"] .agenda-mini-card--open {
+            background: linear-gradient(135deg, rgba(10, 18, 31, 0.98), rgba(7, 13, 22, 0.98));
+            border-color: rgba(116, 167, 255, 0.22);
+        }
+
+        html[data-theme="dark"] .agenda-mini-card--doing {
+            background: linear-gradient(135deg, rgba(31, 24, 12, 0.98), rgba(12, 14, 24, 0.98));
+            border-color: rgba(243, 198, 124, 0.22);
+        }
+
+        html[data-theme="dark"] .agenda-mini-card--archived {
+            background: linear-gradient(135deg, rgba(9, 14, 22, 0.92), rgba(7, 11, 18, 0.96));
+            opacity: 0.8;
         }
 
         html[data-theme="light"] .agenda-mini-card {
@@ -2226,6 +2718,10 @@ function premium_render_agenda_list_modal(array $items): string
             background: rgba(110, 243, 197, 0.07);
         }
 
+        html[data-theme="dark"] .leader-search-row.is-selected {
+            background: rgba(143, 211, 255, 0.07);
+        }
+
         .leader-batch-checkbox {
             width: 18px;
             height: 18px;
@@ -2244,6 +2740,11 @@ function premium_render_agenda_list_modal(array $items): string
             border: 1px solid var(--line);
             border-radius: 18px;
             background: rgba(255,255,255,0.03);
+        }
+
+        html[data-theme="dark"] .leader-batch-toolbar {
+            background: linear-gradient(135deg, rgba(13, 23, 38, 0.96), rgba(8, 14, 24, 0.98));
+            border-color: rgba(143, 211, 255, 0.14);
         }
 
         html[data-theme="light"] .leader-batch-toolbar {
@@ -2321,6 +2822,13 @@ function premium_render_agenda_list_modal(array $items): string
             padding: 22px;
         }
 
+        html[data-theme="dark"] .leader-modal__panel,
+        html[data-theme="dark"] .agenda-modal__panel {
+            background: linear-gradient(180deg, rgba(11, 20, 34, 0.98), rgba(6, 12, 21, 0.98));
+            border-color: rgba(145, 159, 181, 0.16);
+            box-shadow: 0 30px 90px rgba(2, 8, 20, 0.48);
+        }
+
         .agenda-modal__panel--wide {
             width: min(1360px, 100%);
         }
@@ -2341,7 +2849,7 @@ function premium_render_agenda_list_modal(array $items): string
 
         .leader-modal__header h3,
         .agenda-modal__header h3 {
-            margin-top: 8px;
+            margin-top: 16px;
             font-size: clamp(1.5rem, 2.8vw, 2rem);
         }
 
@@ -2396,6 +2904,32 @@ function premium_render_agenda_list_modal(array $items): string
             min-height: 120px;
         }
 
+        html[data-theme="dark"] .stat-card {
+            background: linear-gradient(180deg, rgba(14, 25, 40, 0.98), rgba(8, 14, 24, 0.98));
+            border-color: rgba(145, 159, 181, 0.14);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+        }
+
+        html[data-theme="dark"] .stats-grid .stat-card:nth-child(1) {
+            background: linear-gradient(135deg, rgba(15, 28, 46, 0.98), rgba(8, 14, 24, 0.98));
+            border-color: rgba(143, 211, 255, 0.18);
+        }
+
+        html[data-theme="dark"] .stats-grid .stat-card:nth-child(2) {
+            background: linear-gradient(135deg, rgba(13, 23, 38, 0.98), rgba(7, 13, 23, 0.98));
+            border-color: rgba(116, 167, 255, 0.18);
+        }
+
+        html[data-theme="dark"] .stats-grid .stat-card:nth-child(3) {
+            background: linear-gradient(135deg, rgba(20, 27, 41, 0.98), rgba(8, 14, 24, 0.98));
+            border-color: rgba(243, 198, 124, 0.18);
+        }
+
+        html[data-theme="dark"] .stats-grid .stat-card:nth-child(4) {
+            background: linear-gradient(135deg, rgba(12, 21, 35, 0.98), rgba(7, 13, 22, 0.98));
+            border-color: rgba(143, 211, 255, 0.14);
+        }
+
         .stat-label {
             color: var(--muted);
             text-transform: uppercase;
@@ -2412,7 +2946,7 @@ function premium_render_agenda_list_modal(array $items): string
         }
 
         .stat-sub {
-            margin-top: 8px;
+            margin-top: 16px;
             color: var(--muted);
             font-size: .85rem;
         }
@@ -2448,10 +2982,21 @@ function premium_render_agenda_list_modal(array $items): string
 
         .grid-2.dashboard-panels-split {
             grid-template-columns: minmax(0, 65fr) minmax(0, 35fr);
+            align-items: start;
         }
 
         .grid-2 > .panel {
             min-width: 0;
+        }
+
+        .grid-2.dashboard-panels-split > .panel {
+            align-self: start;
+        }
+
+        @media (min-width: 1121px) {
+            .grid-2.dashboard-panels-split > .panel-tint--baseline {
+                margin-top: 16px;
+            }
         }
 
         .forecast-agenda-split {
@@ -2513,6 +3058,23 @@ function premium_render_agenda_list_modal(array $items): string
             padding: 16px;
         }
 
+        html[data-theme="dark"] .leader-card,
+        html[data-theme="dark"] .agenda-card {
+            background: linear-gradient(180deg, rgba(13, 23, 38, 0.98), rgba(8, 14, 24, 0.98));
+            border-color: rgba(145, 159, 181, 0.14);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+        }
+
+        html[data-theme="dark"] .leader-card:nth-child(2n) {
+            background: linear-gradient(180deg, rgba(15, 27, 43, 0.98), rgba(8, 14, 24, 0.98));
+            border-color: rgba(143, 211, 255, 0.14);
+        }
+
+        html[data-theme="dark"] .agenda-card:nth-child(2n) {
+            background: linear-gradient(180deg, rgba(12, 22, 36, 0.98), rgba(7, 13, 22, 0.98));
+            border-color: rgba(243, 198, 124, 0.14);
+        }
+
         .leader-card + .leader-card,
         .agenda-card + .agenda-card {
             margin-top: 12px;
@@ -2551,6 +3113,27 @@ function premium_render_agenda_list_modal(array $items): string
             gap: 10px;
             flex-wrap: wrap;
             margin-top: 12px;
+        }
+
+        .campaign-selection-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-top: 12px;
+        }
+
+        .campaign-selection-actions .btn {
+            padding: 9px 12px;
+            min-height: 40px;
+            font-size: 0.78rem;
+            border-radius: 12px;
+            white-space: nowrap;
+        }
+
+        .campaign-selection-actions .campaign-delete-form {
+            margin: 0;
+            display: inline-flex;
         }
 
         .agenda-form .action-row .btn.primary {
@@ -2651,6 +3234,10 @@ function premium_render_agenda_list_modal(array $items): string
                 width: 100%;
             }
 
+            .section-title .panel-tint__toggle {
+                width: 100%;
+            }
+
             .modal-header-actions {
                 width: 100%;
                 justify-content: flex-start;
@@ -2743,12 +3330,14 @@ function premium_render_agenda_list_modal(array $items): string
 
             .section-title .comparison-cta,
             .section-title .comparison-report-btn,
+            .section-title .panel-tint__toggle,
             .leader-modal__header .btn,
             .agenda-modal__header .btn,
             .campaign-shortcuts__actions .btn,
             .leader-batch-toolbar__actions .btn,
             .modal-header-actions .btn,
-            .action-row .btn {
+            .action-row .btn,
+            .campaign-selection-actions .btn {
                 width: 100%;
                 white-space: normal;
             }
@@ -2779,6 +3368,7 @@ function premium_render_agenda_list_modal(array $items): string
             .leader-batch-toolbar__actions,
             .modal-header-actions,
             .action-row,
+            .campaign-selection-actions,
             .pill-row,
             .agenda-filter-bar,
             .scope-summary-meta {
@@ -2790,8 +3380,13 @@ function premium_render_agenda_list_modal(array $items): string
             .campaign-shortcuts__actions,
             .leader-batch-toolbar__actions,
             .modal-header-actions,
-            .action-row {
+            .action-row,
+            .campaign-selection-actions {
                 align-items: stretch;
+            }
+
+            .campaign-selection-actions .campaign-delete-form {
+                width: 100%;
             }
 
             .leader-batch-toolbar {
@@ -3015,7 +3610,7 @@ function premium_render_agenda_list_modal(array $items): string
             <div class="panel auth-card">
                 <h3>Acesso premium</h3>
                 <p class="muted">Use as credenciais premium para entrar no escritório da campanha.</p>
-                <form method="post" action="premium.php" style="margin-top:16px;">
+                <form method="post" action="premium" style="margin-top:16px;">
                     <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                     <input type="hidden" name="action" value="login">
                     <div class="form-grid">
@@ -3049,7 +3644,7 @@ function premium_render_agenda_list_modal(array $items): string
             </div>
             <div class="panel" style="margin:0;">
                 <h3 style="margin-bottom:12px;">Selecionar campanha</h3>
-                <form method="post" action="premium_actions.php" class="campaign-form">
+                <form method="post" action="premium_actions.php" class="campaign-form" id="campaignSelectForm">
                     <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                     <input type="hidden" name="action" value="select_campaign">
                     <label>Campanha
@@ -3057,20 +3652,18 @@ function premium_render_agenda_list_modal(array $items): string
                             <?= premium_render_campaign_options($campaigns, $campaign) ?>
                         </select>
                     </label>
-                    <div class="action-row">
-                        <button class="btn primary" type="submit">Carregar campanha</button>
-                    </div>
                 </form>
+                <div class="campaign-selection-actions">
+                    <button class="btn primary btn-small" type="submit" form="campaignSelectForm">Carregar campanha</button>
                 <?php if ($campaign): ?>
-                    <form method="post" action="premium_actions.php" class="campaign-form" style="margin-top: 12px;" onsubmit="return confirm('Excluir esta campanha permanentemente? Isso apagará baseline, lideranças, agenda e pesos.');">
+                    <form method="post" action="premium_actions.php" class="campaign-delete-form" onsubmit="return confirm('Excluir esta campanha permanentemente? Isso apagará baseline, lideranças, agenda e pesos.');">
                         <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                         <input type="hidden" name="action" value="delete_campaign">
                         <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
-                        <div class="action-row">
-                            <button class="btn ghost" type="submit">Excluir campanha atual</button>
-                        </div>
+                        <button class="btn ghost btn-small" type="submit">Excluir campanha</button>
                     </form>
                 <?php endif; ?>
+                </div>
             </div>
         </section>
 
@@ -3331,13 +3924,13 @@ function premium_render_agenda_list_modal(array $items): string
             <?php if (!$baselinePanelHidden || !$settingsPanelHidden): ?>
                 <?php $dashboardPanelsClass = (!$baselinePanelHidden && !$settingsPanelHidden) ? 'grid-2 dashboard-panels-split' : 'dashboard-single'; ?>
                 <section class="<?= premium_escape_html($dashboardPanelsClass) ?>">
-                <div class="panel"<?= $baselinePanelHidden ? ' hidden' : '' ?>>
+                <div class="panel panel-tint panel-tint--baseline"<?= $baselinePanelHidden ? ' hidden' : '' ?>>
                     <div class="section-title">
                         <div>
                             <div class="eyebrow">Baseline</div>
                             <h2>Comparativo 2022</h2>
                         </div>
-                        <button class="btn ghost btn-small" type="button" data-toggle-target="baselineBody" aria-controls="baselineBody" aria-expanded="false">Abrir</button>
+                        <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="baselineBody" aria-controls="baselineBody" aria-expanded="false">Abrir</button>
                     </div>
                     <div id="baselineBody" hidden>
                     <form method="post" action="premium_actions.php" class="campaign-form">
@@ -3403,13 +3996,13 @@ function premium_render_agenda_list_modal(array $items): string
                     </div>
                 </div>
 
-                <div class="panel"<?= $settingsPanelHidden ? ' hidden' : '' ?>>
+                <div class="panel panel-tint panel-tint--model"<?= $settingsPanelHidden ? ' hidden' : '' ?>>
                     <div class="section-title">
                         <div>
                             <div class="eyebrow">Modelo</div>
                             <h2>Peso dos cenários</h2>
                         </div>
-                        <button class="btn ghost btn-small" type="button" data-toggle-target="settingsBody" aria-controls="settingsBody" aria-expanded="false">Abrir</button>
+                        <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="settingsBody" aria-controls="settingsBody" aria-expanded="false">Abrir</button>
                     </div>
                     <div id="settingsBody" hidden>
                     <p class="panel-note">Cada peso ajusta uma parte da projeção. A base de 2022 fica como comparativo e só entra no fallback onde não houver liderança cadastrada.</p>
@@ -3483,13 +4076,13 @@ function premium_render_agenda_list_modal(array $items): string
             </section>
             <?php endif; ?>
 
-            <section class="panel">
+            <section class="panel panel-tint panel-tint--leaders-search">
                 <div class="section-title">
                     <div>
                         <div class="eyebrow">Lideranças 2024</div>
                         <h2>Buscar e adicionar lideranças</h2>
                     </div>
-                    <button class="btn ghost btn-small" type="button" data-toggle-target="leaderSearchBody" aria-controls="leaderSearchBody" aria-expanded="false">Abrir</button>
+                    <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="leaderSearchBody" aria-controls="leaderSearchBody" aria-expanded="false">Abrir</button>
                 </div>
                 <div id="leaderSearchBody" hidden>
                     <div class="search-grid">
@@ -3635,13 +4228,13 @@ function premium_render_agenda_list_modal(array $items): string
                 </div>
             </section>
 
-            <section class="panel">
+            <section class="panel panel-tint panel-tint--leaders-active">
                 <div class="section-title">
                     <div>
                         <div class="eyebrow">Lideranças ativas</div>
                         <h2>Lideranças selecionadas na campanha</h2>
                     </div>
-                    <button class="btn ghost btn-small" type="button" data-toggle-target="leadersBody" aria-controls="leadersBody" aria-expanded="false">Abrir</button>
+                    <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="leadersBody" aria-controls="leadersBody" aria-expanded="false">Abrir</button>
                 </div>
                 <div id="leadersBody" hidden>
                     <p class="muted" style="margin-bottom: 14px;">
@@ -3707,7 +4300,7 @@ function premium_render_agenda_list_modal(array $items): string
                         </div>
                     <?php endif; ?>
                     <div class="grid-2" style="margin-top: 16px;">
-                        <div class="panel" style="margin:0;">
+                        <div class="panel panel-tint panel-tint--regions" style="margin:0;">
                             <h4 style="margin-bottom:12px;">Regiões com maior projeção</h4>
                             <p class="panel-note" style="margin-top:-2px; margin-bottom:10px;">Clique em uma região para ver todas as lideranças, as projeções individuais e o comparativo com 2022.</p>
                             <div class="table-wrap">
@@ -3740,7 +4333,7 @@ function premium_render_agenda_list_modal(array $items): string
                                 </table>
                             </div>
                         </div>
-                        <div class="panel" style="margin:0;">
+                        <div class="panel panel-tint panel-tint--cities" style="margin:0;">
                             <h4 style="margin-bottom:12px;">Cidades com maior projeção</h4>
                             <p class="panel-note" style="margin-top:-2px; margin-bottom:10px;">Clique em uma cidade para abrir o resumo completo com os líderes cadastrados e o efeito no modelo.</p>
                             <div class="table-wrap">
@@ -3748,6 +4341,7 @@ function premium_render_agenda_list_modal(array $items): string
                                     <thead>
                                         <tr>
                                             <th>Município</th>
+                                            <th>Votos 2022</th>
                                             <th>Projeção<br>2026</th>
                                             <th>Ação</th>
                                         </tr>
@@ -3756,6 +4350,7 @@ function premium_render_agenda_list_modal(array $items): string
                                         <?php foreach (array_slice((array) ($forecast['cities'] ?? []), 0, 6) as $cityRow): ?>
                                             <tr>
                                                 <td><?= premium_escape_html((string) ($cityRow['municipio'] ?? '')) ?></td>
+                                                <td><?= premium_fmt_int((int) ($cityRow['baseline_votes'] ?? 0)) ?></td>
                                                 <td><?= premium_fmt_int((int) ($cityRow['projected_base'] ?? 0)) ?></td>
                                                 <td>
                                                     <button
@@ -4008,7 +4603,7 @@ function premium_render_agenda_list_modal(array $items): string
                     <th>Município</th>
                     <th>Votos 2024</th>
                     <th>Base transferível</th>
-                    <th>Projeção</th>
+                    <th>Projeção 2026</th>
                     <th>Transferência</th>
                     <th>Ação</th>
                 </tr>
@@ -4084,7 +4679,7 @@ function premium_render_agenda_list_modal(array $items): string
                         <th>Liderança</th>
                         <th>Votos 2024</th>
                         <th>Base transferível</th>
-                        <th>Projeção</th>
+                        <th>Projeção 2026</th>
                         <th>Transferência</th>
                         <th>Ação</th>
                     </tr>
@@ -4096,7 +4691,7 @@ function premium_render_agenda_list_modal(array $items): string
                         <th>Liderança</th>
                         <th>Votos 2024</th>
                         <th>Base transferível</th>
-                        <th>Projeção</th>
+                        <th>Projeção 2026</th>
                         <th>Transferência</th>
                         <th>Ação</th>
                     </tr>
@@ -4196,7 +4791,7 @@ function premium_render_agenda_list_modal(array $items): string
                         <th>Liderança</th>
                         <th>Votos 2024</th>
                         <th>Base transferível</th>
-                        <th>Projeção</th>
+                        <th>Projeção 2026</th>
                         <th>Transferência</th>
                         <th>Ação</th>
                     </tr>
@@ -4209,7 +4804,7 @@ function premium_render_agenda_list_modal(array $items): string
                         <th>Liderança</th>
                         <th>Votos 2024</th>
                         <th>Base transferível</th>
-                        <th>Projeção</th>
+                        <th>Projeção 2026</th>
                         <th>Transferência</th>
                         <th>Ação</th>
                     </tr>
@@ -4470,17 +5065,8 @@ function premium_render_agenda_list_modal(array $items): string
         }
 
         .report-brand {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
-            border-radius: 999px;
-            background: rgba(15, 118, 110, 0.10);
-            color: var(--accent);
-            font-weight: 800;
-            letter-spacing: .08em;
-            text-transform: uppercase;
-            font-size: .74rem;
+            padding: 11px 18px;
+            font-size: .84rem;
         }
 
         .report-hero h1 {
@@ -4569,7 +5155,7 @@ function premium_render_agenda_list_modal(array $items): string
         }
 
         .report-card__value {
-            margin-top: 8px;
+            margin-top: 16px;
             font-size: 1.55rem;
             font-weight: 900;
             line-height: 1.06;
@@ -4640,15 +5226,18 @@ function premium_render_agenda_list_modal(array $items): string
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
-            font-size: .78rem;
+            font-size: .72rem;
         }
 
         .report-table th,
         .report-table td {
-            padding: 10px 10px;
+            padding: 8px 8px;
             border-bottom: 1px solid rgba(15, 23, 42, 0.08);
             vertical-align: top;
-            word-wrap: break-word;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            line-height: 1.15;
         }
 
         .report-table thead th {
@@ -4660,6 +5249,29 @@ function premium_render_agenda_list_modal(array $items): string
             position: sticky;
             top: 0;
             z-index: 1;
+        }
+
+        .report-table th:nth-child(1),
+        .report-table td:nth-child(1) { width: 17%; }
+        .report-table th:nth-child(2),
+        .report-table td:nth-child(2) { width: 12%; }
+        .report-table th:nth-child(3),
+        .report-table td:nth-child(3) { width: 6%; }
+        .report-table th:nth-child(4),
+        .report-table td:nth-child(4) { width: 13%; }
+        .report-table th:nth-child(5),
+        .report-table td:nth-child(5) { width: 13%; }
+        .report-table th:nth-child(6),
+        .report-table td:nth-child(6) { width: 13%; }
+        .report-table th:nth-child(7),
+        .report-table td:nth-child(7) { width: 7%; }
+        .report-table th:nth-child(8),
+        .report-table td:nth-child(8) { width: 19%; }
+
+        .report-table .report-status {
+            white-space: normal;
+            max-width: 100%;
+            line-height: 1.1;
         }
 
         .report-table tbody tr:nth-child(even) {
@@ -4980,7 +5592,7 @@ function premium_render_agenda_list_modal(array $items): string
                         <th>Município</th>
                         <th>Região</th>
                         <th>2022</th>
-                        <th>Votos liderança</th>
+                        <th>Votos Liderança</th>
                         <th>Votos independentes</th>
                         <th>Projeção 2026</th>
                         <th>Delta</th>

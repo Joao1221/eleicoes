@@ -961,7 +961,7 @@
     <div class="shell">
         <div class="topbar">
             <div class="topbar-left">
-                <a class="back-link" href="index.php">← Voltar ao painel estadual</a>
+                <a class="back-link" href="./">← Voltar ao painel estadual</a>
                 <div class="theme-switcher" role="group" aria-label="Selecionar tema">
                     <button type="button" data-theme-choice="dark" aria-label="Ativar modo escuro" title="Modo escuro">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -979,7 +979,7 @@
                 </div>
             </div>
             <div class="topbar-actions">
-                <a href="premium.php" class="premium-feature">
+                <a href="premium" class="premium-feature">
                     <span class="premium-feature__tag">Novo</span>
                     <strong>Abra o Premium</strong>
                     <span>Previsões, agenda e comparativos para montar sua campanha com visão territorial.</span>

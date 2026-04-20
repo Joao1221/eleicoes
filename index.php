@@ -135,15 +135,63 @@
 
         .header-actions {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 12px;
             flex-wrap: wrap;
             margin-top: 1rem;
+            width: 100%;
         }
 
         .header-cta {
-            flex: 1 1 auto;
-            min-width: 0;
+            text-decoration: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+        }
+
+        .header-cta:hover,
+        .header-cta:focus-visible {
+            transform: translateY(-1px);
+        }
+
+        .header-cta:focus-visible {
+            outline: 2px solid rgba(79, 161, 234, 0.45);
+            outline-offset: 3px;
+        }
+
+        .header-cta--desktop {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+            width: min(100%, 440px);
+            padding: 1.1rem 1.2rem;
+            border-radius: 20px;
+            border: 1px solid rgba(79, 161, 234, 0.35);
+            background: linear-gradient(135deg, #d9f0ff 0%, #9fd7ff 100%);
+            color: #0f2d4d;
+            box-shadow: 0 10px 24px rgba(79, 161, 234, 0.18);
+        }
+
+        .header-cta__eyebrow {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.55rem;
+            border-radius: 999px;
+            background: rgba(15, 45, 77, 0.08);
+            color: #0f2d4d;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .header-cta__headline {
+            font-size: 0.98rem;
+            line-height: 1.45;
+            font-weight: 600;
+        }
+
+        .header-cta--mobile {
+            display: none;
         }
 
         @media (max-width: 720px) {
@@ -155,11 +203,28 @@
                 width: 100%;
             }
 
-            .header-cta {
+            .header-cta--desktop {
+                display: none !important;
+            }
+
+            .header-cta--mobile {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                flex: 1 1 auto;
+                min-width: 0;
                 padding: 0.72rem 0.95rem !important;
                 font-size: 0.86rem;
                 line-height: 1.2;
                 text-align: center;
+                gap: 0.6rem;
+                background: linear-gradient(135deg, #d9f0ff 0%, #9fd7ff 100%);
+                border: 1px solid rgba(79, 161, 234, 0.35);
+                border-radius: 999px;
+                color: #0f2d4d;
+                backdrop-filter: blur(8px);
+                box-shadow: 0 8px 22px rgba(79, 161, 234, 0.18);
+                font-weight: 600;
             }
 
             .theme-switcher {
@@ -1381,10 +1446,14 @@
             <span class="premium-promo__tag">Novo módulo premium</span>
             <strong>Seu escritório de campanha, com previsões, agenda e inteligência territorial.</strong>
             <p>Compare 2022 x 2024, monte cenários por liderança e acompanhe cada cidade com uma leitura pensada para quem quer transformar dado em estratégia.</p>
-            <a href="premium.php">Quero conhecer o Premium</a>
+            <a href="premium">Quero conhecer o Premium</a>
         </div>
         <div class="header-actions">
-            <a class="header-cta" href="eleicoes_municipais_se.php" style="display:inline-flex;align-items:center;gap:.6rem;padding:.85rem 1.2rem;background:linear-gradient(135deg,#d9f0ff 0%,#9fd7ff 100%);border:1px solid rgba(79,161,234,.35);border-radius:999px;color:#0f2d4d;text-decoration:none;font-weight:600;backdrop-filter:blur(8px);box-shadow:0 8px 22px rgba(79,161,234,.18);">
+            <a class="header-cta header-cta--desktop" href="eleicoes_municipais_se" aria-label="Abrir o painel municipal 2024">
+                <span class="header-cta__eyebrow">Painel municipal 2024</span>
+                <span class="header-cta__headline">Clique aqui e tenha nas suas mãos todos os dados da última eleição (2024) para prefeitos e vereadores em Sergipe.</span>
+            </a>
+            <a class="header-cta header-cta--mobile" href="eleicoes_municipais_se">
                 Abrir o painel municipal 2024
             </a>
             <div class="theme-switcher" role="group" aria-label="Selecionar tema">

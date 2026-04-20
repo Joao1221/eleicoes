@@ -9,13 +9,13 @@ $isAdmin = premium_is_admin_user($user);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     premium_flash('error', 'Método inválido.');
-    header('Location: premium.php');
+    header('Location: premium');
     exit;
 }
 
 if (!premium_validate_csrf($_POST['csrf'] ?? null)) {
     premium_flash('error', 'A sessão premium expirou. Recarregue a página e tente novamente.');
-    header('Location: premium.php');
+    header('Location: premium');
     exit;
 }
 
@@ -23,7 +23,7 @@ $action = trim((string) ($_POST['action'] ?? ''));
 $selectedCampaignId = (int) ($_POST['campaign_id'] ?? ($_SESSION['premium_campaign_id'] ?? 0));
 
 $redirectToCampaign = static function (int $campaignId = 0): void {
-    $url = 'premium.php';
+    $url = 'premium';
     if ($campaignId > 0) {
         premium_set_active_campaign($campaignId);
         $url .= '?campaign_id=' . $campaignId;
@@ -367,7 +367,7 @@ switch ($action) {
         }
 
         premium_clear_active_campaign();
-        header('Location: premium.php');
+        header('Location: premium');
         exit;
 
     case 'add_leaders_batch':
