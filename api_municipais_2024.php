@@ -353,7 +353,7 @@ function fetchAracajuPrefeitoTurno2Winner(mysqli $conn): array
            AND nr_turno = 2
            AND nm_municipio = 'ARACAJU'
            AND ds_sit_tot_turno LIKE '%ELEITO%'
-           AND ds_sit_tot_turno NOT LIKE '%NÃƒO ELEITO%'
+           AND ds_sit_tot_turno NOT LIKE '%NÃO ELEITO%'
            AND ds_sit_tot_turno NOT LIKE '%NAO ELEITO%'
            AND ds_sit_tot_turno NOT LIKE '%SUPLENTE%'
          ORDER BY nr_cand ASC

@@ -14,26 +14,30 @@ if ($conn->connect_error) {
 }
 
 
-function queryAll(mysqli $conn, string $sql): array {
-    $result = $conn->query($sql);
-    if (!$result) {
-        throw new RuntimeException($conn->error . ' | SQL: ' . $sql);
-    }
+if (!function_exists('queryAll')) {
+    function queryAll(mysqli $conn, string $sql): array {
+        $result = $conn->query($sql);
+        if (!$result) {
+            throw new RuntimeException($conn->error . ' | SQL: ' . $sql);
+        }
 
-    $rows = [];
-    while ($row = $result->fetch_assoc()) {
-        $rows[] = $row;
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+        return $rows;
     }
-    return $rows;
 }
 
-function queryOne(mysqli $conn, string $sql): array {
-    $result = $conn->query($sql);
-    if (!$result) {
-        throw new RuntimeException($conn->error . ' | SQL: ' . $sql);
-    }
+if (!function_exists('queryOne')) {
+    function queryOne(mysqli $conn, string $sql): array {
+        $result = $conn->query($sql);
+        if (!$result) {
+            throw new RuntimeException($conn->error . ' | SQL: ' . $sql);
+        }
 
-    return $result->fetch_assoc() ?: [];
+        return $result->fetch_assoc() ?: [];
+    }
 }
 
 function buildWhere(array $conditions): string {

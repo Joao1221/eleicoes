@@ -69,13 +69,17 @@
         }
 
         .theme-switcher {
+            position: absolute;
+            top: 1.25rem;
+            right: 1.25rem;
             display: inline-flex;
-            gap: 6px;
-            padding: 4px;
+            gap: 4px;
+            padding: 3px;
             border: 1px solid var(--border);
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.04);
             backdrop-filter: blur(10px);
+            z-index: 3;
         }
 
         .theme-switcher button {
@@ -83,12 +87,24 @@
             border-radius: 999px;
             background: transparent;
             color: var(--text-muted);
-            padding: 8px 12px;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             font: inherit;
-            font-size: 0.8rem;
-            font-weight: 800;
             cursor: pointer;
-            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .theme-switcher button svg {
+            width: 15px;
+            height: 15px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
 
         .theme-switcher button:hover {
@@ -98,10 +114,23 @@
         .theme-switcher button.active {
             background: var(--highlight);
             color: #fff;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
         }
 
         html[data-theme="light"] .theme-switcher {
-            background: rgba(255, 255, 255, 0.72);
+            background: rgba(255, 255, 255, 0.78);
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
         .header-actions {
@@ -112,20 +141,44 @@
             margin-top: 1rem;
         }
 
+        .header-cta {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
         @media (max-width: 720px) {
             .header-actions {
-                flex-direction: column;
-                align-items: flex-start;
+                flex-direction: row;
+                align-items: center;
+                flex-wrap: nowrap;
+                gap: 0.6rem;
+                width: 100%;
+            }
+
+            .header-cta {
+                padding: 0.72rem 0.95rem !important;
+                font-size: 0.86rem;
+                line-height: 1.2;
+                text-align: center;
+            }
+
+            .theme-switcher {
+                position: static;
+                top: auto;
+                right: auto;
+                margin: 0;
+                flex: 0 0 auto;
             }
         }
 
         .header {
+            position: relative;
             display: grid;
             grid-template-columns: minmax(0, 1.1fr) minmax(280px, 380px);
             gap: 1.5rem;
             align-items: center;
             background: linear-gradient(135deg, var(--secondary) 0%, var(--accent) 100%);
-            padding: 2rem;
+            padding: 3rem 2rem 2rem;
             border-bottom: 3px solid var(--highlight);
         }
 
@@ -187,7 +240,98 @@
             text-transform: uppercase;
         }
 
+        .premium-promo {
+            margin-top: 1.15rem;
+            max-width: 760px;
+            padding: 1.15rem 1.2rem;
+            border-radius: 20px;
+            border: 1px solid rgba(110, 243, 197, 0.22);
+            background: linear-gradient(135deg, rgba(10, 43, 38, 0.98), rgba(18, 61, 56, 0.9));
+            box-shadow: 0 18px 40px rgba(16, 123, 99, 0.18);
+        }
+
+        html[data-theme="light"] .premium-promo {
+            background: linear-gradient(135deg, #ffffff, #eef7f5);
+            border-color: rgba(37, 99, 235, 0.14);
+            box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
+        }
+
+        .premium-promo__tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.65rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            background: rgba(110, 243, 197, 0.12);
+            color: #8ef6d0;
+            margin-bottom: 0.75rem;
+        }
+
+        html[data-theme="light"] .premium-promo__tag {
+            background: rgba(37, 99, 235, 0.08);
+            color: var(--highlight);
+        }
+
+        .premium-promo strong {
+            display: block;
+            font-size: 1.08rem;
+            line-height: 1.4;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+
+        .premium-promo p {
+            color: var(--text-muted);
+            font-size: 0.92rem;
+            line-height: 1.55;
+            margin-bottom: 0.85rem;
+        }
+
+        .premium-promo a {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.78rem 1rem;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #6ef3c5, #2bc6b3);
+            color: #051412;
+            font-weight: 800;
+            text-decoration: none;
+            box-shadow: 0 12px 24px rgba(43, 198, 179, 0.2);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        }
+
+        html[data-theme="light"] .premium-promo a {
+            background: linear-gradient(135deg, #2563eb, #38bdf8);
+            color: #fff;
+            box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+        }
+
+        .premium-promo a:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 28px rgba(43, 198, 179, 0.28);
+            filter: brightness(1.02);
+        }
+
+        html[data-theme="light"] .premium-promo a:hover {
+            box-shadow: 0 16px 28px rgba(37, 99, 235, 0.24);
+        }
+
         @media (max-width: 920px) {
+            .header-actions {
+                flex-wrap: nowrap;
+            }
+
+            .theme-switcher {
+                position: static;
+                top: auto;
+                right: auto;
+            }
+
             .header {
                 grid-template-columns: 1fr;
             }
@@ -1233,14 +1377,31 @@
         <h1>Painel Estatístico - Eleições Sergipe 2022</h1>
         <p>Resultados detalhados por candidato, partido e município | Dados TSE</p>
         <p class="page-context">Base oficial TSE • Sergipe 2022</p>
+        <div class="premium-promo">
+            <span class="premium-promo__tag">Novo módulo premium</span>
+            <strong>Seu escritório de campanha, com previsões, agenda e inteligência territorial.</strong>
+            <p>Compare 2022 x 2024, monte cenários por liderança e acompanhe cada cidade com uma leitura pensada para quem quer transformar dado em estratégia.</p>
+            <a href="premium.php">Quero conhecer o Premium</a>
+        </div>
         <div class="header-actions">
-            <div class="theme-switcher" role="group" aria-label="Selecionar tema">
-                <button type="button" data-theme-choice="dark">Modo escuro</button>
-                <button type="button" data-theme-choice="light">Modo claro</button>
-            </div>
-            <a href="eleicoes_municipais_se.php" style="display:inline-flex;align-items:center;gap:.6rem;padding:.85rem 1.2rem;background:linear-gradient(135deg,#d9f0ff 0%,#9fd7ff 100%);border:1px solid rgba(79,161,234,.35);border-radius:999px;color:#0f2d4d;text-decoration:none;font-weight:600;backdrop-filter:blur(8px);box-shadow:0 8px 22px rgba(79,161,234,.18);">
-                Ir para Eleições municipais 2024 - SE
+            <a class="header-cta" href="eleicoes_municipais_se.php" style="display:inline-flex;align-items:center;gap:.6rem;padding:.85rem 1.2rem;background:linear-gradient(135deg,#d9f0ff 0%,#9fd7ff 100%);border:1px solid rgba(79,161,234,.35);border-radius:999px;color:#0f2d4d;text-decoration:none;font-weight:600;backdrop-filter:blur(8px);box-shadow:0 8px 22px rgba(79,161,234,.18);">
+                Abrir o painel municipal 2024
             </a>
+            <div class="theme-switcher" role="group" aria-label="Selecionar tema">
+                <button type="button" data-theme-choice="dark" aria-label="Ativar modo escuro" title="Modo escuro">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M21 13.5A8.5 8.5 0 1 1 10.5 3a7 7 0 0 0 10.5 10.5Z"></path>
+                    </svg>
+                    <span class="sr-only">Modo escuro</span>
+                </button>
+                <button type="button" data-theme-choice="light" aria-label="Ativar modo claro" title="Modo claro">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+                    </svg>
+                    <span class="sr-only">Modo claro</span>
+                </button>
+            </div>
         </div>
         </div>
         <div class="header-visual" aria-hidden="true">

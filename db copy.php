@@ -2,10 +2,10 @@
 
 mysqli_report(MYSQLI_REPORT_OFF);
 
-$host = getenv('DB_HOST') ?: 'localhost';
-$user = getenv('DB_USER') ?: 'root';
-$pass = getenv('DB_PASS') ?: '';
-$db = getenv('DB_NAME') ?: 'eleicoes';
+$host = getenv('DB_HOST') ?: 'sql308.infinityfree.com';
+$user = getenv('DB_USER') ?: 'if0_41682016';
+$pass = getenv('DB_PASS') ?: 'egTva023SR';
+$db = getenv('DB_NAME') ?: 'if0_41682016_eleicoes';
 $port = (int) (getenv('DB_PORT') ?: 3306);
 
 $conn = mysqli_init();

@@ -101,8 +101,8 @@
 
         .theme-switcher {
             display: inline-flex;
-            gap: 6px;
-            padding: 4px;
+            gap: 4px;
+            padding: 3px;
             border: 1px solid var(--line);
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.04);
@@ -114,12 +114,24 @@
             border-radius: 999px;
             background: transparent;
             color: var(--muted);
-            padding: 8px 12px;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             font: inherit;
-            font-size: 0.8rem;
-            font-weight: 800;
             cursor: pointer;
-            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .theme-switcher button svg {
+            width: 15px;
+            height: 15px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
 
         .theme-switcher button:hover {
@@ -129,10 +141,23 @@
         .theme-switcher button.active {
             background: var(--accent);
             color: #fff;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
         }
 
         html[data-theme="light"] .theme-switcher {
-            background: rgba(255, 255, 255, 0.72);
+            background: rgba(255, 255, 255, 0.78);
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
         .shell {
@@ -150,12 +175,87 @@
             color: var(--muted);
         }
 
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
         .topbar-actions {
             display: flex;
             align-items: center;
             justify-content: flex-end;
-            gap: 12px;
+            gap: 10px;
             flex-wrap: wrap;
+        }
+
+        .premium-feature {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            min-width: 260px;
+            max-width: 340px;
+            padding: 12px 16px;
+            border-radius: 18px;
+            border: 1px solid rgba(110, 243, 197, 0.25);
+            background: linear-gradient(135deg, rgba(11, 43, 40, 0.98), rgba(18, 61, 56, 0.9));
+            color: #ebfff7;
+            box-shadow: 0 12px 28px rgba(16, 123, 99, 0.2);
+            backdrop-filter: blur(10px);
+            text-decoration: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease;
+        }
+
+        html[data-theme="light"] .premium-feature {
+            background: linear-gradient(135deg, #ffffff, #eef7f5);
+            border-color: rgba(37, 99, 235, 0.14);
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+            color: var(--text);
+        }
+
+        .premium-feature:hover {
+            transform: translateY(-1px);
+            border-color: rgba(110, 243, 197, 0.4);
+            box-shadow: 0 16px 32px rgba(16, 123, 99, 0.26);
+            filter: brightness(1.02);
+        }
+
+        html[data-theme="light"] .premium-feature:hover {
+            border-color: rgba(37, 99, 235, 0.22);
+            box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
+        }
+
+        .premium-feature__tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #8ef6d0;
+        }
+
+        html[data-theme="light"] .premium-feature__tag {
+            color: var(--accent-3);
+        }
+
+        .premium-feature strong {
+            font-size: 0.95rem;
+            line-height: 1.25;
+        }
+
+        .premium-feature span:not(.premium-feature__tag) {
+            font-size: 0.78rem;
+            line-height: 1.4;
+            color: rgba(235, 255, 247, 0.8);
+        }
+
+        html[data-theme="light"] .premium-feature span:not(.premium-feature__tag) {
+            color: var(--muted);
         }
 
         .page-context {
@@ -176,6 +276,12 @@
             .topbar-actions {
                 width: 100%;
                 justify-content: flex-start;
+            }
+
+            .premium-feature {
+                width: 100%;
+                min-width: 0;
+                max-width: none;
             }
         }
 
@@ -274,6 +380,16 @@
         .type-card .sub {
             color: var(--muted);
             line-height: 1.6;
+        }
+
+        .hero-premium-copy {
+            margin-top: 0.9rem;
+            padding-left: 14px;
+            border-left: 3px solid var(--accent);
+            max-width: 64ch;
+            color: var(--text);
+            font-weight: 600;
+            line-height: 1.55;
         }
 
         .hero-note,
@@ -803,6 +919,25 @@
                 flex-direction: column;
                 align-items: flex-start;
             }
+
+            .topbar-left {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .back-link {
+                min-width: 0;
+            }
+
+            .topbar-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+
+            .premium-feature {
+                width: 100%;
+                max-width: none;
+            }
         }
     </style>
 </head>
@@ -825,12 +960,30 @@
 
     <div class="shell">
         <div class="topbar">
-            <a class="back-link" href="index.php">← Voltar ao painel estadual</a>
-            <div class="topbar-actions">
+            <div class="topbar-left">
+                <a class="back-link" href="index.php">← Voltar ao painel estadual</a>
                 <div class="theme-switcher" role="group" aria-label="Selecionar tema">
-                    <button type="button" data-theme-choice="dark">Modo escuro</button>
-                    <button type="button" data-theme-choice="light">Modo claro</button>
+                    <button type="button" data-theme-choice="dark" aria-label="Ativar modo escuro" title="Modo escuro">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M21 13.5A8.5 8.5 0 1 1 10.5 3a7 7 0 0 0 10.5 10.5Z"></path>
+                        </svg>
+                        <span class="sr-only">Modo escuro</span>
+                    </button>
+                    <button type="button" data-theme-choice="light" aria-label="Ativar modo claro" title="Modo claro">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="4"></circle>
+                            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+                        </svg>
+                        <span class="sr-only">Modo claro</span>
+                    </button>
                 </div>
+            </div>
+            <div class="topbar-actions">
+                <a href="premium.php" class="premium-feature">
+                    <span class="premium-feature__tag">Novo</span>
+                    <strong>Abra o Premium</strong>
+                    <span>Previsões, agenda e comparativos para montar sua campanha com visão territorial.</span>
+                </a>
             </div>
         </div>
         <div class="page-context">Base oficial TSE por seção eleitoral • Sergipe 2024</div>
@@ -843,6 +996,9 @@
                     <p>
                         Um painel novo para explorar votos por seção, zona e município nas disputas de prefeito e vereador.
                         O foco aqui é velocidade de filtro, leitura visual forte e uma camada de síntese útil para investigação.
+                    </p>
+                    <p class="hero-premium-copy">
+                        O Premium leva isso mais longe: comparação 2022 x 2024, leitura por liderança, agenda de campanha e um escritório de decisão pensado para quem quer transformar dados em poder de campanha.
                     </p>
                 </div>
                 <div class="hero-note">
