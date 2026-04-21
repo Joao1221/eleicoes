@@ -263,6 +263,7 @@ switch ($action) {
         $campaignName = trim((string) ($_POST['campaign_name'] ?? ''));
         $candidateName = trim((string) ($_POST['candidate_name'] ?? ''));
         $candidateCargo = trim((string) ($_POST['candidate_cargo'] ?? ''));
+        $candidateNumber = premium_parse_candidate_number($_POST['candidate_number'] ?? null);
         $baselineYear = (int) ($_POST['baseline_year'] ?? 2022);
         $notes = trim((string) ($_POST['notes'] ?? ''));
 
@@ -271,12 +272,18 @@ switch ($action) {
             $redirectToCampaign($selectedCampaignId);
         }
 
+        if ($candidateNumber === null) {
+            $candidateBaseline = premium_candidate_baseline($conn, $candidateName, $candidateCargo);
+            $candidateNumber = premium_parse_candidate_number($candidateBaseline['candidate_number'] ?? null);
+        }
+
         $conn->query("
             INSERT INTO premium_campaigns (
                 user_id,
                 campaign_name,
                 candidate_name,
                 candidate_cargo,
+                candidate_number,
                 baseline_year,
                 notes
             ) VALUES (
@@ -284,6 +291,7 @@ switch ($action) {
                 " . premium_sql_quote($conn, $campaignName) . ",
                 " . premium_sql_quote($conn, $candidateName) . ",
                 " . premium_sql_quote($conn, $candidateCargo) . ",
+                " . ($candidateNumber !== null ? (string) $candidateNumber : 'NULL') . ",
                 " . max(2022, $baselineYear) . ",
                 " . premium_sql_quote($conn, $notes !== '' ? $notes : null) . "
             )
@@ -511,15 +519,26 @@ switch ($action) {
 
         $candidateName = trim((string) ($_POST['candidate_name'] ?? ''));
         $candidateCargo = trim((string) ($_POST['candidate_cargo'] ?? ''));
+        $candidateNumber = premium_parse_candidate_number($_POST['candidate_number'] ?? null);
         $baselineYear = (int) ($_POST['baseline_year'] ?? 2022);
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $currentMunicipio = trim((string) ($_POST['current_municipio'] ?? ''));
         $currentRegion = trim((string) ($_POST['current_region'] ?? ''));
 
+        if ($candidateNumber === null) {
+            $candidateNumber = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
+        }
+
+        if ($candidateNumber === null) {
+            $candidateBaseline = premium_candidate_baseline($conn, $candidateName, $candidateCargo);
+            $candidateNumber = premium_parse_candidate_number($candidateBaseline['candidate_number'] ?? null);
+        }
+
         $conn->query("
             UPDATE premium_campaigns
             SET candidate_name = " . premium_sql_quote($conn, $candidateName) . ",
                 candidate_cargo = " . premium_sql_quote($conn, $candidateCargo) . ",
+                candidate_number = " . ($candidateNumber !== null ? (string) $candidateNumber : 'NULL') . ",
                 baseline_year = " . max(2022, $baselineYear) . ",
                 baseline_panel_hidden = 1,
                 notes = " . premium_sql_quote($conn, $notes !== '' ? $notes : null) . ",
@@ -813,6 +832,246 @@ switch ($action) {
             premium_flash('success', 'Liderança removida.');
         }
 
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
+    case 'update_leaders_transfer_batch':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de alterar lideranças.');
+            $redirectToCampaign();
+        }
+
+        $transferRateRaw = trim((string) ($_POST['transfer_rate'] ?? ''));
+        $transferScope = trim((string) ($_POST['transfer_scope'] ?? 'selected'));
+
+        if ($transferRateRaw === '' || !is_numeric($transferRateRaw)) {
+            premium_flash('error', 'Informe uma transferência válida entre 0 e 100.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $transferRate = (float) $transferRateRaw;
+        if ($transferRate < 0 || $transferRate > 100) {
+            premium_flash('error', 'Informe uma transferência válida entre 0 e 100.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if (!in_array($transferScope, ['selected', 'visible', 'all'], true)) {
+            $transferScope = 'selected';
+        }
+
+        $requestedIds = [];
+        $invalidSelections = 0;
+        if ($transferScope !== 'all') {
+            $leadersJson = trim((string) ($_POST['leaders_json'] ?? ''));
+            if ($leadersJson === '') {
+                premium_flash('error', 'Selecione pelo menos uma liderança antes de alterar a transferência.');
+                $redirectToCampaign($selectedCampaignId);
+            }
+
+            $decoded = json_decode($leadersJson, true);
+            if (!is_array($decoded) || !$decoded) {
+                premium_flash('error', 'Não foi possível ler a seleção em lote.');
+                $redirectToCampaign($selectedCampaignId);
+            }
+
+            foreach ($decoded as $item) {
+                $leaderId = 0;
+                if (is_array($item) && isset($item['id'])) {
+                    $leaderId = (int) $item['id'];
+                } elseif (is_numeric($item)) {
+                    $leaderId = (int) $item;
+                }
+
+                if ($leaderId <= 0) {
+                    $invalidSelections++;
+                    continue;
+                }
+
+                $requestedIds[$leaderId] = true;
+            }
+
+            if (!$requestedIds) {
+                premium_flash('error', 'Nenhuma liderança válida foi selecionada.');
+                $redirectToCampaign($selectedCampaignId);
+            }
+
+            $requestedIds = array_keys($requestedIds);
+        }
+
+        $transferRateSql = number_format($transferRate, 2, '.', '');
+        $updatedCount = 0;
+
+        $conn->begin_transaction();
+
+        try {
+            if ($transferScope === 'all') {
+                $countRows = queryAll($conn, "
+                    SELECT COUNT(*) AS total
+                    FROM premium_campaign_leaders
+                    WHERE campaign_id = " . (int) $selectedCampaignId . "
+                ");
+                $updatedCount = (int) ($countRows[0]['total'] ?? 0);
+
+                if ($updatedCount <= 0) {
+                    $conn->rollback();
+                    premium_flash('warning', 'Não há lideranças nesta campanha para alterar.');
+                    $redirectToCampaign($selectedCampaignId);
+                }
+
+                $conn->query("
+                    UPDATE premium_campaign_leaders
+                    SET transfer_rate = {$transferRateSql}
+                    WHERE campaign_id = " . (int) $selectedCampaignId . "
+                ");
+            } else {
+                $requestedSql = implode(',', array_map('intval', $requestedIds));
+                $existingRows = queryAll($conn, "
+                    SELECT id
+                    FROM premium_campaign_leaders
+                    WHERE campaign_id = " . (int) $selectedCampaignId . "
+                      AND id IN ({$requestedSql})
+                ");
+
+                $existingIds = [];
+                foreach ($existingRows as $row) {
+                    $existingIds[] = (int) ($row['id'] ?? 0);
+                }
+                $existingIds = array_values(array_filter(array_unique($existingIds), static fn(int $id): bool => $id > 0));
+
+                if (!$existingIds) {
+                    $conn->rollback();
+                    premium_flash('warning', 'Nenhuma liderança selecionada foi encontrada nesta campanha.');
+                    $redirectToCampaign($selectedCampaignId);
+                }
+
+                $existingSql = implode(',', array_map('intval', $existingIds));
+                $updatedCount = count($existingIds);
+
+                $conn->query("
+                    UPDATE premium_campaign_leaders
+                    SET transfer_rate = {$transferRateSql}
+                    WHERE campaign_id = " . (int) $selectedCampaignId . "
+                      AND id IN ({$existingSql})
+                ");
+            }
+
+            if ($conn->errno) {
+                throw new RuntimeException($conn->error);
+            }
+
+            $conn->commit();
+        } catch (Throwable $e) {
+            $conn->rollback();
+            premium_flash('error', 'Não foi possível alterar a transferência das lideranças selecionadas.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $messageParts = [];
+        $messageParts[] = $updatedCount === 1 ? 'Transferência atualizada em 1 liderança' : 'Transferência atualizada em ' . $updatedCount . ' lideranças';
+        if ($transferScope !== 'all') {
+            $ignoredCount = max(0, count($requestedIds) - $updatedCount + $invalidSelections);
+            if ($ignoredCount > 0) {
+                $messageParts[] = $ignoredCount === 1 ? '1 seleção ignorada' : $ignoredCount . ' seleções ignoradas';
+            }
+        }
+
+        premium_flash('success', implode('; ', $messageParts) . '.');
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
+    case 'delete_leaders_batch':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de excluir lideranças.');
+            $redirectToCampaign();
+        }
+
+        $leadersJson = trim((string) ($_POST['leaders_json'] ?? ''));
+        if ($leadersJson === '') {
+            premium_flash('error', 'Selecione pelo menos uma liderança antes de excluir.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $decoded = json_decode($leadersJson, true);
+        if (!is_array($decoded) || !$decoded) {
+            premium_flash('error', 'Não foi possível ler a seleção em lote.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $requestedIds = [];
+        $invalidSelections = 0;
+        foreach ($decoded as $item) {
+            $leaderId = 0;
+            if (is_array($item) && isset($item['id'])) {
+                $leaderId = (int) $item['id'];
+            } elseif (is_numeric($item)) {
+                $leaderId = (int) $item;
+            }
+
+            if ($leaderId <= 0) {
+                $invalidSelections++;
+                continue;
+            }
+
+            $requestedIds[$leaderId] = true;
+        }
+
+        if (!$requestedIds) {
+            premium_flash('error', 'Nenhuma liderança válida foi selecionada.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $requestedIds = array_keys($requestedIds);
+        $requestedSql = implode(',', array_map('intval', $requestedIds));
+
+        $conn->begin_transaction();
+
+        try {
+            $existingRows = queryAll($conn, "
+                SELECT id
+                FROM premium_campaign_leaders
+                WHERE campaign_id = " . (int) $selectedCampaignId . "
+                  AND id IN ({$requestedSql})
+            ");
+
+            $existingIds = [];
+            foreach ($existingRows as $row) {
+                $existingIds[] = (int) ($row['id'] ?? 0);
+            }
+            $existingIds = array_values(array_filter(array_unique($existingIds), static fn(int $id): bool => $id > 0));
+
+            if (!$existingIds) {
+                $conn->rollback();
+                premium_flash('warning', 'Nenhuma liderança selecionada foi encontrada nesta campanha.');
+                $redirectToCampaign($selectedCampaignId);
+            }
+
+            $existingSql = implode(',', array_map('intval', $existingIds));
+            $conn->query("
+                DELETE FROM premium_campaign_leaders
+                WHERE campaign_id = " . (int) $selectedCampaignId . "
+                  AND id IN ({$existingSql})
+            ");
+
+            if ($conn->errno) {
+                throw new RuntimeException($conn->error);
+            }
+
+            $conn->commit();
+        } catch (Throwable $e) {
+            $conn->rollback();
+            premium_flash('error', 'Não foi possível excluir as lideranças selecionadas.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $removedCount = count($existingIds);
+        $ignoredCount = max(0, count($requestedIds) - $removedCount + $invalidSelections);
+        $messageParts = [];
+        $messageParts[] = $removedCount === 1 ? '1 liderança removida' : $removedCount . ' lideranças removidas';
+        if ($ignoredCount > 0) {
+            $messageParts[] = $ignoredCount === 1 ? '1 seleção ignorada' : $ignoredCount . ' seleções ignoradas';
+        }
+
+        premium_flash('success', implode('; ', $messageParts) . '.');
         $redirectToCampaign($selectedCampaignId);
         break;
 

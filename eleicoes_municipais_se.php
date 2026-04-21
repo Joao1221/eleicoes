@@ -1077,8 +1077,8 @@
                     <article class="stat panel"><div class="pill">Votos no recorte</div><div class="kpi" id="statTotalVotos">-</div><div class="meta">Volume agregado do filtro ativo.</div></article>
                     <article class="stat panel"><div class="pill">Municípios</div><div class="kpi" id="statMunicipios">-</div><div class="meta">Cidades cobertas pelo recorte.</div></article>
                     <article class="stat panel"><div class="pill">Zonas</div><div class="kpi" id="statZonas">-</div><div class="meta">Combinações ativas de município e zona.</div></article>
-                    <article class="stat panel"><div class="pill">Seções com voto</div><div class="kpi" id="statSecoes">-</div><div class="meta">Seções que registraram esse filtro.</div></article>
-                    <article class="stat panel"><div class="pill">Votáveis</div><div class="kpi" id="statVotaveis">-</div><div class="meta">Nomes ou tipos de voto presentes.</div></article>
+                    <article class="stat panel"><div class="pill">Seções com voto</div><div class="kpi" id="statSecoes">-</div><div class="meta">Seções distintas no recorte.</div></article>
+                    <article class="stat panel"><div class="pill">Votáveis</div><div class="kpi" id="statVotaveis">-</div><div class="meta">Candidatos ou tipos únicos no recorte.</div></article>
                 </section>
 
                 

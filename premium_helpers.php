@@ -27,6 +27,31 @@ function premium_sql_int(mixed $value): int
     return (int) $value;
 }
 
+function premium_parse_candidate_number(mixed $value): ?int
+{
+    if ($value === null) {
+        return null;
+    }
+
+    $digits = preg_replace('/\D+/', '', trim((string) $value)) ?? '';
+    if ($digits === '') {
+        return null;
+    }
+
+    $number = (int) $digits;
+    return $number > 0 ? $number : null;
+}
+
+function premium_fmt_candidate_number(?int $value): string
+{
+    $number = (int) $value;
+    if ($number <= 0) {
+        return '';
+    }
+
+    return number_format($number, 0, ',', '.');
+}
+
 function premium_normalize_text(string $value): string
 {
     $value = trim($value);
@@ -81,6 +106,26 @@ function premium_cargo_variants(string $cargo): array
     ];
 
     return $variants[$normalized] ?? [$cargo];
+}
+
+function premium_leader_type_bucket(string $cargo): string
+{
+    $normalized = premium_normalize_cargo($cargo);
+
+    return match ($normalized) {
+        'PREFEITO' => 'prefeito',
+        'VEREADOR' => 'vereador',
+        default => 'sem_mandato',
+    };
+}
+
+function premium_leader_type_label(string $bucket): string
+{
+    return match ($bucket) {
+        'prefeito' => 'Prefeito',
+        'vereador' => 'Vereador',
+        default => 'Liderança sem mandato',
+    };
 }
 
 function premium_region_definitions(): array
@@ -402,6 +447,7 @@ function premium_get_all_campaigns(mysqli $conn): array
         $campaign['campaign_name'] = (string) ($campaign['campaign_name'] ?? '');
         $campaign['candidate_name'] = (string) ($campaign['candidate_name'] ?? '');
         $campaign['candidate_cargo'] = (string) ($campaign['candidate_cargo'] ?? '');
+        $campaign['candidate_number'] = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
         $campaign['status'] = (string) ($campaign['status'] ?? 'inactive');
         $campaign['created_at'] = (string) ($campaign['created_at'] ?? '');
         $campaign['updated_at'] = (string) ($campaign['updated_at'] ?? '');
@@ -505,7 +551,7 @@ function premium_require_user(mysqli $conn, bool $json = false): ?array
 
 function premium_get_campaigns(mysqli $conn, int $userId): array
 {
-    return queryAll($conn, "
+    $campaigns = queryAll($conn, "
         SELECT *
         FROM premium_campaigns
         WHERE user_id = " . (int) $userId . "
@@ -514,6 +560,13 @@ function premium_get_campaigns(mysqli $conn, int $userId): array
             updated_at DESC,
             id DESC
     ");
+
+    foreach ($campaigns as &$campaign) {
+        $campaign['candidate_number'] = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
+    }
+    unset($campaign);
+
+    return $campaigns;
 }
 
 function premium_delete_campaign(mysqli $conn, int $campaignId): bool
@@ -568,6 +621,10 @@ function premium_get_campaign(mysqli $conn, int $campaignId, int $userId): ?arra
           AND user_id = " . (int) $userId . "
         LIMIT 1
     ");
+
+    if ($campaign) {
+        $campaign['candidate_number'] = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
+    }
 
     return $campaign ?: null;
 }
@@ -688,6 +745,8 @@ function premium_get_campaign_leaders(mysqli $conn, int $campaignId): array
         $leader['size_class'] = (string) ($leader['size_class'] ?? 'medium');
         $leader['region_name'] = (string) ($leader['region_name'] ?? '');
         $leader['municipality'] = (string) ($leader['municipality'] ?? '');
+        $leader['leader_type'] = premium_leader_type_bucket((string) ($leader['leader_cargo'] ?? ''));
+        $leader['leader_type_label'] = premium_leader_type_label((string) $leader['leader_type']);
         $leader['leader_display_name'] = premium_leader_display_name($conn, $leader);
     }
     unset($leader);
@@ -764,6 +823,7 @@ function premium_candidate_baseline(mysqli $conn, string $candidateName, string 
         return [
             'candidate_name' => $candidateName,
             'cargo' => $cargo,
+            'candidate_number' => null,
             'total_votes' => 0,
             'municipalities' => [],
             'regions' => [],
@@ -777,6 +837,7 @@ function premium_candidate_baseline(mysqli $conn, string $candidateName, string 
         return [
             'candidate_name' => $candidateName,
             'cargo' => $cargo,
+            'candidate_number' => null,
             'total_votes' => 0,
             'municipalities' => [],
             'regions' => [],
@@ -799,6 +860,18 @@ function premium_candidate_baseline(mysqli $conn, string $candidateName, string 
     if (preg_match('/^\d+$/', $candidateName) === 1) {
         $nameConditions[] = 'nr_candidato = ' . (int) $candidateName;
     }
+
+    $candidateNumberRow = querySingle($conn, "
+        SELECT nr_candidato AS candidate_number, SUM(qt_votos_nominais) AS total_votos
+        FROM votacao_2022
+        WHERE (" . implode(' OR ', $cargoConditions) . ")
+          AND (" . implode(' OR ', $nameConditions) . ")
+          AND nr_candidato IS NOT NULL
+        GROUP BY nr_candidato
+        ORDER BY total_votos DESC, nr_candidato ASC
+        LIMIT 1
+    ");
+    $candidateNumber = premium_parse_candidate_number($candidateNumberRow['candidate_number'] ?? null);
 
     $rows = queryAll($conn, "
         SELECT municipio, SUM(qt_votos_nominais) AS total_votos
@@ -852,6 +925,7 @@ function premium_candidate_baseline(mysqli $conn, string $candidateName, string 
     return [
         'candidate_name' => $candidateName,
         'cargo' => $cargo,
+        'candidate_number' => $candidateNumber,
         'total_votes' => $totalVotes,
         'municipalities' => $municipalities,
         'regions' => $regionRows,

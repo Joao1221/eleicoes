@@ -52,6 +52,7 @@ $summary = [
     'baseline' => [
         'candidate_name' => '',
         'cargo' => '',
+        'candidate_number' => null,
         'total_votes' => 0,
         'municipalities' => [],
         'regions' => [],
@@ -107,4 +108,3 @@ if ($campaign) {
 }
 
 echo json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-

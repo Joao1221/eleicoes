@@ -110,6 +110,7 @@ $settings = premium_default_settings();
 $baseline = [
     'candidate_name' => '',
     'cargo' => '',
+    'candidate_number' => null,
     'total_votes' => 0,
     'municipalities' => [],
     'regions' => [],
@@ -215,6 +216,30 @@ function premium_selected_campaign_label(?array $campaign): string
     return trim(implode(' • ', array_filter($parts, static fn(string $item): bool => $item !== '')));
 }
 
+function premium_selected_campaign_subtitle(?array $campaign, ?int $candidateNumber = null): string
+{
+    if (!$campaign) {
+        return '';
+    }
+
+    $parts = [];
+    $cargo = trim((string) ($campaign['candidate_cargo'] ?? ''));
+    if ($cargo !== '') {
+        $parts[] = $cargo;
+    }
+
+    if ($candidateNumber === null) {
+        $candidateNumber = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
+    }
+
+    $formattedNumber = premium_fmt_candidate_number($candidateNumber);
+    if ($formattedNumber !== '') {
+        $parts[] = $formattedNumber;
+    }
+
+    return trim(implode(' • ', $parts));
+}
+
 function premium_render_campaign_options(array $campaigns, ?array $selectedCampaign): string
 {
     $selectedId = (int) ($selectedCampaign['id'] ?? 0);
@@ -246,7 +271,7 @@ function premium_size_label(string $sizeClass): string
     };
 }
 
-function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, int $forecast2026 = 0, array $settings = []): string
+function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, int $forecast2026 = 0, array $settings = [], ?array $campaign = null, string $csrf = ''): string
 {
     $settings = $settings ?: premium_default_settings();
     $leaders = array_values($leaders);
@@ -269,8 +294,100 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
             premium_normalize_text((string) ($b['leader_display_name'] ?? $b['leader_name'] ?? ''))
         );
     });
+
+    $cities = [];
+    $parties = [];
+    foreach ($leaders as &$leader) {
+        $leaderType = (string) ($leader['leader_type'] ?? premium_leader_type_bucket((string) ($leader['leader_cargo'] ?? '')));
+        $leader['leader_type'] = $leaderType;
+        $leader['leader_type_label'] = (string) ($leader['leader_type_label'] ?? premium_leader_type_label($leaderType));
+
+        $municipality = trim((string) ($leader['municipality'] ?? ''));
+        if ($municipality !== '') {
+            $cities[$municipality] = true;
+        }
+
+        $party = trim((string) ($leader['leader_party'] ?? ''));
+        if ($party !== '') {
+            $parties[$party] = true;
+        }
+    }
+    unset($leader);
+
+    ksort($cities, SORT_NATURAL | SORT_FLAG_CASE);
+    $parties = $parties ?? [];
+    ksort($parties, SORT_NATURAL | SORT_FLAG_CASE);
+
+    $campaignId = (int) ($campaign['id'] ?? 0);
+    $canDeleteLeader = $campaignId > 0 && trim($csrf) !== '';
+    $leaderTotal = count($leaders);
+
     $html = [];
     $html[] = '<div class="leaders-table-shell">';
+    $html[] = '<div class="leaders-table-toolbar">';
+    $html[] = '  <div class="leaders-table-toolbar__meta">';
+    $html[] = '    <div class="leaders-table-toolbar__title">Filtrar lideranças</div>';
+    $html[] = '    <div class="leaders-table-toolbar__sub">Refine a lista por cidade, por tipo de candidato e por partido. "Liderança sem mandato" agrupa registros fora de prefeito e vereador.</div>';
+    $html[] = '  </div>';
+    $html[] = '  <div class="leaders-table-toolbar__filters">';
+    $html[] = '    <label class="leaders-table-filter" for="activeLeadersCityFilter"><span>Cidade</span><select id="activeLeadersCityFilter"><option value="">Todas as cidades</option>';
+    foreach (array_keys($cities) as $city) {
+        $html[] = '      <option value="' . premium_escape_html($city) . '">' . premium_escape_html($city) . '</option>';
+    }
+    $html[] = '    </select></label>';
+    $html[] = '    <label class="leaders-table-filter" for="activeLeadersTypeFilter"><span>Tipo de candidato</span><select id="activeLeadersTypeFilter"><option value="">Todos os tipos</option><option value="prefeito">Prefeito</option><option value="vereador">Vereador</option><option value="sem_mandato">Liderança sem mandato</option></select></label>';
+    $html[] = '    <label class="leaders-table-filter" for="activeLeadersPartyFilter"><span>Partido</span><select id="activeLeadersPartyFilter"><option value="">Todos os partidos</option>';
+    foreach (array_keys($parties) as $party) {
+        $html[] = '      <option value="' . premium_escape_html($party) . '">' . premium_escape_html($party) . '</option>';
+    }
+    $html[] = '    </select></label>';
+    $html[] = '    <button type="button" class="btn ghost btn-small" id="activeLeadersResetBtn">Limpar filtros</button>';
+    $html[] = '  </div>';
+    $html[] = '  <div class="leaders-table-toolbar__count">Mostrando <strong id="activeLeadersVisibleCount">' . premium_fmt_int($leaderTotal) . '</strong> de <strong id="activeLeadersTotalCount">' . premium_fmt_int($leaderTotal) . '</strong> lideranças</div>';
+    $html[] = '</div>';
+    if ($canDeleteLeader) {
+        $html[] = '  <div class="leaders-table-toolbar__bulk">';
+        $html[] = '    <div class="leaders-table-toolbar__bulk-item leaders-table-toolbar__bulk-item--transfer">';
+        $html[] = '    <div class="leaders-table-toolbar__bulk-copy">';
+        $html[] = '      <div class="leaders-table-toolbar__bulk-title">Alterar transferência em lote</div>';
+        $html[] = '      <div class="leaders-table-toolbar__bulk-sub">Defina um novo percentual e aplique aos registros selecionados, aos visÃ­veis ou a toda a campanha.</div>';
+        $html[] = '    </div>';
+        $html[] = '    <form method="post" action="premium_actions.php" id="leaderBulkTransferForm" class="leaders-table-bulk-form leader-bulk-transfer-form">';
+        $html[] = '      <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
+        $html[] = '      <input type="hidden" name="action" value="update_leaders_transfer_batch">';
+        $html[] = '      <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
+        $html[] = '      <input type="hidden" name="transfer_scope" id="leaderBulkTransferScope" value="selected">';
+        $html[] = '      <input type="hidden" name="leaders_json" id="leaderBulkTransferPayload">';
+        $html[] = '      <label class="leader-bulk-transfer-form__field" for="leaderBulkTransferValue">';
+        $html[] = '        <span>Transferência %</span>';
+        $html[] = '        <input type="number" name="transfer_rate" id="leaderBulkTransferValue" value="' . premium_escape_html((string) ($settings['transfer_rate_default'] ?? 40)) . '" min="0" max="100" step="0.01">';
+        $html[] = '      </label>';
+        $html[] = '      <div class="leader-bulk-transfer-form__actions">';
+        $html[] = '        <button class="btn primary btn-small" type="submit" id="leaderBulkTransferSelectedBtn" data-bulk-transfer-scope="selected" disabled>Aplicar selecionadas</button>';
+        $html[] = '        <button class="btn ghost btn-small" type="submit" id="leaderBulkTransferVisibleBtn" data-bulk-transfer-scope="visible">Aplicar visíveis</button>';
+        $html[] = '        <button class="btn ghost btn-small" type="submit" id="leaderBulkTransferAllBtn" data-bulk-transfer-scope="all">Aplicar todas</button>';
+        $html[] = '      </div>';
+        $html[] = '    </form>';
+        $html[] = '  </div>';
+        $html[] = '  <div class="leaders-table-toolbar__bulk-item leaders-table-toolbar__bulk-item--delete">';
+        $html[] = '    <div class="leaders-table-toolbar__bulk-copy">';
+        $html[] = '      <div class="leaders-table-toolbar__bulk-title"><span id="leaderBulkSelectedCount">0 selecionadas</span></div>';
+        $html[] = '      <div class="leaders-table-toolbar__bulk-sub">Marque uma ou mais lideranças para excluir em lote. A projeção será recalculada automaticamente após salvar.</div>';
+        $html[] = '    </div>';
+        $html[] = '    <div class="leaders-table-toolbar__bulk-actions">';
+        $html[] = '      <button type="button" class="btn ghost btn-small" id="leaderBulkSelectVisibleBtn">Selecionar visíveis</button>';
+        $html[] = '      <button type="button" class="btn ghost btn-small" id="leaderBulkClearBtn">Limpar seleção</button>';
+        $html[] = '      <form method="post" action="premium_actions.php" id="leaderBulkDeleteForm" class="leaders-table-bulk-form">';
+        $html[] = '        <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
+        $html[] = '        <input type="hidden" name="action" value="delete_leaders_batch">';
+        $html[] = '        <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
+        $html[] = '        <input type="hidden" name="leaders_json" id="leaderBulkDeletePayload">';
+        $html[] = '        <button class="btn danger btn-small" type="submit" id="leaderBulkDeleteBtn" disabled>Excluir selecionadas</button>';
+        $html[] = '      </form>';
+        $html[] = '    </div>';
+        $html[] = '  </div>';
+        $html[] = '  </div>';
+    }
     $html[] = '<div class="leaders-summary">';
     $html[] = '  <div class="summary-metric">';
     $html[] = '    <div class="summary-metric__label">Baseline 2022</div>';
@@ -283,8 +400,13 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
     $html[] = '    <div class="summary-metric__sub">Cenário base calculado com os pesos atuais</div>';
     $html[] = '  </div>';
     $html[] = '</div>';
+    $html[] = '<div class="empty-state" id="activeLeadersFilterEmpty" hidden>Nenhuma liderança corresponde aos filtros selecionados.</div>';
+    $html[] = '<div id="activeLeadersRowsViewport">';
     $html[] = '<table class="leaders-table">';
     $html[] = '<thead><tr>';
+    if ($canDeleteLeader) {
+        $html[] = '<th class="leaders-table-select-cell"><input type="checkbox" id="activeLeadersSelectAll" aria-label="Selecionar todas as lideranças visíveis"></th>';
+    }
     $html[] = '<th>Região</th>';
     $html[] = '<th>Município</th>';
     $html[] = '<th>Liderança</th>';
@@ -296,33 +418,50 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
     $html[] = '</tr></thead><tbody>';
 
     foreach ($leaders as $leader) {
-    $leaderId = (int) ($leader['id'] ?? 0);
-    $regionName = (string) ($leader['region_name'] ?? 'Sem região');
-    $municipality = (string) ($leader['municipality'] ?? '');
-    $leaderName = (string) ($leader['leader_display_name'] ?? $leader['leader_name'] ?? 'Liderança');
+        $leaderId = (int) ($leader['id'] ?? 0);
+        $regionName = (string) ($leader['region_name'] ?? 'Sem região');
+        $municipality = (string) ($leader['municipality'] ?? '');
+        $leaderName = (string) ($leader['leader_display_name'] ?? $leader['leader_name'] ?? 'Liderança');
         $leaderCargo = (string) ($leader['leader_cargo'] ?? '');
         $leaderParty = (string) ($leader['leader_party'] ?? '');
+        $leaderType = (string) ($leader['leader_type'] ?? premium_leader_type_bucket($leaderCargo));
         $votes2024 = (int) ($leader['leader_votes_2024'] ?? 0);
         $transferRate = (float) ($leader['transfer_rate'] ?? 0);
         $projection = premium_apply_transfer_multiplier($leader, $settings);
         $baseEffect = (int) ($projection['base_effect'] ?? 0);
         $projectedVotes = (int) ($projection['projected_votes'] ?? 0);
 
-        $html[] = '<tr>';
-        $html[] = '<td><span class="table-pill">' . premium_escape_html($regionName) . '</span></td>';
-        $html[] = '<td>' . premium_escape_html($municipality) . '</td>';
-        $html[] = '<td>';
-        $html[] = '<button type="button" class="leader-open-btn" data-leader-id="' . $leaderId . '">' . premium_escape_html($leaderName) . '</button>';
-        if ($leaderCargo !== '' || $leaderParty !== '') {
-            $meta = trim($leaderCargo . ($leaderParty !== '' ? ' · ' . $leaderParty : ''));
-            $html[] = '<div class="table-sub">' . premium_escape_html($meta) . '</div>';
+        $html[] = '<tr class="leaders-table-row" data-active-leader-row data-leader-municipality="' . premium_escape_html($municipality) . '" data-leader-type="' . premium_escape_html($leaderType) . '" data-leader-party="' . premium_escape_html($leaderParty) . '">';
+        if ($canDeleteLeader) {
+            $html[] = '<td class="leaders-table-select-cell"><input type="checkbox" class="leader-bulk-checkbox" value="' . $leaderId . '" aria-label="Selecionar liderança ' . premium_escape_html($leaderName) . '"></td>';
         }
-        $html[] = '</td>';
+        $html[] = '<td><span class="table-pill">' . premium_escape_html($regionName) . '</span></td>';
+        $html[] = '<td class="leaders-table-city-cell"><span class="leaders-table-city">' . premium_escape_html($municipality) . '</span></td>';
+        $html[] = '<td class="leaders-table-leader-cell"><span class="leaders-table-leader-content">';
+        $html[] = '<button type="button" class="leader-open-btn leader-open-btn--compact" data-leader-id="' . $leaderId . '" title="' . premium_escape_html($leaderName) . '">' . premium_escape_html($leaderName) . '</button>';
+        if ($leaderParty !== '') {
+            $html[] = '<span class="leaders-table-leader-meta">' . premium_escape_html($leaderParty) . '</span>';
+        }
+        $html[] = '</span></td>';
         $html[] = '<td>' . premium_fmt_int($votes2024) . '</td>';
         $html[] = '<td>' . premium_fmt_percent($transferRate) . '</td>';
         $html[] = '<td>' . premium_fmt_int($baseEffect) . '</td>';
         $html[] = '<td>' . premium_fmt_int($projectedVotes) . '</td>';
-        $html[] = '<td><button type="button" class="btn ghost btn-small leader-open-btn" data-leader-id="' . $leaderId . '">Abrir</button></td>';
+        $html[] = '<td class="leaders-table-action-cell"><div class="leaders-table-actions"><button type="button" class="btn ghost btn-small leader-open-btn" data-leader-id="' . $leaderId . '">Abrir</button>';
+        if ($canDeleteLeader) {
+            $html[] = '<form method="post" action="premium_actions.php" class="leaders-table-action-form" onsubmit="return confirm(\'Remover esta liderança da campanha?\');">';
+            $html[] = '  <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
+            $html[] = '  <input type="hidden" name="action" value="delete_leader">';
+            $html[] = '  <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
+            $html[] = '  <input type="hidden" name="leader_id" value="' . $leaderId . '">';
+            $html[] = '  <button class="btn danger btn-small leader-delete-icon-btn" type="submit" aria-label="Excluir liderança" title="Excluir liderança">';
+            $html[] = '    <svg viewBox="0 0 24 24" class="leader-delete-icon" aria-hidden="true" focusable="false">';
+            $html[] = '      <path d="M4 7h16M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7m-8 0 .8 11a2 2 0 0 0 2 1.8h4.4a2 2 0 0 0 2-1.8L17 7m-7 4v6m4-6v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />';
+            $html[] = '    </svg>';
+            $html[] = '  </button>';
+            $html[] = '</form>';
+        }
+        $html[] = '</div></td>';
         $html[] = '</tr>';
     }
 
@@ -1739,6 +1878,48 @@ function premium_render_agenda_list_modal(array $items): string
             grid-template-columns: repeat(3, minmax(0, 1fr));
         }
 
+        .baseline-form {
+            display: grid;
+            grid-template-columns: repeat(10, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .baseline-form > .form-grid {
+            display: contents;
+        }
+
+        .baseline-form > .form-grid > label:nth-child(1) {
+            grid-column: span 4;
+        }
+
+        .baseline-form > .form-grid > label:nth-child(2) {
+            grid-column: span 4;
+        }
+
+        .baseline-form > .form-grid > label:nth-child(3) {
+            grid-column: span 2;
+        }
+
+        .baseline-form > .form-grid > label:nth-child(4) {
+            grid-column: span 2;
+        }
+
+        .baseline-form > .form-grid > label:nth-child(5) {
+            grid-column: span 4;
+        }
+
+        .baseline-form > label:nth-of-type(1) {
+            grid-column: span 4;
+        }
+
+        .baseline-form > label:nth-of-type(2) {
+            grid-column: 1 / -1;
+        }
+
+        .baseline-form > .action-row {
+            grid-column: 1 / -1;
+        }
+
         label {
             display: flex;
             flex-direction: column;
@@ -2073,8 +2254,152 @@ function premium_render_agenda_list_modal(array $items): string
 
         .leaders-table {
             width: 100%;
-            min-width: 980px;
+            min-width: 0;
+            table-layout: fixed;
             border-collapse: collapse;
+        }
+
+        .leaders-table-toolbar {
+            display: grid;
+            gap: 14px;
+            margin: 14px 14px 0;
+            padding: 14px 16px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: rgba(255,255,255,0.04);
+        }
+
+        html[data-theme="dark"] .leaders-table-toolbar {
+            background: linear-gradient(135deg, rgba(13, 23, 38, 0.98), rgba(8, 14, 24, 0.98));
+            border-color: rgba(145, 159, 181, 0.14);
+        }
+
+        html[data-theme="light"] .leaders-table-toolbar {
+            background: rgba(15, 23, 42, 0.03);
+        }
+
+        .leaders-table-toolbar__meta {
+            display: grid;
+            gap: 4px;
+        }
+
+        .leaders-table-toolbar__title {
+            font-size: 0.92rem;
+            font-weight: 800;
+        }
+
+        .leaders-table-toolbar__sub {
+            color: var(--muted);
+            font-size: 0.78rem;
+            line-height: 1.45;
+        }
+
+        .leaders-table-toolbar__filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            align-items: end;
+        }
+
+        .leaders-table-filter {
+            display: grid;
+            gap: 6px;
+        }
+
+        .leaders-table-filter span {
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-size: .7rem;
+            font-weight: 800;
+        }
+
+        .leaders-table-filter select {
+            width: 100%;
+        }
+
+        .leaders-table-toolbar__count {
+            color: var(--muted);
+            font-size: 0.78rem;
+        }
+
+        .leaders-table-toolbar__bulk {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 12px;
+            margin: 14px 14px 0;
+        }
+
+        .leaders-table-toolbar__bulk-item {
+            display: grid;
+            gap: 10px;
+            padding: 14px 16px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: rgba(255,255,255,0.04);
+        }
+
+        html[data-theme="dark"] .leaders-table-toolbar__bulk-item {
+            background: linear-gradient(135deg, rgba(13, 23, 38, 0.98), rgba(8, 14, 24, 0.98));
+            border-color: rgba(145, 159, 181, 0.14);
+        }
+
+        html[data-theme="light"] .leaders-table-toolbar__bulk-item {
+            background: rgba(15, 23, 42, 0.03);
+        }
+
+        .leaders-table-toolbar__bulk-copy {
+            display: grid;
+            gap: 4px;
+        }
+
+        .leaders-table-toolbar__bulk-title {
+            font-size: 0.92rem;
+            font-weight: 800;
+        }
+
+        .leaders-table-toolbar__bulk-sub {
+            color: var(--muted);
+            font-size: 0.76rem;
+            line-height: 1.35;
+        }
+
+        .leaders-table-toolbar__bulk-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .leaders-table-bulk-form {
+            display: grid;
+            gap: 10px;
+            margin: 0;
+        }
+
+        .leader-bulk-transfer-form__field {
+            display: grid;
+            gap: 6px;
+            max-width: 240px;
+        }
+
+        .leader-bulk-transfer-form__field span {
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-size: .7rem;
+            font-weight: 800;
+        }
+
+        .leader-bulk-transfer-form__field input {
+            width: 100%;
+        }
+
+        .leader-bulk-transfer-form__actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
         }
 
         .leaders-summary {
@@ -2082,6 +2407,80 @@ function premium_render_agenda_list_modal(array $items): string
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
             margin: 14px 14px 0;
+        }
+
+        #activeLeadersRowsViewport[hidden],
+        .empty-state[hidden] {
+            display: none !important;
+        }
+
+        .leaders-table-city-cell,
+        .leaders-table-leader-cell {
+            vertical-align: middle;
+            white-space: nowrap;
+            min-width: 0;
+        }
+
+        .leaders-table-select-cell {
+            width: 44px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .leaders-table-select-cell input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--accent);
+        }
+
+        .leaders-table-row.is-selected {
+            background: rgba(110, 243, 197, 0.07);
+        }
+
+        html[data-theme="dark"] .leaders-table-row.is-selected {
+            background: rgba(143, 211, 255, 0.07);
+        }
+
+        html[data-theme="light"] .leaders-table-row.is-selected {
+            background: rgba(16, 185, 129, 0.06);
+        }
+
+        .leaders-table-leader-content {
+            display: grid;
+            gap: 2px;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            align-items: start;
+        }
+
+        .leaders-table-city {
+            display: block;
+            max-width: 180px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            line-height: 1.25;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .leaders-table-leader-cell {
+            min-width: 0;
+            overflow: hidden;
+            white-space: normal;
+        }
+
+        .leaders-table-leader-meta {
+            display: block;
+            margin-left: 0;
+            color: var(--muted);
+            font-size: 0.68rem;
+            line-height: 1.3;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
         }
 
         .scope-summary-grid {
@@ -2421,9 +2820,57 @@ function premium_render_agenda_list_modal(array $items): string
 
         .leaders-table th,
         .leaders-table td {
-            padding: 14px 12px;
+            padding: 12px 10px;
             border-bottom: 1px solid rgba(255,255,255,0.06);
-            vertical-align: top;
+            vertical-align: middle;
+        }
+
+        .leaders-table-actions {
+            display: flex;
+            flex-wrap: nowrap;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .leaders-table-action-cell {
+            min-width: 132px;
+        }
+
+        .leaders-table-action-form {
+            display: inline-flex;
+            margin: 0;
+            flex: 0 0 auto;
+        }
+
+        .leader-open-btn--compact {
+            display: block;
+            min-width: 0;
+            flex: 1 1 auto;
+            font-size: 0.74rem;
+            font-weight: 700;
+            line-height: 1.2;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+        }
+
+        .leader-delete-icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            min-width: 32px;
+            height: 32px;
+            padding: 0;
+            border-radius: 999px;
+        }
+
+        .leader-delete-icon {
+            width: 15px;
+            height: 15px;
+            stroke-width: 1.85;
+            flex: 0 0 auto;
         }
 
         .leaders-table tbody tr:hover {
@@ -2701,6 +3148,18 @@ function premium_render_agenda_list_modal(array $items): string
         .leader-open-btn:hover,
         .agenda-open-btn:hover {
             text-decoration: underline;
+        }
+
+        .leaders-table-leader-cell .leader-open-btn--compact {
+            display: block;
+            width: 100%;
+            max-width: none;
+            min-width: 0;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            word-break: break-word;
+            line-height: 1.15;
         }
 
         .agenda-open-btn {
@@ -3207,8 +3666,14 @@ function premium_render_agenda_list_modal(array $items): string
         }
 
         @media (max-width: 1120px) {
-            .hero, .auth-grid, .grid-2, .grid-3, .stats-grid, .search-grid, .form-grid, .form-grid.compact {
+            .hero, .auth-grid, .grid-2, .grid-3, .stats-grid, .search-grid, .form-grid, .form-grid.compact, .baseline-form {
                 grid-template-columns: 1fr;
+            }
+
+            .baseline-form > .form-grid > label,
+            .baseline-form > label,
+            .baseline-form > .action-row {
+                grid-column: auto;
             }
 
             .grid-2.dashboard-panels-split {
@@ -3293,11 +3758,18 @@ function premium_render_agenda_list_modal(array $items): string
             .search-grid,
             .form-grid,
             .form-grid.compact,
+            .baseline-form,
             .leaders-summary,
             .scope-summary-grid,
             .comparison-summary-grid {
                 grid-template-columns: 1fr;
                 gap: 12px;
+            }
+
+            .baseline-form > .form-grid > label,
+            .baseline-form > label,
+            .baseline-form > .action-row {
+                grid-column: auto;
             }
 
             .dashboard-panels-split,
@@ -3461,6 +3933,10 @@ function premium_render_agenda_list_modal(array $items): string
             .admin-user-table,
             .admin-campaign-table {
                 min-width: 760px;
+            }
+
+            .leaders-table {
+                min-width: 820px;
             }
 
             .leaders-table-shell,
@@ -3628,10 +4104,25 @@ function premium_render_agenda_list_modal(array $items): string
             </div>
         </section>
     <?php else: ?>
+        <?php
+            $activeCampaignNumber = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
+            if ($activeCampaignNumber === null) {
+                $activeCampaignNumber = premium_parse_candidate_number($baseline['candidate_number'] ?? null);
+            }
+
+            $activeCampaignLabel = trim(implode(' • ', array_filter([
+                (string) ($campaign['campaign_name'] ?? 'Campanha'),
+                (string) ($campaign['candidate_name'] ?? ''),
+            ], static fn(string $item): bool => $item !== '')));
+            $activeCampaignSubtitle = premium_selected_campaign_subtitle($campaign, $activeCampaignNumber);
+        ?>
         <section class="panel hero">
             <div class="copy">
                 <div class="eyebrow">Escritório ativo</div>
-                <h2 style="font-size:2rem; margin-top: 12px;"><?= premium_escape_html(premium_selected_campaign_label($campaign)) ?></h2>
+                <h2 style="font-size:2rem; margin-top: 12px;"><?= premium_escape_html($activeCampaignLabel) ?></h2>
+                <?php if ($activeCampaignSubtitle !== ''): ?>
+                    <p class="muted" style="margin-top: 12px;"><?= premium_escape_html($activeCampaignSubtitle) ?></p>
+                <?php endif; ?>
                 <p class="muted" style="margin-top: 12px;">
                     Baseline de 2022, leitura regional e comparação com 2024, com fatores ajustáveis para alinhamento,
                     visibilidade, investimento e porte do município.
@@ -3866,13 +4357,17 @@ function premium_render_agenda_list_modal(array $items): string
                     <input type="hidden" name="action" value="create_campaign">
                     <div class="form-grid">
                         <label>Nome da campanha
-                            <input type="text" name="campaign_name" placeholder="Gabinete João 2026" required>
+                            <input type="text" name="campaign_name" placeholder="Gabinete de campanha" required>
                         </label>
                         <label>Candidato
                             <input type="text" name="candidate_name" placeholder="Nome do candidato" required>
                         </label>
                         <label>Cargo
                             <input type="text" name="candidate_cargo" placeholder="Deputado Federal, Estadual..." required>
+                        </label>
+                        <label>Número da campanha 2026
+                            <input type="text" name="candidate_number" inputmode="numeric" placeholder="Opcional">
+                            <span class="field-help">Se houver número em 2022, ele será sugerido automaticamente depois de criar a campanha.</span>
                         </label>
                         <label>Ano-base
                             <input type="number" name="baseline_year" value="2022" min="2022" step="1">
@@ -3933,7 +4428,13 @@ function premium_render_agenda_list_modal(array $items): string
                         <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="baselineBody" aria-controls="baselineBody" aria-expanded="false">Abrir</button>
                     </div>
                     <div id="baselineBody" hidden>
-                    <form method="post" action="premium_actions.php" class="campaign-form">
+                    <?php
+                        $campaignCandidateNumber = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
+                        if ($campaignCandidateNumber === null) {
+                            $campaignCandidateNumber = premium_parse_candidate_number($baseline['candidate_number'] ?? null);
+                        }
+                    ?>
+                    <form method="post" action="premium_actions.php" class="campaign-form baseline-form">
                         <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                         <input type="hidden" name="action" value="save_baseline">
                         <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
@@ -3943,6 +4444,9 @@ function premium_render_agenda_list_modal(array $items): string
                             </label>
                             <label>Cargo
                                 <input type="text" name="candidate_cargo" value="<?= premium_escape_html((string) ($campaign['candidate_cargo'] ?? '')) ?>" required>
+                            </label>
+                            <label>Número da campanha 2026
+                                <input type="text" name="candidate_number" inputmode="numeric" value="<?= premium_escape_html(premium_fmt_candidate_number($campaignCandidateNumber)) ?>" placeholder="Opcional">
                             </label>
                             <label>Ano-base
                                 <input type="number" name="baseline_year" value="<?= (int) ($campaign['baseline_year'] ?? 2022) ?>" min="2022" step="1">
@@ -4080,7 +4584,7 @@ function premium_render_agenda_list_modal(array $items): string
                 <div class="section-title">
                     <div>
                         <div class="eyebrow">Lideranças 2024</div>
-                        <h2>Buscar e adicionar lideranças</h2>
+                        <h2>Adicionar lideranças à campanha</h2>
                     </div>
                     <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="leaderSearchBody" aria-controls="leaderSearchBody" aria-expanded="false">Abrir</button>
                 </div>
@@ -4152,8 +4656,8 @@ function premium_render_agenda_list_modal(array $items): string
                     <div style="margin-top:18px;" class="panel">
                         <div class="section-title" style="margin-bottom:12px;">
                             <div>
-                                <div class="eyebrow">Adicionar liderança</div>
-                                <h3 style="font-size:1.08rem;">Ao escritório</h3>
+                                <div class="eyebrow">Adicionar liderança fora de 2024</div>
+                                <h3 style="font-size:1.08rem;">Aqui você adiciona as lideranças que não foram candidados em 2024</h3>
                             </div>
                             <button class="btn ghost btn-small" type="button" data-toggle-target="leaderAddBody" aria-controls="leaderAddBody" aria-expanded="false">Abrir</button>
                         </div>
@@ -4232,7 +4736,7 @@ function premium_render_agenda_list_modal(array $items): string
                 <div class="section-title">
                     <div>
                         <div class="eyebrow">Lideranças ativas</div>
-                        <h2>Lideranças selecionadas na campanha</h2>
+                        <h2>Lideranças participantes da campanha</h2>
                     </div>
                     <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="leadersBody" aria-controls="leadersBody" aria-expanded="false">Abrir</button>
                 </div>
@@ -4241,7 +4745,7 @@ function premium_render_agenda_list_modal(array $items): string
                         Lista resumida para leitura rápida. A tabela está ordenada por cidade e por votos dentro de cada cidade. Clique no nome ou em <strong>Abrir</strong> para ver todos os dados, editar pesos e ajustar a estratégia sem ocupar espaço demais na tela.
                     </p>
                     <?php if ($leaders): ?>
-                        <?= premium_render_leaders_table($leaders, (int) ($baseline['total_votes'] ?? 0), (int) ($forecast['totals']['projected_base'] ?? 0), (array) ($forecast['settings'] ?? $settings ?? [])) ?>
+                        <?= premium_render_leaders_table($leaders, (int) ($baseline['total_votes'] ?? 0), (int) ($forecast['totals']['projected_base'] ?? 0), (array) ($forecast['settings'] ?? $settings ?? []), $campaign, $csrf) ?>
                     <?php else: ?>
                         <div class="empty-state">Ainda não há lideranças cadastradas. Use a busca acima para adicionar prefeitos e vereadores à campanha.</div>
                     <?php endif; ?>
@@ -4464,6 +4968,7 @@ function premium_render_agenda_list_modal(array $items): string
         'campaign_name' => (string) ($campaign['campaign_name'] ?? ''),
         'candidate_name' => (string) ($campaign['candidate_name'] ?? ''),
         'candidate_cargo' => (string) ($campaign['candidate_cargo'] ?? ''),
+        'candidate_number' => premium_parse_candidate_number($campaign['candidate_number'] ?? null),
         'current_municipio' => (string) ($campaign['current_municipio'] ?? ''),
         'current_region' => (string) ($campaign['current_region'] ?? ''),
         'baseline_year' => (int) ($campaign['baseline_year'] ?? 2022),
@@ -4494,6 +4999,28 @@ function premium_render_agenda_list_modal(array $items): string
     const agendaPreviewArea = document.getElementById('agendaPreviewArea');
     const agendaPreviewNote = document.getElementById('agendaPreviewNote');
     const agendaFilterButtons = Array.from(document.querySelectorAll('[data-agenda-filter]'));
+    const activeLeadersCityFilter = document.getElementById('activeLeadersCityFilter');
+    const activeLeadersTypeFilter = document.getElementById('activeLeadersTypeFilter');
+    const activeLeadersPartyFilter = document.getElementById('activeLeadersPartyFilter');
+    const activeLeadersResetBtn = document.getElementById('activeLeadersResetBtn');
+    const activeLeadersVisibleCount = document.getElementById('activeLeadersVisibleCount');
+    const activeLeadersTotalCount = document.getElementById('activeLeadersTotalCount');
+    const activeLeadersFilterEmpty = document.getElementById('activeLeadersFilterEmpty');
+    const activeLeadersRowsViewport = document.getElementById('activeLeadersRowsViewport');
+    const activeLeadersSelectAll = document.getElementById('activeLeadersSelectAll');
+    const leaderBulkTransferForm = document.getElementById('leaderBulkTransferForm');
+    const leaderBulkTransferPayload = document.getElementById('leaderBulkTransferPayload');
+    const leaderBulkTransferScope = document.getElementById('leaderBulkTransferScope');
+    const leaderBulkTransferValue = document.getElementById('leaderBulkTransferValue');
+    const leaderBulkTransferSelectedBtn = document.getElementById('leaderBulkTransferSelectedBtn');
+    const leaderBulkTransferVisibleBtn = document.getElementById('leaderBulkTransferVisibleBtn');
+    const leaderBulkTransferAllBtn = document.getElementById('leaderBulkTransferAllBtn');
+    const leaderBulkDeleteForm = document.getElementById('leaderBulkDeleteForm');
+    const leaderBulkDeletePayload = document.getElementById('leaderBulkDeletePayload');
+    const leaderBulkDeleteBtn = document.getElementById('leaderBulkDeleteBtn');
+    const leaderBulkSelectVisibleBtn = document.getElementById('leaderBulkSelectVisibleBtn');
+    const leaderBulkClearBtn = document.getElementById('leaderBulkClearBtn');
+    const leaderBulkSelectedCount = document.getElementById('leaderBulkSelectedCount');
     let agendaFilter = 'pending';
     let scopeModalColspan = 8;
     let cityComparisonFilter = 'all';
@@ -4547,6 +5074,137 @@ function premium_render_agenda_list_modal(array $items): string
             .toLowerCase()
             .trim()
             .replace(/\s+/g, ' ');
+    }
+
+    function applyActiveLeadersFilters() {
+        if (!activeLeadersRowsViewport) {
+            return;
+        }
+
+        const rows = Array.from(document.querySelectorAll('[data-active-leader-row]'));
+        const cityFilter = normalizeText(activeLeadersCityFilter?.value || '');
+        const typeFilter = String(activeLeadersTypeFilter?.value || '').trim();
+        const partyFilter = normalizeText(activeLeadersPartyFilter?.value || '');
+
+        let visibleCount = 0;
+        rows.forEach((row) => {
+            const rowCity = normalizeText(row.dataset.leaderMunicipality || '');
+            const rowType = String(row.dataset.leaderType || '').trim();
+            const rowParty = normalizeText(row.dataset.leaderParty || '');
+            const showRow = (!cityFilter || rowCity === cityFilter) && (!typeFilter || rowType === typeFilter) && (!partyFilter || rowParty === partyFilter);
+
+            row.hidden = !showRow;
+            if (showRow) {
+                visibleCount += 1;
+            }
+        });
+
+        if (activeLeadersVisibleCount) {
+            activeLeadersVisibleCount.textContent = formatNumber(visibleCount);
+        }
+
+        if (activeLeadersTotalCount) {
+            activeLeadersTotalCount.textContent = formatNumber(rows.length);
+        }
+
+        if (activeLeadersFilterEmpty) {
+            activeLeadersFilterEmpty.hidden = visibleCount > 0;
+        }
+
+        activeLeadersRowsViewport.hidden = rows.length > 0 && visibleCount === 0;
+        updateActiveLeaderBulkSelectionState();
+    }
+
+    function getActiveLeaderCheckboxes() {
+        return Array.from(document.querySelectorAll('.leader-bulk-checkbox'));
+    }
+
+    function getVisibleActiveLeaderCheckboxes() {
+        return getActiveLeaderCheckboxes().filter((checkbox) => !checkbox.closest('tr')?.hidden);
+    }
+
+    function getActiveLeaderIdsForScope(scope = 'selected') {
+        const normalizedScope = String(scope || 'selected');
+        let checkboxes = [];
+
+        if (normalizedScope === 'all') {
+            checkboxes = getActiveLeaderCheckboxes();
+        } else if (normalizedScope === 'visible') {
+            checkboxes = getVisibleActiveLeaderCheckboxes();
+        } else {
+            checkboxes = getActiveLeaderCheckboxes().filter((checkbox) => checkbox.checked);
+        }
+
+        const ids = [];
+        const seen = new Set();
+        checkboxes.forEach((checkbox) => {
+            const id = Number.parseInt(checkbox.value || '0', 10);
+            if (!Number.isFinite(id) || id <= 0 || seen.has(id)) {
+                return;
+            }
+
+            seen.add(id);
+            ids.push(id);
+        });
+
+        return ids;
+    }
+
+    function updateActiveLeaderBulkSelectionState() {
+        const checkboxes = getActiveLeaderCheckboxes();
+        const visibleCheckboxes = getVisibleActiveLeaderCheckboxes();
+        const selectedCheckboxes = checkboxes.filter((checkbox) => checkbox.checked);
+        const selectedVisibleCheckboxes = visibleCheckboxes.filter((checkbox) => checkbox.checked);
+        const totalCount = checkboxes.length;
+
+        if (leaderBulkSelectedCount) {
+            leaderBulkSelectedCount.textContent = `${selectedCheckboxes.length} selecionadas`;
+        }
+
+        if (leaderBulkDeleteBtn) {
+            leaderBulkDeleteBtn.disabled = selectedCheckboxes.length === 0;
+        }
+
+        if (leaderBulkTransferSelectedBtn) {
+            leaderBulkTransferSelectedBtn.disabled = selectedCheckboxes.length === 0;
+        }
+
+        if (leaderBulkTransferVisibleBtn) {
+            leaderBulkTransferVisibleBtn.disabled = visibleCheckboxes.length === 0;
+        }
+
+        if (leaderBulkTransferAllBtn) {
+            leaderBulkTransferAllBtn.disabled = totalCount === 0;
+        }
+
+        if (activeLeadersSelectAll) {
+            activeLeadersSelectAll.disabled = visibleCheckboxes.length === 0;
+            activeLeadersSelectAll.checked = visibleCheckboxes.length > 0 && selectedVisibleCheckboxes.length === visibleCheckboxes.length;
+            activeLeadersSelectAll.indeterminate = selectedVisibleCheckboxes.length > 0 && selectedVisibleCheckboxes.length < visibleCheckboxes.length;
+        }
+
+        checkboxes.forEach((checkbox) => {
+            const row = checkbox.closest('tr');
+            if (row) {
+                row.classList.toggle('is-selected', checkbox.checked);
+            }
+        });
+    }
+
+    function setActiveLeaderBulkSelection(checked, visibleOnly = false) {
+        const targets = visibleOnly ? getVisibleActiveLeaderCheckboxes() : getActiveLeaderCheckboxes();
+        targets.forEach((checkbox) => {
+            checkbox.checked = checked;
+        });
+        updateActiveLeaderBulkSelectionState();
+    }
+
+    function buildActiveLeaderBulkDeletePayload() {
+        return getActiveLeaderIdsForScope('selected');
+    }
+
+    function buildActiveLeaderBulkTransferPayload(scope = 'selected') {
+        return getActiveLeaderIdsForScope(scope);
     }
 
     function findForecastCity(cityName) {
@@ -6294,6 +6952,135 @@ function premium_render_agenda_list_modal(array $items): string
     if (agendaPreviewArea) {
         renderAgendaPreview(agendaFilter);
     }
+
+    if (activeLeadersCityFilter) {
+        activeLeadersCityFilter.addEventListener('change', applyActiveLeadersFilters);
+    }
+
+    if (activeLeadersTypeFilter) {
+        activeLeadersTypeFilter.addEventListener('change', applyActiveLeadersFilters);
+    }
+
+    if (activeLeadersPartyFilter) {
+        activeLeadersPartyFilter.addEventListener('change', applyActiveLeadersFilters);
+    }
+
+    if (activeLeadersResetBtn) {
+        activeLeadersResetBtn.addEventListener('click', () => {
+            if (activeLeadersCityFilter) {
+                activeLeadersCityFilter.value = '';
+            }
+            if (activeLeadersTypeFilter) {
+                activeLeadersTypeFilter.value = '';
+            }
+            if (activeLeadersPartyFilter) {
+                activeLeadersPartyFilter.value = '';
+            }
+            applyActiveLeadersFilters();
+        });
+    }
+
+    if (activeLeadersSelectAll) {
+        activeLeadersSelectAll.addEventListener('change', () => {
+            setActiveLeaderBulkSelection(Boolean(activeLeadersSelectAll.checked), true);
+        });
+    }
+
+    if (activeLeadersRowsViewport) {
+        activeLeadersRowsViewport.addEventListener('change', (event) => {
+            if (!event.target.classList.contains('leader-bulk-checkbox')) {
+                return;
+            }
+
+            updateActiveLeaderBulkSelectionState();
+        });
+    }
+
+    if (leaderBulkTransferForm) {
+        [leaderBulkTransferSelectedBtn, leaderBulkTransferVisibleBtn, leaderBulkTransferAllBtn].forEach((button) => {
+            if (!button) {
+                return;
+            }
+
+            button.addEventListener('click', () => {
+                leaderBulkTransferForm.dataset.bulkTransferScope = button.dataset.bulkTransferScope || 'selected';
+            });
+        });
+
+        leaderBulkTransferForm.addEventListener('submit', (event) => {
+            const submitter = event.submitter;
+            const scope = String(submitter?.dataset?.bulkTransferScope || leaderBulkTransferForm.dataset.bulkTransferScope || 'selected');
+            const transferRate = Number.parseFloat(leaderBulkTransferValue?.value || '');
+
+            if (!Number.isFinite(transferRate) || transferRate < 0 || transferRate > 100) {
+                event.preventDefault();
+                alert('Informe uma transferência entre 0 e 100.');
+                return;
+            }
+
+            const payload = buildActiveLeaderBulkTransferPayload(scope);
+            if (!payload.length) {
+                event.preventDefault();
+                alert(scope === 'all'
+                    ? 'Não há lideranças na campanha para atualizar.'
+                    : 'Selecione pelo menos uma liderança antes de alterar a transferência.');
+                return;
+            }
+
+            if (leaderBulkTransferScope) {
+                leaderBulkTransferScope.value = scope;
+            }
+            if (leaderBulkTransferPayload) {
+                leaderBulkTransferPayload.value = JSON.stringify(payload);
+            }
+
+            const scopeLabel = scope === 'all'
+                ? 'todas as lideranças da campanha'
+                : scope === 'visible'
+                    ? 'as lideranças visíveis'
+                    : 'as lideranças selecionadas';
+            const countLabel = payload.length === 1 ? '1 liderança' : `${payload.length} lideranças`;
+            const confirmed = window.confirm(`Aplicar ${formatNumber(transferRate)}% para ${countLabel} (${scopeLabel})?`);
+            if (!confirmed) {
+                event.preventDefault();
+            }
+        });
+    }
+
+    if (leaderBulkSelectVisibleBtn) {
+        leaderBulkSelectVisibleBtn.addEventListener('click', () => {
+            setActiveLeaderBulkSelection(true, true);
+        });
+    }
+
+    if (leaderBulkClearBtn) {
+        leaderBulkClearBtn.addEventListener('click', () => {
+            setActiveLeaderBulkSelection(false, false);
+        });
+    }
+
+    if (leaderBulkDeleteForm) {
+        leaderBulkDeleteForm.addEventListener('submit', (event) => {
+            const payload = buildActiveLeaderBulkDeletePayload();
+            if (!payload.length) {
+                event.preventDefault();
+                alert('Selecione pelo menos uma lideranÃ§a antes de excluir.');
+                return;
+            }
+
+            if (leaderBulkDeletePayload) {
+                leaderBulkDeletePayload.value = JSON.stringify(payload);
+            }
+
+            const countLabel = payload.length === 1 ? '1 lideranÃ§a' : `${payload.length} lideranÃ§as`;
+            const confirmed = window.confirm(`Excluir ${countLabel} da campanha? Esta aÃ§Ã£o nÃ£o pode ser desfeita.`);
+            if (!confirmed) {
+                event.preventDefault();
+            }
+        });
+    }
+
+    applyActiveLeadersFilters();
 
     document.addEventListener('click', (event) => {
         const toggleButton = event.target.closest('[data-toggle-target]');

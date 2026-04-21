@@ -511,9 +511,16 @@ try {
             COALESCE(SUM(total_votos), 0) AS total_votos,
             COUNT(DISTINCT cd_municipio) AS total_municipios,
             COUNT(DISTINCT CONCAT(cd_municipio, '-', nr_zona)) AS total_zonas,
-            COUNT(DISTINCT nr_votavel) AS total_votaveis,
-            COALESCE(SUM(secoes_com_votos), 0) AS total_secoes
+            COUNT(DISTINCT CONCAT(cd_municipio, '-', nr_votavel, '-', nm_votavel)) AS total_votaveis
          FROM resumo_votacao_2024_se
+         {$where}"
+    );
+
+    $sectionRow = querySingle(
+        $conn,
+        "SELECT
+            COALESCE(COUNT(DISTINCT CONCAT(cd_municipio, '-', nr_zona, '-', nr_secao)), 0) AS total_secoes
+         FROM votacao_secao_2024_se
          {$where}"
     );
 
@@ -832,7 +839,7 @@ try {
             'total_municipios' => toInt($statRow['total_municipios'] ?? 0),
             'total_zonas' => toInt($statRow['total_zonas'] ?? 0),
             'total_votaveis' => toInt($statRow['total_votaveis'] ?? 0),
-            'total_secoes' => toInt($statRow['total_secoes'] ?? 0),
+            'total_secoes' => toInt($sectionRow['total_secoes'] ?? 0),
             'lider' => $leader ? [
                 'nr_votavel' => (int) $leader['nr_votavel'],
                 'nm_votavel' => $leader['nm_votavel'],
