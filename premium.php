@@ -1122,7 +1122,7 @@ function premium_render_agenda_list_modal(array $items): string
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="dark light">
+    <meta name="color-scheme" content="light dark">
     <script src="assets/js/premium-bootstrap.js"></script>
     <title>Escritório Premium | Eleições Sergipe</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">

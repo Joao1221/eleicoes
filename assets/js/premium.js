@@ -84,10 +84,28 @@
     const leaderBulkSelectedCount = document.getElementById('leaderBulkSelectedCount');
     let agendaFilter = 'pending';
     let scopeModalColspan = 8;
-    let cityComparisonFilter = 'all';    const themeToggleButtons = Array.from(document.querySelectorAll('[data-theme-toggle]'));
+    let cityComparisonFilter = 'all';
+
+    const themeToggleButtons = Array.from(document.querySelectorAll('[data-theme-toggle]'));
+    const premiumThemeStorageKey = 'premium-theme';
+    const premiumThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    let premiumThemePreference = null;
 
     function normalizePremiumTheme(value) {
         return String(value) === 'light' ? 'light' : 'dark';
+    }
+
+    function getSystemPremiumTheme() {
+        return premiumThemeMediaQuery.matches ? 'dark' : 'light';
+    }
+
+    function getInitialPremiumTheme() {
+        const datasetTheme = document.documentElement.dataset.theme;
+        if (datasetTheme === 'light' || datasetTheme === 'dark') {
+            return datasetTheme;
+        }
+
+        return getSystemPremiumTheme();
     }
 
     function applyPremiumTheme(theme, persist = true) {
@@ -96,11 +114,15 @@
         document.documentElement.style.colorScheme = normalizedTheme;
 
         if (persist) {
+            premiumThemePreference = normalizedTheme;
+            document.documentElement.dataset.themeSource = 'stored';
             try {
-                localStorage.setItem('premium-theme', normalizedTheme);
+                localStorage.setItem(premiumThemeStorageKey, normalizedTheme);
             } catch (error) {
                 // Ignore storage failures and keep the current theme in memory.
             }
+        } else if (premiumThemePreference === null) {
+            document.documentElement.dataset.themeSource = 'system';
         }
 
         themeToggleButtons.forEach((button) => {
@@ -110,11 +132,33 @@
         });
     }
 
-    applyPremiumTheme(document.documentElement.dataset.theme || 'dark', false);
+    const initialPremiumTheme = getInitialPremiumTheme();
+    if (document.documentElement.dataset.themeSource === 'stored') {
+        premiumThemePreference = initialPremiumTheme;
+    }
+
+    applyPremiumTheme(initialPremiumTheme, false);
+
+    if (premiumThemePreference === null) {
+        const syncPremiumThemeWithSystem = (event) => {
+            if (premiumThemePreference !== null) {
+                return;
+            }
+
+            applyPremiumTheme(event.matches ? 'dark' : 'light', false);
+        };
+
+        if (typeof premiumThemeMediaQuery.addEventListener === 'function') {
+            premiumThemeMediaQuery.addEventListener('change', syncPremiumThemeWithSystem);
+        } else if (typeof premiumThemeMediaQuery.addListener === 'function') {
+            premiumThemeMediaQuery.addListener(syncPremiumThemeWithSystem);
+        }
+    }
 
     themeToggleButtons.forEach((button) => {
         button.addEventListener('click', () => {
-            applyPremiumTheme(button.dataset.themeToggle || 'dark');
+            premiumThemePreference = normalizePremiumTheme(button.dataset.themeToggle || 'dark');
+            applyPremiumTheme(premiumThemePreference);
         });
     });
 
