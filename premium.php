@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/premium_helpers.php';
+require_once __DIR__ . '/premium_advisor_helpers.php';
 
 premium_ensure_campaign_photo_column($conn);
 
@@ -145,6 +146,7 @@ $forecast = [
     'cities' => [],
     'leaders' => [],
 ];
+$advisor = null;
 $baselinePanelHidden = false;
 $settingsPanelHidden = false;
 $isAdmin = premium_is_admin_user($user);
@@ -174,6 +176,7 @@ if ($user) {
         }
         $agendaPendingPreview = array_slice($agendaPendingPreview, 0, 5);
         $forecast = premium_build_forecast($baseline, $leaders, $settings);
+        $advisor = premium_build_campaign_advisor($campaign, $baseline, $leaders, $forecast, $settings);
         $baselinePanelHidden = !empty($campaign['baseline_panel_hidden']);
         $settingsPanelHidden = !empty($campaign['settings_panel_hidden']);
     }
@@ -1510,6 +1513,42 @@ function premium_render_agenda_list_modal(array $items): string
                 <?= premium_render_stat('Delta vs 2022', premium_fmt_int((int) ($forecast['totals']['delta_base'] ?? 0)), 'Diferença absoluta sobre a base'); ?>
                 <?= premium_render_stat('Lideranças ativas', premium_fmt_int(count($leaders)), 'Lideranças adicionadas ao escritório'); ?>
             </section>
+
+            <?php if ($advisor): ?>
+                <section class="panel advisor-summary-panel">
+                    <div class="section-title">
+                        <div>
+                            <div class="eyebrow">Conselheiro</div>
+                            <h2>Próximas decisões de campanha</h2>
+                        </div>
+                        <a class="btn comparison-cta" href="premium_conselheiro.php?campaign_id=<?= (int) $campaign['id'] ?>">Abrir Conselheiro</a>
+                    </div>
+                    <div class="advisor-summary-grid">
+                        <div>
+                            <strong><?= premium_fmt_int((int) ($advisor['summary']['priority_cities'] ?? 0)) ?></strong>
+                            <span>cidades de prioridade alta</span>
+                        </div>
+                        <div>
+                            <strong><?= premium_fmt_int((int) ($advisor['summary']['risk_cities'] ?? 0)) ?></strong>
+                            <span>bases históricas sem liderança</span>
+                        </div>
+                        <div>
+                            <strong><?= premium_fmt_int((int) ($advisor['summary']['rentable_cities'] ?? 0)) ?></strong>
+                            <span>cidades com alta rentabilidade</span>
+                        </div>
+                    </div>
+                    <?php if (!empty($advisor['alerts'])): ?>
+                        <div class="advisor-mini-alerts">
+                            <?php foreach (array_slice((array) $advisor['alerts'], 0, 3) as $alert): ?>
+                                <article>
+                                    <strong><?= premium_escape_html((string) ($alert['title'] ?? 'Alerta')) ?></strong>
+                                    <span><?= premium_escape_html((string) ($alert['text'] ?? '')) ?></span>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </section>
+            <?php endif; ?>
 
             <?php if ($baselinePanelHidden || $settingsPanelHidden): ?>
                 <section class="campaign-shortcuts">
