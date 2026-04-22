@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/premium_helpers.php';
 
+premium_ensure_campaign_photo_column($conn);
+
 function premium_fmt_int(int $value): string
 {
     return number_format($value, 0, ',', '.');
@@ -232,7 +234,7 @@ function premium_selected_campaign_subtitle(?array $campaign, ?int $candidateNum
         $candidateNumber = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
     }
 
-    $formattedNumber = premium_fmt_candidate_number($candidateNumber);
+    $formattedNumber = premium_fmt_candidate_number_plain($candidateNumber);
     if ($formattedNumber !== '') {
         $parts[] = $formattedNumber;
     }
@@ -360,7 +362,7 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
         $html[] = '      <input type="hidden" name="leaders_json" id="leaderBulkTransferPayload">';
         $html[] = '      <label class="leader-bulk-transfer-form__field" for="leaderBulkTransferValue">';
         $html[] = '        <span>Transferência %</span>';
-        $html[] = '        <input type="number" name="transfer_rate" id="leaderBulkTransferValue" value="' . premium_escape_html((string) ($settings['transfer_rate_default'] ?? 40)) . '" min="0" max="100" step="0.01">';
+        $html[] = '        <input type="number" name="transfer_rate" id="leaderBulkTransferValue" value="' . premium_escape_html((string) ($settings['transfer_rate_default'] ?? 30)) . '" min="0" max="100" step="0.01">';
         $html[] = '      </label>';
         $html[] = '      <div class="leader-bulk-transfer-form__actions">';
         $html[] = '        <button class="btn primary btn-small" type="submit" id="leaderBulkTransferSelectedBtn" data-bulk-transfer-scope="selected" disabled>Aplicar selecionadas</button>';
@@ -522,7 +524,7 @@ function premium_render_leader_modal(?array $campaign, string $csrf): string
     $html[] = '          <span class="field-help">Diferença entre o primeiro e o segundo colocado no município. Quanto maior a margem, maior a folga política da liderança.</span>';
     $html[] = '        </label>';
     $html[] = '        <label>Transferência %';
-    $html[] = '          <input type="number" name="transfer_rate" id="modalLeaderTransfer" value="' . premium_escape_html((string) (premium_default_settings()['transfer_rate_default'] ?? 40)) . '" min="0" max="100" step="0.01">';
+        $html[] = '          <input type="number" name="transfer_rate" id="modalLeaderTransfer" value="' . premium_escape_html((string) premium_default_settings()['transfer_rate_default']) . '" min="0" max="100" step="0.01">';
     $html[] = '          <span class="field-help">Percentual da votação desta liderança que pode migrar para o candidato. É o motor principal da projeção.</span>';
     $html[] = '        </label>';
     $html[] = '        <label>Visibilidade';
@@ -766,7 +768,7 @@ function premium_render_leaf_card(array $leader): string
     $leaderId = (int) ($leader['id'] ?? 0);
     $yesChecked = !empty($leader['aligned_with_executive']) ? ' checked' : '';
     $leaderName = (string) ($leader['leader_display_name'] ?? $leader['leader_name'] ?? 'Liderança');
-    $transferRate = number_format((float) ($leader['transfer_rate'] ?? 40), 2, '.', '');
+    $transferRate = number_format((float) ($leader['transfer_rate'] ?? premium_default_settings()['transfer_rate_default']), 2, '.', '');
     $marginPercent = number_format((float) ($leader['margin_percent'] ?? 0), 2, '.', '');
     $visibilityScore = number_format((float) ($leader['visibility_score'] ?? 50), 2, '.', '');
     $investmentScore = number_format((float) ($leader['investment_score'] ?? 50), 2, '.', '');
@@ -1163,6 +1165,20 @@ function premium_render_agenda_list_modal(array $items): string
                 <div class="pill">Olá, <?= premium_escape_html((string) ($user['name'] ?? '')) ?></div>
                 <a class="btn ghost" href="premium_logout.php">Sair</a>
             </div>
+            <?php if ($campaign): ?>
+                <details class="desktop-campaign-delete">
+                    <summary>Opcoes avancadas</summary>
+                    <form method="post" action="premium_actions.php" class="campaign-delete-form" onsubmit="return confirm('Excluir esta campanha permanentemente? Esta acao nao pode ser desfeita.');">
+                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                        <input type="hidden" name="action" value="delete_campaign">
+                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                        <label>Digite EXCLUIR CAMPANHA para confirmar
+                            <input type="text" name="delete_confirmation" autocomplete="off" required>
+                        </label>
+                        <button class="btn danger btn-small" type="submit">Excluir campanha</button>
+                    </form>
+                </details>
+            <?php endif; ?>
         <?php endif; ?>
         </div>
     </header>
@@ -1221,8 +1237,9 @@ function premium_render_agenda_list_modal(array $items): string
                 (string) ($campaign['candidate_name'] ?? ''),
             ], static fn(string $item): bool => $item !== '')));
             $activeCampaignSubtitle = premium_selected_campaign_subtitle($campaign, $activeCampaignNumber);
+            $candidatePhotoPath = trim((string) ($campaign['candidate_photo_path'] ?? ''));
         ?>
-        <section class="panel hero">
+        <section class="panel hero hero--active">
             <div class="copy">
                 <div class="eyebrow">Escritório ativo</div>
                 <h2 style="font-size:2rem; margin-top: 12px;"><?= premium_escape_html($activeCampaignLabel) ?></h2>
@@ -1239,27 +1256,20 @@ function premium_render_agenda_list_modal(array $items): string
                     <span class="pill">Regiões: 8</span>
                 </div>
             </div>
-            <div class="panel" style="margin:0;">
-                <h3 style="margin-bottom:12px;">Selecionar campanha</h3>
-                <form method="post" action="premium_actions.php" class="campaign-form" id="campaignSelectForm">
-                    <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                    <input type="hidden" name="action" value="select_campaign">
-                    <label>Campanha
-                        <select name="campaign_id">
-                            <?= premium_render_campaign_options($campaigns, $campaign) ?>
-                        </select>
-                    </label>
-                </form>
-                <div class="campaign-selection-actions">
-                    <button class="btn primary btn-small" type="submit" form="campaignSelectForm">Carregar campanha</button>
-                <?php if ($campaign): ?>
-                    <form method="post" action="premium_actions.php" class="campaign-delete-form" onsubmit="return confirm('Excluir esta campanha permanentemente? Isso apagará baseline, lideranças, agenda e pesos.');">
-                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                        <input type="hidden" name="action" value="delete_campaign">
-                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
-                        <button class="btn ghost btn-small" type="submit">Excluir campanha</button>
-                    </form>
+            <div class="candidate-photo-card">
+                <?php if ($candidatePhotoPath !== ''): ?>
+                    <img src="<?= premium_escape_html($candidatePhotoPath) ?>" alt="Foto de <?= premium_escape_html((string) ($campaign['candidate_name'] ?? 'candidato')) ?>">
+                <?php else: ?>
+                    <div class="candidate-photo-card__empty">
+                        <span><?= premium_escape_html(premium_fmt_candidate_number_plain($activeCampaignNumber)) ?></span>
+                    </div>
                 <?php endif; ?>
+                <div class="candidate-photo-card__caption">
+                    <?php if ($activeCampaignNumber !== null): ?>
+                        <span class="candidate-photo-card__number"><?= premium_escape_html(premium_fmt_candidate_number_plain($activeCampaignNumber)) ?></span>
+                    <?php endif; ?>
+                    <strong><?= premium_escape_html((string) ($campaign['candidate_name'] ?? 'Candidato')) ?></strong>
+                    <span><?= premium_escape_html((string) ($campaign['candidate_cargo'] ?? '')) ?></span>
                 </div>
             </div>
         </section>
@@ -1430,12 +1440,18 @@ function premium_render_agenda_list_modal(array $items): string
                                         <td><?= premium_escape_html($adminCampaignCreatedAt) ?></td>
                                         <td>
                                             <div class="user-actions">
-                                                <form method="post" action="premium_actions.php" onsubmit="return confirm('Excluir esta campanha permanentemente? Isso apagará baseline, lideranças, agenda e pesos.');">
-                                                    <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                                                    <input type="hidden" name="action" value="delete_campaign">
-                                                    <input type="hidden" name="campaign_id" value="<?= $adminCampaignId ?>">
-                                                    <button class="btn ghost btn-small" type="submit">Excluir</button>
-                                                </form>
+                                                <details class="admin-danger-menu">
+                                                    <summary>Avancado</summary>
+                                                    <form method="post" action="premium_actions.php" onsubmit="return confirm('Excluir esta campanha permanentemente? Isso apagara baseline, liderancas, agenda e pesos.');">
+                                                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                                                        <input type="hidden" name="action" value="delete_campaign">
+                                                        <input type="hidden" name="campaign_id" value="<?= $adminCampaignId ?>">
+                                                        <label>Confirmacao
+                                                            <input type="text" name="delete_confirmation" autocomplete="off" required placeholder="EXCLUIR CAMPANHA">
+                                                        </label>
+                                                        <button class="btn danger btn-small" type="submit">Excluir</button>
+                                                    </form>
+                                                </details>
                                             </div>
                                         </td>
                                     </tr>
@@ -1471,7 +1487,7 @@ function premium_render_agenda_list_modal(array $items): string
                         <label>Cargo
                             <input type="text" name="candidate_cargo" placeholder="Deputado Federal, Estadual..." required>
                         </label>
-                        <label>Número da campanha 2026
+                        <label>Nº campanha 2026
                             <input type="text" name="candidate_number" inputmode="numeric" placeholder="Opcional">
                             <span class="field-help">Se houver número em 2022, ele será sugerido automaticamente depois de criar a campanha.</span>
                         </label>
@@ -1488,7 +1504,7 @@ function premium_render_agenda_list_modal(array $items): string
                 </form>
             </section>
         <?php else: ?>
-            <section class="stats-grid">
+            <section class="stats-grid campaign-stats-grid">
                 <?= premium_render_stat('Baseline 2022', premium_fmt_int((int) ($baseline['total_votes'] ?? 0)), 'Votação histórica do candidato'); ?>
                 <?= premium_render_stat('Projeção base', premium_fmt_int((int) ($forecast['totals']['projected_base'] ?? 0)), 'Cenário com os pesos atuais'); ?>
                 <?= premium_render_stat('Delta vs 2022', premium_fmt_int((int) ($forecast['totals']['delta_base'] ?? 0)), 'Diferença absoluta sobre a base'); ?>
@@ -1540,7 +1556,7 @@ function premium_render_agenda_list_modal(array $items): string
                             $campaignCandidateNumber = premium_parse_candidate_number($baseline['candidate_number'] ?? null);
                         }
                     ?>
-                    <form method="post" action="premium_actions.php" class="campaign-form baseline-form">
+                    <form method="post" action="premium_actions.php" class="campaign-form baseline-form" enctype="multipart/form-data">
                         <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                         <input type="hidden" name="action" value="save_baseline">
                         <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
@@ -1551,8 +1567,8 @@ function premium_render_agenda_list_modal(array $items): string
                             <label>Cargo
                                 <input type="text" name="candidate_cargo" value="<?= premium_escape_html((string) ($campaign['candidate_cargo'] ?? '')) ?>" required>
                             </label>
-                            <label>Número da campanha 2026
-                                <input type="text" name="candidate_number" inputmode="numeric" value="<?= premium_escape_html(premium_fmt_candidate_number($campaignCandidateNumber)) ?>" placeholder="Opcional">
+                            <label>Nº campanha 2026
+                                <input type="text" name="candidate_number" inputmode="numeric" value="<?= premium_escape_html(premium_fmt_candidate_number_plain($campaignCandidateNumber)) ?>" placeholder="Opcional">
                             </label>
                             <label>Ano-base
                                 <input type="number" name="baseline_year" value="<?= (int) ($campaign['baseline_year'] ?? 2022) ?>" min="2022" step="1">
@@ -1564,9 +1580,15 @@ function premium_render_agenda_list_modal(array $items): string
                         <label style="margin-top:12px;">Região-base
                             <input type="text" name="current_region" value="<?= premium_escape_html((string) ($campaign['current_region'] ?? '')) ?>" placeholder="Região principal, se houver">
                         </label>
-                        <label style="margin-top:12px;">Notas
-                            <textarea name="notes" rows="3"><?= premium_escape_html((string) ($campaign['notes'] ?? '')) ?></textarea>
-                        </label>
+                        <div class="baseline-notes-photo">
+                            <label>Notas
+                                <textarea name="notes" rows="3"><?= premium_escape_html((string) ($campaign['notes'] ?? '')) ?></textarea>
+                            </label>
+                            <label>Foto do candidato
+                                <input type="file" name="candidate_photo" accept="image/jpeg,image/png,image/webp">
+                                <span class="field-help">JPG, PNG ou WEBP ate 3 MB. A foto aparece no card Escritorio ativo.</span>
+                            </label>
+                        </div>
                         <div class="action-row">
                             <button class="btn primary" type="submit">Salvar baseline</button>
                         </div>
@@ -1577,8 +1599,8 @@ function premium_render_agenda_list_modal(array $items): string
                                 <span class="pill">Municípios: <?= premium_fmt_int((int) ($baseline['municipality_count'] ?? 0)) ?></span>
                                 <span class="pill">Total: <?= premium_fmt_int((int) ($baseline['total_votes'] ?? 0)) ?></span>
                             </div>
-                            <div class="table-wrap" style="margin-top:12px;">
-                                <table>
+                            <div class="table-wrap baseline-preview-table-wrap" style="margin-top:12px;">
+                                <table class="baseline-preview-table">
                                     <thead>
                                         <tr>
                                             <th>Município</th>
@@ -1621,15 +1643,15 @@ function premium_render_agenda_list_modal(array $items): string
                         <input type="hidden" name="action" value="save_settings">
                         <div class="form-grid">
                             <label>Fallback 2022
-                                <input type="number" name="baseline_retention" value="<?= premium_escape_html((string) ($settings['baseline_retention'] ?? 0.45)) ?>" step="0.01" min="0" max="1">
+                                <input type="number" name="baseline_retention" value="<?= premium_escape_html((string) ($settings['baseline_retention'] ?? 0.30)) ?>" step="0.01" min="0" max="1">
                                 <span class="field-help">Usado apenas quando o município ou a região não tem lideranças cadastradas; nesse caso, a base histórica vira referência de projeção.</span>
                             </label>
                             <label>Transferência padrão %
-                                <input type="number" name="transfer_rate_default" value="<?= premium_escape_html((string) ($settings['transfer_rate_default'] ?? 40)) ?>" step="0.01" min="0" max="100">
+                                <input type="number" name="transfer_rate_default" value="<?= premium_escape_html((string) ($settings['transfer_rate_default'] ?? 30)) ?>" step="0.01" min="0" max="100">
                                 <span class="field-help">Percentual médio da votação de uma liderança que pode migrar para o candidato apoiado.</span>
                             </label>
                             <label>Bônus alinhamento
-                                <input type="number" name="alignment_bonus" value="<?= premium_escape_html((string) ($settings['alignment_bonus'] ?? 0.2)) ?>" step="0.01" min="0" max="1">
+                                <input type="number" name="alignment_bonus" value="<?= premium_escape_html((string) ($settings['alignment_bonus'] ?? 0.20)) ?>" step="0.01" min="0" max="1">
                                 <span class="field-help">Reforço aplicado quando a liderança está alinhada ao executivo estadual ou ao grupo dominante.</span>
                             </label>
                             <label>Peso visibilidade
@@ -1641,11 +1663,11 @@ function premium_render_agenda_list_modal(array $items): string
                                 <span class="field-help">Quanto obras, entregas e ações visíveis ampliam o valor político da liderança.</span>
                             </label>
                             <label>Peso margem
-                                <input type="number" name="margin_weight" value="<?= premium_escape_html((string) ($settings['margin_weight'] ?? 0.25)) ?>" step="0.01" min="0" max="1">
+                                <input type="number" name="margin_weight" value="<?= premium_escape_html((string) ($settings['margin_weight'] ?? 0.15)) ?>" step="0.01" min="0" max="1">
                                 <span class="field-help">Maior margem de vitória significa mais folga política e maior potencial de transferência.</span>
                             </label>
                             <label>Bônus cidade pequena
-                                <input type="number" name="small_city_bonus" value="<?= premium_escape_html((string) ($settings['small_city_bonus'] ?? 0.18)) ?>" step="0.01" min="0" max="1">
+                                <input type="number" name="small_city_bonus" value="<?= premium_escape_html((string) ($settings['small_city_bonus'] ?? 0.15)) ?>" step="0.01" min="0" max="1">
                                 <span class="field-help">Peso extra para municípios menores, onde a relação entre eleitor e liderança é mais direta.</span>
                             </label>
                             <label>Bônus cidade média
@@ -1669,11 +1691,11 @@ function premium_render_agenda_list_modal(array $items): string
                                 <span class="field-help">Hipótese de maior eficiência da campanha e da rede de lideranças.</span>
                             </label>
                             <label>Pequeno até votos
-                                <input type="number" name="small_city_threshold" value="<?= premium_escape_html((string) ($settings['small_city_threshold'] ?? 15000)) ?>" step="1" min="0">
+                                <input type="number" name="small_city_threshold" value="<?= premium_escape_html((string) ($settings['small_city_threshold'] ?? 10000)) ?>" step="1" min="0">
                                 <span class="field-help">Limite de votos totais para classificar um município como pequeno no modelo.</span>
                             </label>
                             <label>Médio até votos
-                                <input type="number" name="medium_city_threshold" value="<?= premium_escape_html((string) ($settings['medium_city_threshold'] ?? 40000)) ?>" step="1" min="0">
+                                <input type="number" name="medium_city_threshold" value="<?= premium_escape_html((string) ($settings['medium_city_threshold'] ?? 30000)) ?>" step="1" min="0">
                                 <span class="field-help">Limite superior para classificar um município como médio antes de virar grande.</span>
                             </label>
                         </div>
@@ -1802,7 +1824,7 @@ function premium_render_agenda_list_modal(array $items): string
                                         <span class="field-help">Diferença entre o primeiro e o segundo colocado no município. Quanto maior a margem, maior a folga política da liderança.</span>
                                     </label>
                                     <label>Transferência %
-                                        <input type="number" name="transfer_rate" id="leaderTransfer" value="<?= premium_escape_html((string) (($settings['transfer_rate_default'] ?? 40))) ?>" min="0" max="100" step="0.01">
+                                        <input type="number" name="transfer_rate" id="leaderTransfer" value="<?= premium_escape_html((string) (($settings['transfer_rate_default'] ?? premium_default_settings()['transfer_rate_default']))) ?>" min="0" max="100" step="0.01">
                                         <span class="field-help">Percentual da votação desta liderança que pode migrar para o candidato. É o principal motor da projeção.</span>
                                     </label>
                                     <label>Visibilidade
@@ -2060,7 +2082,7 @@ function premium_render_agenda_list_modal(array $items): string
 
 <script id="premium-page-data" type="application/json"><?=
     json_encode([
-        'leaderBatchDefaultTransfer' => (float) ($settings['transfer_rate_default'] ?? 40),
+        'leaderBatchDefaultTransfer' => (float) ($settings['transfer_rate_default'] ?? premium_default_settings()['transfer_rate_default']),
         'campaign' => [
             'campaign_name' => (string) ($campaign['campaign_name'] ?? ''),
             'candidate_name' => (string) ($campaign['candidate_name'] ?? ''),

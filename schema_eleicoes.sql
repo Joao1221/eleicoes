@@ -364,6 +364,7 @@ CREATE TABLE `premium_campaigns` (
   `candidate_name` varchar(190) NOT NULL,
   `candidate_cargo` varchar(60) NOT NULL,
   `candidate_number` int(10) UNSIGNED DEFAULT NULL,
+  `candidate_photo_path` varchar(255) DEFAULT NULL,
   `baseline_year` smallint(6) NOT NULL DEFAULT 2022,
   `status` enum('active','archived') NOT NULL DEFAULT 'active',
   `baseline_panel_hidden` tinyint(1) NOT NULL DEFAULT 0,

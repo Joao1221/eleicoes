@@ -25,6 +25,7 @@ CREATE TABLE premium_campaigns (
     candidate_name VARCHAR(190) NOT NULL,
     candidate_cargo VARCHAR(60) NOT NULL,
     candidate_number INT UNSIGNED DEFAULT NULL,
+    candidate_photo_path VARCHAR(255) DEFAULT NULL,
     baseline_year SMALLINT NOT NULL DEFAULT 2022,
     status ENUM('active','archived') NOT NULL DEFAULT 'active',
     baseline_panel_hidden TINYINT(1) NOT NULL DEFAULT 0,

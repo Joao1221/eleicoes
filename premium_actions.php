@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/premium_helpers.php';
 
+premium_ensure_campaign_photo_column($conn);
+
 $user = premium_require_user($conn);
 $isAdmin = premium_is_admin_user($user);
 
@@ -59,6 +61,66 @@ function premium_batch_leader_key(array $row): string
         'nr:' . (int) ($row['source_nr_votavel'] ?? 0),
         'turno:' . (int) ($row['source_turno'] ?? 1),
     ]);
+}
+
+function premium_store_candidate_photo_upload(int $campaignId, ?string $currentPath = null): ?string
+{
+    if (empty($_FILES['candidate_photo']) || !is_array($_FILES['candidate_photo'])) {
+        return $currentPath;
+    }
+
+    $file = $_FILES['candidate_photo'];
+    $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error === UPLOAD_ERR_NO_FILE) {
+        return $currentPath;
+    }
+
+    if ($error !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Nao foi possivel carregar a foto do candidato.');
+    }
+
+    $tmpName = (string) ($file['tmp_name'] ?? '');
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        throw new RuntimeException('Arquivo de foto invalido.');
+    }
+
+    $maxBytes = 3 * 1024 * 1024;
+    if ((int) ($file['size'] ?? 0) > $maxBytes) {
+        throw new RuntimeException('A foto deve ter no maximo 3 MB.');
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = (string) $finfo->file($tmpName);
+    $extensions = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+    ];
+
+    if (!isset($extensions[$mime])) {
+        throw new RuntimeException('Use uma foto em JPG, PNG ou WEBP.');
+    }
+
+    $uploadDir = __DIR__ . '/assets/uploads/premium_candidates';
+    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
+        throw new RuntimeException('Nao foi possivel preparar a pasta de fotos.');
+    }
+
+    $filename = 'candidate-' . $campaignId . '-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
+    $targetPath = $uploadDir . '/' . $filename;
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        throw new RuntimeException('Nao foi possivel salvar a foto do candidato.');
+    }
+
+    $relativePath = 'assets/uploads/premium_candidates/' . $filename;
+    if ($currentPath && str_starts_with($currentPath, 'assets/uploads/premium_candidates/')) {
+        $oldPath = __DIR__ . '/' . $currentPath;
+        if (is_file($oldPath)) {
+            @unlink($oldPath);
+        }
+    }
+
+    return $relativePath;
 }
 
 function premium_normalize_batch_leader_row(array $row, string $defaultCargo, array $settings): ?array
@@ -353,6 +415,11 @@ switch ($action) {
             $redirectToCampaign($activeCampaignId);
         }
 
+        if (trim((string) ($_POST['delete_confirmation'] ?? '')) !== 'EXCLUIR CAMPANHA') {
+            premium_flash('error', 'Confirme a exclusao digitando EXCLUIR CAMPANHA.');
+            $redirectToCampaign($activeCampaignId);
+        }
+
         if (!premium_delete_campaign($conn, $campaignIdToDelete)) {
             premium_flash('error', 'Não foi possível excluir a campanha.');
             $redirectToCampaign($activeCampaignId);
@@ -475,7 +542,7 @@ switch ($action) {
                         " . (int) ($leader['source_turno'] ?? 1) . ",
                         " . (int) ($leader['leader_votes_2024'] ?? 0) . ",
                         " . number_format((float) ($leader['margin_percent'] ?? 0), 2, '.', '') . ",
-                        " . number_format((float) ($leader['transfer_rate'] ?? 40), 2, '.', '') . ",
+                        " . number_format((float) ($leader['transfer_rate'] ?? premium_default_settings()['transfer_rate_default']), 2, '.', '') . ",
                         " . (int) ($leader['aligned_with_executive'] ?? 0) . ",
                         " . number_format((float) ($leader['visibility_score'] ?? 50), 2, '.', '') . ",
                         " . number_format((float) ($leader['investment_score'] ?? 50), 2, '.', '') . ",
@@ -524,6 +591,12 @@ switch ($action) {
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $currentMunicipio = trim((string) ($_POST['current_municipio'] ?? ''));
         $currentRegion = trim((string) ($_POST['current_region'] ?? ''));
+        try {
+            $candidatePhotoPath = premium_store_candidate_photo_upload($selectedCampaignId, (string) ($campaign['candidate_photo_path'] ?? ''));
+        } catch (RuntimeException $exception) {
+            premium_flash('error', $exception->getMessage());
+            $redirectToCampaign($selectedCampaignId);
+        }
 
         if ($candidateNumber === null) {
             $candidateNumber = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
@@ -541,6 +614,7 @@ switch ($action) {
                 candidate_number = " . ($candidateNumber !== null ? (string) $candidateNumber : 'NULL') . ",
                 baseline_year = " . max(2022, $baselineYear) . ",
                 baseline_panel_hidden = 1,
+                candidate_photo_path = " . premium_sql_quote($conn, $candidatePhotoPath !== '' ? $candidatePhotoPath : null) . ",
                 notes = " . premium_sql_quote($conn, $notes !== '' ? $notes : null) . ",
                 current_municipio = " . premium_sql_quote($conn, $currentMunicipio !== '' ? $currentMunicipio : null) . ",
                 current_region = " . premium_sql_quote($conn, $currentRegion !== '' ? $currentRegion : null) . "

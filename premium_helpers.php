@@ -52,6 +52,35 @@ function premium_fmt_candidate_number(?int $value): string
     return number_format($number, 0, ',', '.');
 }
 
+function premium_fmt_candidate_number_plain(?int $value): string
+{
+    $number = (int) $value;
+    return $number > 0 ? (string) $number : '';
+}
+
+function premium_ensure_campaign_photo_column(mysqli $conn): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $checked = true;
+
+    $column = querySingle($conn, "
+        SHOW COLUMNS FROM premium_campaigns LIKE 'candidate_photo_path'
+    ");
+
+    if ($column) {
+        return;
+    }
+
+    $conn->query("
+        ALTER TABLE premium_campaigns
+        ADD COLUMN candidate_photo_path VARCHAR(255) DEFAULT NULL AFTER candidate_number
+    ");
+}
+
 function premium_normalize_text(string $value): string
 {
     $value = trim($value);
@@ -261,20 +290,20 @@ function premium_region_choices(): array
 function premium_default_settings(): array
 {
     return [
-        'baseline_retention' => 0.45,
-        'transfer_rate_default' => 40.00,
+        'baseline_retention' => 0.30,
+        'transfer_rate_default' => 30.00,
         'alignment_bonus' => 0.20,
         'visibility_weight' => 0.12,
         'investment_weight' => 0.10,
-        'margin_weight' => 0.25,
-        'small_city_bonus' => 0.18,
+        'margin_weight' => 0.15,
+        'small_city_bonus' => 0.15,
         'medium_city_bonus' => 0.08,
         'large_city_bonus' => 0.00,
         'scenario_conservative' => 0.90,
         'scenario_base' => 1.00,
         'scenario_optimistic' => 1.12,
-        'small_city_threshold' => 15000,
-        'medium_city_threshold' => 40000,
+        'small_city_threshold' => 10000,
+        'medium_city_threshold' => 30000,
     ];
 }
 
@@ -936,8 +965,8 @@ function premium_candidate_baseline(mysqli $conn, string $candidateName, string 
 
 function premium_default_size_class_from_votes(int $votes, array $settings): string
 {
-    $small = (int) ($settings['small_city_threshold'] ?? 15000);
-    $medium = (int) ($settings['medium_city_threshold'] ?? 40000);
+    $small = (int) ($settings['small_city_threshold'] ?? premium_default_settings()['small_city_threshold']);
+    $medium = (int) ($settings['medium_city_threshold'] ?? premium_default_settings()['medium_city_threshold']);
 
     if ($votes <= $small) {
         return 'small';
@@ -1116,7 +1145,7 @@ function premium_search_2024_candidates(mysqli $conn, string $cargo, string $mun
 
 function premium_apply_transfer_multiplier(array $leader, array $settings): array
 {
-    $transferRate = (float) ($leader['transfer_rate'] ?? ($settings['transfer_rate_default'] ?? 40.00));
+    $transferRate = (float) ($leader['transfer_rate'] ?? ($settings['transfer_rate_default'] ?? premium_default_settings()['transfer_rate_default']));
     if ($transferRate > 1) {
         $transferRate /= 100;
     }
@@ -1166,7 +1195,7 @@ function premium_apply_transfer_multiplier(array $leader, array $settings): arra
 function premium_build_forecast(array $baseline, array $leaders, array $settings): array
 {
     $settings = premium_normalize_settings($settings);
-    $fallbackRetention = (float) ($settings['baseline_retention'] ?? 0.45);
+    $fallbackRetention = (float) ($settings['baseline_retention'] ?? premium_default_settings()['baseline_retention']);
     if ($fallbackRetention > 1) {
         $fallbackRetention /= 100;
     }
