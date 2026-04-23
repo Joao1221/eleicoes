@@ -8,6 +8,8 @@
         }
     }
 
+    const heroRotators = Array.from(document.querySelectorAll('[data-hero-rotator]'));
+
     const searchBtn = document.getElementById('searchLeadersBtn');
     const resultsBody = document.getElementById('leaderSearchResults');
     const leaderSelectAll = document.getElementById('leaderSelectAll');
@@ -28,6 +30,7 @@
         current_region: '',
         baseline_year: 2022,
     }, premiumPageData.campaign || {});
+    const baselineYearLabel = String(Number(premiumCampaign.baseline_year || 2022) || 2022);
     const premiumLeaders = Array.isArray(premiumPageData.leaders) ? premiumPageData.leaders : [];
     const premiumAgenda = Array.isArray(premiumPageData.agenda) ? premiumPageData.agenda : [];
     const premiumForecast = Object.assign({
@@ -84,6 +87,10 @@
     const leaderBulkSelectedCount = document.getElementById('leaderBulkSelectedCount');
     let agendaFilter = 'pending';
     let scopeModalColspan = 8;
+    let scopeModalState = {
+        type: 'city',
+        name: '',
+    };
     let cityComparisonFilter = 'all';
 
     const themeToggleButtons = Array.from(document.querySelectorAll('[data-theme-toggle]'));
@@ -132,12 +139,61 @@
         });
     }
 
+    function initHeroRotator(rotator) {
+        const messages = Array.from(rotator.querySelectorAll('[data-hero-message]'));
+        const triggers = Array.from(rotator.querySelectorAll('[data-hero-message-trigger]'));
+        if (messages.length <= 1) {
+            return;
+        }
+
+        const interval = Math.max(1000, Number(rotator.dataset.heroInterval || 300000));
+        let activeIndex = Math.max(0, messages.findIndex((message) => !message.hidden));
+        if (activeIndex < 0) {
+            activeIndex = 0;
+        }
+        let timerId = null;
+
+        const render = (index) => {
+            activeIndex = ((index % messages.length) + messages.length) % messages.length;
+            messages.forEach((message, messageIndex) => {
+                const isActive = messageIndex === activeIndex;
+                message.hidden = !isActive;
+                message.classList.toggle('is-active', isActive);
+            });
+            triggers.forEach((trigger, triggerIndex) => {
+                const isActive = triggerIndex === activeIndex;
+                trigger.classList.toggle('is-active', isActive);
+                trigger.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+        };
+
+        const schedule = () => {
+            if (timerId) {
+                window.clearInterval(timerId);
+            }
+            timerId = window.setInterval(() => {
+                render(activeIndex + 1);
+            }, interval);
+        };
+
+        triggers.forEach((trigger) => {
+            trigger.addEventListener('click', () => {
+                render(Number(trigger.dataset.heroMessageIndex || 0));
+                schedule();
+            });
+        });
+
+        render(activeIndex);
+        schedule();
+    }
+
     const initialPremiumTheme = getInitialPremiumTheme();
     if (document.documentElement.dataset.themeSource === 'stored') {
         premiumThemePreference = initialPremiumTheme;
     }
 
     applyPremiumTheme(initialPremiumTheme, false);
+    heroRotators.forEach(initHeroRotator);
 
     if (premiumThemePreference === null) {
         const syncPremiumThemeWithSystem = (event) => {
@@ -350,13 +406,13 @@
             scopeModalTitle.textContent = 'Selecione um recorte territorial';
         }
         if (scopeModalSubtitle) {
-            scopeModalSubtitle.textContent = 'Clique em uma cidade ou região para ver as lideranças, as projeções individuais e o comparativo com 2022.';
+            scopeModalSubtitle.textContent = `Clique em uma cidade ou região para ver as lideranças, as projeções individuais e o comparativo com ${baselineYearLabel}.`;
         }
         if (scopeModalSummary) {
             scopeModalSummary.innerHTML = '';
         }
         if (scopeModalNote) {
-            scopeModalNote.textContent = 'O detalhe territorial mostrará o total de votos de 2022 apenas como comparativo e destacará a projeção atual construída pelas lideranças cadastradas.';
+            scopeModalNote.textContent = `O detalhe territorial mostrará o total de votos de ${baselineYearLabel} apenas como comparativo e destacará a projeção atual construída pelas lideranças cadastradas.`;
         }
         if (scopeModalHead) {
             scopeModalHead.innerHTML = `
@@ -382,6 +438,10 @@
         }
 
         const normalizedType = scopeType === 'region' ? 'region' : 'city';
+        scopeModalState = {
+            type: normalizedType,
+            name: scopeName || '',
+        };
         scopeModalColspan = normalizedType === 'city' ? 7 : 8;
         closeLeaderModal(false);
         closeCityComparisonModal(false);
@@ -406,7 +466,7 @@
             const comparativeBase = Number(scopeData?.baseline_votes || 0);
             const projected = Number(scopeData?.projected_base || 0);
             const delta = projected - comparativeBase;
-            scopeModalSubtitle.textContent = `${scopeName || 'Recorte territorial'} • Comparativo 2022: ${formatNumber(comparativeBase)} • Projeção atual: ${formatNumber(projected)} • Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}`;
+            scopeModalSubtitle.textContent = `${scopeName || 'Recorte territorial'} • Comparativo ${baselineYearLabel}: ${formatNumber(comparativeBase)} • Projeção atual: ${formatNumber(projected)} • Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}`;
         }
 
         if (scopeModalSummary) {
@@ -417,7 +477,7 @@
             const totalVotes2024 = leaders.reduce((sum, leader) => sum + Number(leader.leader_votes_2024 || 0), 0);
             const baseTransferable = leaders.reduce((sum, leader) => sum + Number(leader.base_effect || 0), 0);
             scopeModalSummary.innerHTML = [
-                `<span class="table-pill">2022: ${formatNumber(comparativeBase)}</span>`,
+                `<span class="table-pill">${baselineYearLabel}: ${formatNumber(comparativeBase)}</span>`,
                 `<span class="table-pill">Projeção: ${formatNumber(projected)}</span>`,
                 `<span class="table-pill">Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}</span>`,
                 `<span class="table-pill">Lideranças: ${formatNumber(leaders.length)}</span>`,
@@ -430,8 +490,8 @@
         if (scopeModalNote) {
             const hasLeaders = leaders.length > 0;
             scopeModalNote.textContent = hasLeaders
-                ? 'As lideranças abaixo são as cadastradas para este recorte. A projeção total da cidade ou região é calculada a partir dos votos das lideranças; o total de 2022 aparece apenas como comparativo.'
-                : 'Nenhuma liderança cadastrada neste recorte. Nesse caso, a projeção do território pode cair no fallback de 2022 para manter a leitura estratégica.';
+                ? `As lideranças abaixo são as cadastradas para este recorte. A projeção total da cidade ou região é calculada a partir dos votos das lideranças; o total de ${baselineYearLabel} aparece apenas como comparativo.`
+                : `Nenhuma liderança cadastrada neste recorte. Nesse caso, a projeção do território pode cair no fallback de ${baselineYearLabel} para manter a leitura estratégica.`;
         }
 
         if (scopeModalHead) {
@@ -505,7 +565,7 @@
         }
 
         if (scopeModalSubtitle) {
-            scopeModalSubtitle.textContent = `${scopeName || 'Recorte territorial'} • Ranking por projeção individual • Comparativo 2022: ${formatNumber(comparativeBase)} • Projeção atual: ${formatNumber(projected)} • Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}`;
+            scopeModalSubtitle.textContent = `${scopeName || 'Recorte territorial'} • Ranking por projeção individual • Comparativo ${baselineYearLabel}: ${formatNumber(comparativeBase)} • Projeção atual: ${formatNumber(projected)} • Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}`;
         }
 
         if (scopeModalSummary) {
@@ -519,7 +579,7 @@
                         <div class="summary-metric__sub">Total projetado do recorte territorial</div>
                     </div>
                     <div class="summary-metric summary-metric--delta">
-                        <div class="summary-metric__label">Diferença para 2022</div>
+                        <div class="summary-metric__label">Diferença para ${baselineYearLabel}</div>
                         <div class="summary-metric__value">${delta >= 0 ? '+' : ''}${formatNumber(delta)}</div>
                         <div class="summary-metric__sub">Comparativo sobre a base histórica</div>
                     </div>
@@ -530,7 +590,7 @@
                     </div>
                 </div>
                 <div class="scope-summary-meta">
-                    <span class="table-pill">2022: ${formatNumber(comparativeBase)}</span>
+                    <span class="table-pill">${baselineYearLabel}: ${formatNumber(comparativeBase)}</span>
                     <span class="table-pill">Votos 2024: ${formatNumber(totalVotes2024)}</span>
                     <span class="table-pill">Base transferível: ${formatNumber(baseTransferable)}</span>
                     <span class="table-pill">efeito das lideranças: ${formatNumber(leaderEffect)}</span>
@@ -541,8 +601,8 @@
 
         if (scopeModalNote) {
             scopeModalNote.textContent = leaders.length
-                ? 'Ranking ordenado por projeção individual. A projeção total soma as lideranças cadastradas e usa 2022 como fallback apenas onde não houver liderança.'
-                : 'Nenhuma liderança cadastrada neste recorte. A projeção pode usar o fallback de 2022 para manter a leitura estratégica.';
+                ? 'Ranking ordenado por projeção individual. A projeção total soma as lideranças cadastradas.'
+                : `Nenhuma liderança cadastrada neste recorte. A projeção pode usar o fallback de ${baselineYearLabel} para manter a leitura estratégica.`;
         }
 
         if (scopeModalHead) {
@@ -552,9 +612,9 @@
                         <th>Posição</th>
                         <th>Liderança</th>
                         <th>Votos 2024</th>
+                        <th>Transferência</th>
                         <th>Base transferível</th>
                         <th>Projeção 2026</th>
-                        <th>Transferência</th>
                         <th>Ação</th>
                     </tr>
                 `;
@@ -565,9 +625,9 @@
                         <th>Município</th>
                         <th>Liderança</th>
                         <th>Votos 2024</th>
+                        <th>Transferência</th>
                         <th>Base transferível</th>
                         <th>Projeção 2026</th>
-                        <th>Transferência</th>
                         <th>Ação</th>
                     </tr>
                 `;
@@ -598,9 +658,9 @@
                                 <td><span class="${rankClass}">${rank}</span></td>
                                 <td>${escapeHtml(leaderDisplayName)}</td>
                                 <td>${votes}</td>
+                                <td>${transferRate}</td>
                                 <td>${baseEffect}</td>
                                 <td>${projectedVotes}</td>
-                                <td>${transferRate}</td>
                                 <td>${actionButton}</td>
                             </tr>
                         `;
@@ -612,9 +672,9 @@
                             <td>${escapeHtml(municipality)}</td>
                             <td>${escapeHtml(leaderDisplayName)}</td>
                             <td>${votes}</td>
+                            <td>${transferRate}</td>
                             <td>${baseEffect}</td>
                             <td>${projectedVotes}</td>
-                            <td>${transferRate}</td>
                             <td>${actionButton}</td>
                         </tr>
                     `;
@@ -748,7 +808,7 @@
             const systemProjection = Number(city.system_projection || city.projected_base || 0);
             const delta = systemProjection - baselineVotes;
             const hasLeaders = leaderCount > 0;
-            const statusLabel = hasLeaders ? 'Com lideranças' : 'Fallback 2022';
+            const statusLabel = hasLeaders ? 'Com lideranças' : `Fallback ${baselineYearLabel}`;
             const statusClass = hasLeaders ? 'report-status report-status--leaders' : 'report-status report-status--fallback';
             const rank = String(index + 1).padStart(2, '0');
 
@@ -1286,7 +1346,7 @@
             <div class="report-hero__top">
                 <div>
                     <div class="report-brand">Apoia Candidato Premium</div>
-                    <h1>Comparativo municipal 2022 x projeção 2026</h1>
+                    <h1>Comparativo municipal ${baselineYearLabel} x projeção 2026</h1>
                     <p>${escapeHtml(campaignLabel)}</p>
                     <div class="report-meta">
                         <span class="report-pill">Cobertura: ${escapeHtml(coverageLabel)}</span>
@@ -1304,14 +1364,14 @@
                     <strong>Votos de liderança</strong> representam a parcela da projeção atribuída às lideranças cadastradas em cada município.
                 </div>
                 <div class="report-note">
-                    <strong>Votos independentes</strong> representam a parcela da projeção que não depende de liderança cadastrada; nas cidades sem liderança, o sistema usa o fallback de 2022.
+                    <strong>Votos independentes</strong> representam a parcela da projeção que não depende de liderança cadastrada; nas cidades sem liderança, o sistema usa o fallback de ${baselineYearLabel}.
                 </div>
             </div>
         </section>
 
         <section class="report-summary">
             <div class="report-card">
-                <div class="report-card__label">Comparativo 2022</div>
+                <div class="report-card__label">Comparativo ${baselineYearLabel}</div>
                 <div class="report-card__value">${formatNumber(baselineTotal)}</div>
                 <div class="report-card__sub">Base histórica do recorte exibido</div>
             </div>
@@ -1323,7 +1383,7 @@
             <div class="report-card">
                 <div class="report-card__label">Delta total</div>
                 <div class="report-card__value">${deltaTotal >= 0 ? '+' : ''}${formatNumber(deltaTotal)}</div>
-                <div class="report-card__sub">Diferença entre projeção e 2022</div>
+                <div class="report-card__sub">Diferença entre projeção e ${baselineYearLabel}</div>
             </div>
             <div class="report-card">
                 <div class="report-card__label">Com lideranças</div>
@@ -1354,7 +1414,7 @@
                     <tr>
                         <th>Município</th>
                         <th>Região</th>
-                        <th>2022</th>
+                        <th>${baselineYearLabel}</th>
                         <th>Votos Liderança</th>
                         <th>Votos independentes</th>
                         <th>Projeção 2026</th>
@@ -1369,7 +1429,7 @@
         </section>
 
         <div class="report-footer">
-            Relatório elaborado a partir do módulo premium. Os votos de 2022 entram como comparativo e como fallback apenas nos municípios sem lideranças cadastradas.
+            Relatório elaborado a partir do módulo premium. Os votos de ${baselineYearLabel} entram como comparativo e como fallback apenas nos municípios sem lideranças cadastradas.
         </div>
     </div>
 </body>
@@ -1389,6 +1449,152 @@
 
         reportWindow.document.open();
         reportWindow.document.write(buildCityComparisonReportHtml(cityComparisonFilter));
+        reportWindow.document.close();
+        reportWindow.focus();
+    }
+
+    function stripActionColumnFromTableHtml(tableSectionHtml, cellTagName) {
+        const template = document.createElement('template');
+        template.innerHTML = `<table>${tableSectionHtml}</table>`;
+
+        const rows = template.content.querySelectorAll('tr');
+        rows.forEach((row) => {
+            const cells = row.querySelectorAll(cellTagName);
+            if (!cells.length) {
+                return;
+            }
+
+            const lastCell = cells[cells.length - 1];
+            const label = (lastCell.textContent || '').trim().toLowerCase();
+            const hasActionButton = !!lastCell.querySelector('button, .btn');
+
+            if (label === 'ação' || hasActionButton) {
+                lastCell.remove();
+            }
+        });
+
+        return template.content.querySelector('table')?.innerHTML || tableSectionHtml;
+    }
+
+    function buildScopeReportHtml() {
+        const campaignParts = [
+            premiumCampaign.campaign_name || 'Campanha ativa',
+            premiumCampaign.candidate_name || '',
+            premiumCampaign.candidate_cargo || '',
+        ].filter(Boolean);
+        const campaignLabel = campaignParts.join(' • ');
+        const generatedAt = new Date().toLocaleString('pt-BR');
+        const scopeLabel = scopeModalTitle?.textContent || 'Recorte territorial';
+        const subtitle = scopeModalSubtitle?.textContent || '';
+        const summaryHtml = scopeModalSummary?.innerHTML || '';
+        const note = scopeModalNote?.textContent || '';
+        const tableHeadHtml = stripActionColumnFromTableHtml(scopeModalHead?.innerHTML || '', 'th');
+        const tableBodyHtml = stripActionColumnFromTableHtml(scopeModalBody?.innerHTML || '', 'td');
+
+        return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(scopeLabel)} | Impressão</title>
+    <style>
+        :root { color-scheme: light; --bg:#f5f7fb; --panel:#fff; --line:rgba(15,23,42,.12); --text:#0f172a; --muted:#475569; --brand:#0ea5e9; --brand-soft:rgba(14,165,233,.10); }
+        * { box-sizing: border-box; }
+        body { margin:0; padding:28px; font-family:Inter, Arial, sans-serif; background:var(--bg); color:var(--text); }
+        .report-shell { max-width:1180px; margin:0 auto; }
+        .report-hero, .report-summary, .report-note, .report-table-wrap { background:var(--panel); border:1px solid var(--line); border-radius:18px; }
+        .report-hero { padding:24px; }
+        .report-brand { display:inline-block; padding:6px 10px; border-radius:999px; background:var(--brand-soft); color:#0369a1; font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+        .report-hero__top { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; }
+        .report-hero h1 { margin:10px 0 6px; font-size:1.8rem; line-height:1.1; }
+        .report-hero p { margin:0; color:var(--muted); line-height:1.45; }
+        .report-meta, .scope-summary-meta { display:flex; flex-wrap:wrap; gap:8px; }
+        .report-meta { margin-top:14px; }
+        .report-pill, .table-pill { display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:#fff; font-size:.78rem; font-weight:600; }
+        .report-actions { display:flex; gap:8px; }
+        .report-action { border:1px solid var(--line); border-radius:12px; padding:10px 14px; background:#fff; color:var(--text); cursor:pointer; font-weight:700; }
+        .report-action--primary { background:var(--brand); border-color:var(--brand); color:#fff; }
+        .report-summary, .report-note, .report-table-wrap { margin-top:18px; padding:18px; }
+        .scope-summary-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; margin-bottom:12px; }
+        .summary-metric { border:1px solid var(--line); border-radius:14px; padding:14px; background:#fff; }
+        .summary-metric__label { font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; font-weight:700; }
+        .summary-metric__value { margin-top:8px; font-size:1.45rem; font-weight:800; }
+        .summary-metric__sub { margin-top:6px; color:var(--muted); font-size:.84rem; }
+        .report-note { color:var(--muted); line-height:1.5; }
+        .report-table { width:100%; border-collapse:collapse; }
+        .report-table th, .report-table td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:.84rem; }
+        .report-table thead th { background:#f8fafc; font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; }
+        .report-table tbody tr:last-child td { border-bottom:0; }
+        .report-table .btn { display:none !important; }
+        .scope-rank-badge { display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:28px; border-radius:999px; border:1px solid var(--line); background:#fff; font-size:.75rem; font-weight:800; }
+        .scope-rank-badge--top { background:#fef3c7; border-color:#f59e0b; }
+        .scope-rank-badge--silver { background:#e2e8f0; }
+        .scope-rank-badge--bronze { background:#fed7aa; }
+        .scope-row--top { background:rgba(14,165,233,.06); }
+        @media print {
+            body { padding:0; background:#fff; }
+            .report-actions { display:none !important; }
+            .report-shell { max-width:none; }
+            .report-hero, .report-summary, .report-note, .report-table-wrap, .summary-metric { box-shadow:none !important; }
+            .report-table thead { display:table-header-group; }
+            .report-table tr { page-break-inside: avoid; }
+        }
+    </style>
+    <script>
+        window.addEventListener('load', function () {
+            setTimeout(function () {
+                try { window.print(); } catch (error) {}
+            }, 350);
+        });
+    <\/script>
+</head>
+<body>
+    <div class="report-shell">
+        <section class="report-hero">
+            <div class="report-hero__top">
+                <div>
+                    <div class="report-brand">Apoia Candidato Premium</div>
+                    <h1>${escapeHtml(scopeLabel)}</h1>
+                    <p>${escapeHtml(campaignLabel)}</p>
+                    <div class="report-meta">
+                        <span class="report-pill">Tipo: ${escapeHtml(scopeModalState.type === 'region' ? 'Região' : 'Cidade')}</span>
+                        <span class="report-pill">Recorte: ${escapeHtml(scopeModalState.name || 'Território')}</span>
+                        <span class="report-pill">Gerado em: ${escapeHtml(generatedAt)}</span>
+                    </div>
+                </div>
+                <div class="report-actions">
+                    <button class="report-action report-action--primary" type="button" onclick="window.print()">Imprimir</button>
+                    <button class="report-action" type="button" onclick="window.close()">Fechar</button>
+                </div>
+            </div>
+            <div class="report-note">${escapeHtml(subtitle)}</div>
+        </section>
+        <section class="report-summary">${summaryHtml}</section>
+        <section class="report-note">${escapeHtml(note)}</section>
+        <section class="report-table-wrap">
+            <table class="report-table">
+                <thead>${tableHeadHtml}</thead>
+                <tbody>${tableBodyHtml}</tbody>
+            </table>
+        </section>
+    </div>
+</body>
+</html>`;
+    }
+
+    function openScopeReport() {
+        if (!scopeModal || scopeModal.hidden) {
+            return;
+        }
+
+        const reportWindow = window.open('', '_blank', 'width=1280,height=900');
+        if (!reportWindow) {
+            alert('Não foi possível abrir o relatório de impressão. Verifique se o navegador bloqueou a janela.');
+            return;
+        }
+
+        reportWindow.document.open();
+        reportWindow.document.write(buildScopeReportHtml());
         reportWindow.document.close();
         reportWindow.focus();
     }
@@ -1750,6 +1956,36 @@
         regionInput.value = regionName || regionInput.value || '';
     }
 
+    function setSelectValue(selectId, value, extra = {}) {
+        const select = document.getElementById(selectId);
+        if (!select) {
+            return;
+        }
+
+        const normalizedValue = String(value ?? '').trim();
+        if (normalizedValue === '') {
+            select.value = '';
+            return;
+        }
+
+        let option = Array.from(select.options || []).find((item) => String(item.value).trim() === normalizedValue);
+        if (!option) {
+            option = document.createElement('option');
+            option.value = normalizedValue;
+            option.textContent = normalizedValue;
+
+            if (extra.region) {
+                option.dataset.region = extra.region;
+            }
+
+            select.appendChild(option);
+        } else if (extra.region && !option.dataset.region) {
+            option.dataset.region = extra.region;
+        }
+
+        select.value = normalizedValue;
+    }
+
     function fillLeaderFormFromResult(dataset) {
         const set = (id, value) => {
             const el = document.getElementById(id);
@@ -1761,7 +1997,9 @@
         if (dataset.regionName) {
             set('leaderRegion', dataset.regionName || '');
         }
-        set('leaderMunicipality', dataset.municipality || '');
+        setSelectValue('leaderMunicipality', dataset.municipality || '', {
+            region: dataset.regionName || '',
+        });
         syncLeaderRegionFromMunicipality(document.getElementById('leaderMunicipality'), 'leaderRegion');
         set('leaderName', dataset.leaderDisplayName || dataset.leaderName || '');
         set('leaderCargo', dataset.cargo || '');
@@ -1833,7 +2071,9 @@
 
         set('modalLeaderId', leader.id ?? '');
         set('modalLeaderRegion', leader.region_name ?? '');
-        set('modalLeaderMunicipality', leader.municipality ?? '');
+        setSelectValue('modalLeaderMunicipality', leader.municipality ?? '', {
+            region: leader.region_name ?? '',
+        });
         set('modalLeaderName', leader.leader_display_name ?? leader.leader_name ?? '');
         set('modalLeaderCargo', leader.leader_cargo ?? '');
         set('modalLeaderParty', leader.leader_party ?? '');
@@ -1965,7 +2205,7 @@
                             data-sq="${escapeHtml(row.sq_candidato || '')}"
                             data-nr-votavel="${escapeHtml(row.nr_votavel || '')}"
                             data-turno="${escapeHtml(row.turno || 1)}"
-                        >Usar</button>
+                        >Add</button>
                     </td>
                 </tr>
             `).join('');
@@ -2209,6 +2449,12 @@
         const cityComparisonPrintButton = event.target.closest('[data-city-comparison-print]');
         if (cityComparisonPrintButton) {
             openCityComparisonReport();
+            return;
+        }
+
+        const scopePrintButton = event.target.closest('[data-scope-print]');
+        if (scopePrintButton) {
+            openScopeReport();
             return;
         }
 

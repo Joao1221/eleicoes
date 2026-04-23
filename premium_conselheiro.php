@@ -94,7 +94,7 @@ $campaignTitle = $campaign
             </div>
             <div class="topbar-actions">
                 <div class="pill">Olá, <?= premium_escape_html((string) ($user['name'] ?? '')) ?></div>
-                <a class="btn ghost" href="premium">Voltar ao painel</a>
+                <a class="btn comparison-cta" href="premium">Voltar ao painel</a>
                 <a class="btn ghost" href="premium_logout.php">Sair</a>
             </div>
         </div>

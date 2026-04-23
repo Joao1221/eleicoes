@@ -157,6 +157,54 @@ function premium_leader_type_label(string $bucket): string
     };
 }
 
+function premium_supported_baseline_years(): array
+{
+    return [
+        2018 => 'votacao_2018',
+        2022 => 'votacao_2022',
+    ];
+}
+
+function premium_resolve_baseline_year(int $year): int
+{
+    return array_key_exists($year, premium_supported_baseline_years()) ? $year : 2022;
+}
+
+function premium_baseline_table_for_year(int $year): ?string
+{
+    $resolvedYear = premium_resolve_baseline_year($year);
+    $tables = premium_supported_baseline_years();
+
+    return $tables[$resolvedYear] ?? null;
+}
+
+function premium_baseline_label(int $year): string
+{
+    return (string) premium_resolve_baseline_year($year);
+}
+
+function premium_baseline_table_exists(mysqli $conn, int $year): bool
+{
+    static $cache = [];
+
+    $table = premium_baseline_table_for_year($year);
+    if ($table === null) {
+        return false;
+    }
+
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+
+    $row = querySingle($conn, "
+        SHOW TABLES LIKE " . premium_sql_quote($conn, $table) . "
+    ");
+
+    $cache[$table] = !empty($row);
+
+    return $cache[$table];
+}
+
 function premium_region_definitions(): array
 {
     return [
@@ -574,7 +622,7 @@ function premium_require_user(mysqli $conn, bool $json = false): ?array
     }
 
     premium_flash('error', 'Você precisa entrar com credenciais premium para continuar.');
-    header('Location: premium.php');
+    header('Location: premium');
     exit;
 }
 
@@ -843,35 +891,39 @@ function premium_archive_overdue_agenda(mysqli $conn, int $campaignId): int
     return (int) $conn->affected_rows;
 }
 
-function premium_candidate_baseline(mysqli $conn, string $candidateName, string $cargo): array
+function premium_candidate_baseline(mysqli $conn, string $candidateName, string $cargo, int $baselineYear = 2022): array
 {
     $candidateName = trim($candidateName);
     $cargo = trim($cargo);
+    $baselineYear = premium_resolve_baseline_year($baselineYear);
+    $baselineTable = premium_baseline_table_for_year($baselineYear);
+
+    $emptyBaseline = [
+        'candidate_name' => $candidateName,
+        'cargo' => $cargo,
+        'candidate_number' => null,
+        'total_votes' => 0,
+        'municipalities' => [],
+        'regions' => [],
+        'found' => false,
+        'municipality_count' => 0,
+        'baseline_year' => $baselineYear,
+        'source_table' => $baselineTable,
+        'source_available' => $baselineTable !== null && premium_baseline_table_exists($conn, $baselineYear),
+    ];
 
     if ($candidateName === '' || $cargo === '') {
-        return [
-            'candidate_name' => $candidateName,
-            'cargo' => $cargo,
-            'candidate_number' => null,
-            'total_votes' => 0,
-            'municipalities' => [],
-            'regions' => [],
-            'found' => false,
-        ];
+        return $emptyBaseline;
     }
 
     $nameSql = premium_sql_quote($conn, $candidateName);
     $cargoVariants = premium_cargo_variants($cargo);
     if (!$cargoVariants) {
-        return [
-            'candidate_name' => $candidateName,
-            'cargo' => $cargo,
-            'candidate_number' => null,
-            'total_votes' => 0,
-            'municipalities' => [],
-            'regions' => [],
-            'found' => false,
-        ];
+        return $emptyBaseline;
+    }
+
+    if ($baselineTable === null || !premium_baseline_table_exists($conn, $baselineYear)) {
+        return $emptyBaseline;
     }
 
     $cargoConditions = array_map(
@@ -892,7 +944,7 @@ function premium_candidate_baseline(mysqli $conn, string $candidateName, string 
 
     $candidateNumberRow = querySingle($conn, "
         SELECT nr_candidato AS candidate_number, SUM(qt_votos_nominais) AS total_votos
-        FROM votacao_2022
+        FROM {$baselineTable}
         WHERE (" . implode(' OR ', $cargoConditions) . ")
           AND (" . implode(' OR ', $nameConditions) . ")
           AND nr_candidato IS NOT NULL
@@ -904,7 +956,7 @@ function premium_candidate_baseline(mysqli $conn, string $candidateName, string 
 
     $rows = queryAll($conn, "
         SELECT municipio, SUM(qt_votos_nominais) AS total_votos
-        FROM votacao_2022
+        FROM {$baselineTable}
         WHERE (" . implode(' OR ', $cargoConditions) . ")
           AND (" . implode(' OR ', $nameConditions) . ")
         GROUP BY municipio
@@ -960,6 +1012,9 @@ function premium_candidate_baseline(mysqli $conn, string $candidateName, string 
         'regions' => $regionRows,
         'found' => $totalVotes > 0,
         'municipality_count' => $municipalityCount,
+        'baseline_year' => $baselineYear,
+        'source_table' => $baselineTable,
+        'source_available' => true,
     ];
 }
 

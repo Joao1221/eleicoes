@@ -151,15 +151,19 @@ $baselinePanelHidden = false;
 $settingsPanelHidden = false;
 $isAdmin = premium_is_admin_user($user);
 $premiumCampaigns = [];
+$campaignBaselineYear = 2022;
+$campaignBaselineLabel = premium_baseline_label($campaignBaselineYear);
 
 if ($user) {
     $campaigns = premium_get_campaigns($conn, (int) $user['id']);
     $campaign = premium_active_campaign($conn, (int) $user['id']);
 
     if ($campaign) {
+        $campaignBaselineYear = premium_resolve_baseline_year((int) ($campaign['baseline_year'] ?? 2022));
+        $campaignBaselineLabel = premium_baseline_label($campaignBaselineYear);
         premium_set_active_campaign((int) $campaign['id']);
         $settings = premium_load_campaign_settings($conn, (int) $campaign['id']);
-        $baseline = premium_candidate_baseline($conn, (string) ($campaign['candidate_name'] ?? ''), (string) ($campaign['candidate_cargo'] ?? ''));
+        $baseline = premium_candidate_baseline($conn, (string) ($campaign['candidate_name'] ?? ''), (string) ($campaign['candidate_cargo'] ?? ''), $campaignBaselineYear);
         $leaders = premium_get_campaign_leaders($conn, (int) $campaign['id']);
         $agenda = premium_load_agenda($conn, (int) $campaign['id']);
         foreach ($agenda as $agendaItem) {
@@ -204,6 +208,12 @@ if ($isAdmin) {
             $premiumUserSummary['inactive']++;
         }
     }
+}
+
+$allowedTabs = ['home', 'liderancas', 'agenda', 'relatorios', 'opcoes'];
+$activeTab = trim((string) ($_GET['tab'] ?? ($campaign ? 'home' : 'opcoes')));
+if (!in_array($activeTab, $allowedTabs, true)) {
+    $activeTab = $campaign ? 'home' : 'opcoes';
 }
 
 function premium_selected_campaign_label(?array $campaign): string
@@ -279,6 +289,7 @@ function premium_size_label(string $sizeClass): string
 function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, int $forecast2026 = 0, array $settings = [], ?array $campaign = null, string $csrf = ''): string
 {
     $settings = $settings ?: premium_default_settings();
+    $baselineLabel = premium_baseline_label((int) ($campaign['baseline_year'] ?? 2022));
     $leaders = array_values($leaders);
     usort($leaders, static function (array $a, array $b): int {
         $cityCompare = strcmp(
@@ -353,13 +364,16 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
     if ($canDeleteLeader) {
         $html[] = '  <div class="leaders-table-toolbar__bulk">';
         $html[] = '    <div class="leaders-table-toolbar__bulk-item leaders-table-toolbar__bulk-item--transfer">';
-        $html[] = '    <div class="leaders-table-toolbar__bulk-copy">';
+        $html[] = '    <div class="leaders-table-toolbar__bulk-head">';
         $html[] = '      <div class="leaders-table-toolbar__bulk-title">Alterar transferência em lote</div>';
         $html[] = '      <div class="leaders-table-toolbar__bulk-sub">Defina um novo percentual e aplique aos registros selecionados, aos visíveis ou a toda a campanha.</div>';
         $html[] = '    </div>';
-        $html[] = '    <form method="post" action="premium_actions.php" id="leaderBulkTransferForm" class="leaders-table-bulk-form leader-bulk-transfer-form">';
+        $html[] = '    <div class="leaders-table-toolbar__bulk-sub" hidden id="leaderBulkTransferSub">Defina um novo percentual e aplique aos registros selecionados, aos visÃ­veis ou a toda a campanha.</div>';
+        $html[] = '    <button class="btn ghost btn-small" type="button" data-toggle-target="leaderBulkTransferForm" aria-controls="leaderBulkTransferForm" aria-expanded="false">Abrir</button>';
+        $html[] = '    <form method="post" action="premium_actions.php" id="leaderBulkTransferForm" class="leaders-table-bulk-form leader-bulk-transfer-form" hidden>';
         $html[] = '      <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
         $html[] = '      <input type="hidden" name="action" value="update_leaders_transfer_batch">';
+        $html[] = '      <input type="hidden" name="redirect_tab" value="liderancas">';
         $html[] = '      <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
         $html[] = '      <input type="hidden" name="transfer_scope" id="leaderBulkTransferScope" value="selected">';
         $html[] = '      <input type="hidden" name="leaders_json" id="leaderBulkTransferPayload">';
@@ -379,12 +393,14 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
         $html[] = '      <div class="leaders-table-toolbar__bulk-title"><span id="leaderBulkSelectedCount">0 selecionadas</span></div>';
         $html[] = '      <div class="leaders-table-toolbar__bulk-sub">Marque uma ou mais lideranças para excluir em lote. A projeção será recalculada automaticamente após salvar.</div>';
         $html[] = '    </div>';
-        $html[] = '    <div class="leaders-table-toolbar__bulk-actions">';
+        $html[] = '    <button class="btn ghost btn-small" type="button" data-toggle-target="leaderBulkDeleteActions" aria-controls="leaderBulkDeleteActions" aria-expanded="false">Abrir</button>';
+        $html[] = '    <div class="leaders-table-toolbar__bulk-actions" id="leaderBulkDeleteActions" hidden>';
         $html[] = '      <button type="button" class="btn ghost btn-small" id="leaderBulkSelectVisibleBtn">Selecionar visíveis</button>';
         $html[] = '      <button type="button" class="btn ghost btn-small" id="leaderBulkClearBtn">Limpar seleção</button>';
         $html[] = '      <form method="post" action="premium_actions.php" id="leaderBulkDeleteForm" class="leaders-table-bulk-form">';
         $html[] = '        <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
         $html[] = '        <input type="hidden" name="action" value="delete_leaders_batch">';
+        $html[] = '        <input type="hidden" name="redirect_tab" value="liderancas">';
         $html[] = '        <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
         $html[] = '        <input type="hidden" name="leaders_json" id="leaderBulkDeletePayload">';
         $html[] = '        <button class="btn danger btn-small" type="submit" id="leaderBulkDeleteBtn" disabled>Excluir selecionadas</button>';
@@ -395,7 +411,7 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
     }
     $html[] = '<div class="leaders-summary">';
     $html[] = '  <div class="summary-metric">';
-    $html[] = '    <div class="summary-metric__label">Baseline 2022</div>';
+    $html[] = '    <div class="summary-metric__label">Baseline ' . premium_escape_html($baselineLabel) . '</div>';
     $html[] = '    <div class="summary-metric__value">' . premium_fmt_int($baselineVotes) . '</div>';
     $html[] = '    <div class="summary-metric__sub">Total histórico do candidato nesta campanha</div>';
     $html[] = '  </div>';
@@ -407,7 +423,9 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
     $html[] = '</div>';
     $html[] = '<div class="empty-state" id="activeLeadersFilterEmpty" hidden>Nenhuma liderança corresponde aos filtros selecionados.</div>';
     $html[] = '<div id="activeLeadersRowsViewport">';
+    $html[] = '<br>';
     $html[] = '<table class="leaders-table">';
+    $html[] = '<caption>Lideranças e projeção de votação em 2026</caption>';
     $html[] = '<thead><tr>';
     if ($canDeleteLeader) {
         $html[] = '<th class="leaders-table-select-cell"><input type="checkbox" id="activeLeadersSelectAll" aria-label="Selecionar todas as lideranças visíveis"></th>';
@@ -415,10 +433,10 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
     $html[] = '<th>Região</th>';
     $html[] = '<th>Município</th>';
     $html[] = '<th>Liderança</th>';
-    $html[] = '<th>Votos</th>';
+    $html[] = '<th>Votos ' . premium_escape_html($baselineLabel) . '</th>';
     $html[] = '<th>Transferência %</th>';
     $html[] = '<th>Base transferível</th>';
-    $html[] = '<th>Projeção</th>';
+    $html[] = '<th>Projeção 2026</th>';
     $html[] = '<th>Ação</th>';
     $html[] = '</tr></thead><tbody>';
 
@@ -457,6 +475,7 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
             $html[] = '<form method="post" action="premium_actions.php" class="leaders-table-action-form" onsubmit="return confirm(\'Remover esta liderança da campanha?\');">';
             $html[] = '  <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
             $html[] = '  <input type="hidden" name="action" value="delete_leader">';
+            $html[] = '  <input type="hidden" name="redirect_tab" value="liderancas">';
             $html[] = '  <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
             $html[] = '  <input type="hidden" name="leader_id" value="' . $leaderId . '">';
             $html[] = '  <button class="btn danger btn-small leader-delete-icon-btn" type="submit" aria-label="Excluir liderança" title="Excluir liderança">';
@@ -498,6 +517,7 @@ function premium_render_leader_modal(?array $campaign, string $csrf): string
     $html[] = '    <form method="post" action="premium_actions.php" class="leader-form" id="leaderModalForm">';
     $html[] = '      <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
     $html[] = '      <input type="hidden" name="action" value="update_leader">';
+    $html[] = '      <input type="hidden" name="redirect_tab" value="liderancas">';
     $html[] = '      <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
     $html[] = '      <input type="hidden" name="leader_id" id="modalLeaderId" value="">';
     $html[] = '      <div class="form-grid compact modal-grid">';
@@ -558,6 +578,7 @@ function premium_render_leader_modal(?array $campaign, string $csrf): string
     $html[] = '    <form method="post" action="premium_actions.php" class="leader-modal__delete" onsubmit="return confirm(\'Remover esta liderança da campanha?\');">';
     $html[] = '      <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
     $html[] = '      <input type="hidden" name="action" value="delete_leader">';
+    $html[] = '      <input type="hidden" name="redirect_tab" value="liderancas">';
     $html[] = '      <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
     $html[] = '      <input type="hidden" name="leader_id" id="modalLeaderDeleteId" value="">';
     $html[] = '      <button class="btn danger" type="submit">Excluir liderança</button>';
@@ -568,8 +589,9 @@ function premium_render_leader_modal(?array $campaign, string $csrf): string
     return implode('', $html);
 }
 
-function premium_render_scope_modal(): string
+function premium_render_scope_modal(int $baselineYear = 2022): string
 {
+    $baselineLabel = premium_baseline_label($baselineYear);
     $html = [];
     $html[] = '<div class="leader-modal" id="scopeModal" hidden aria-hidden="true">';
     $html[] = '  <div class="leader-modal__backdrop" data-modal-close></div>';
@@ -578,12 +600,15 @@ function premium_render_scope_modal(): string
     $html[] = '      <div>';
     $html[] = '        <div class="eyebrow">Cidade ou região</div>';
     $html[] = '        <h3 id="scopeModalTitle">Selecione um recorte territorial</h3>';
-    $html[] = '        <p class="muted" id="scopeModalSubtitle">Clique em uma cidade ou região para ver as lideranças, as projeções individuais e o comparativo com 2022.</p>';
+    $html[] = '        <p class="muted" id="scopeModalSubtitle">Clique em uma cidade ou região para ver as lideranças, as projeções individuais e o comparativo com ' . premium_escape_html($baselineLabel) . '.</p>';
     $html[] = '      </div>';
-    $html[] = '      <button type="button" class="btn ghost" data-modal-close>Fechar</button>';
+    $html[] = '      <div class="modal-header-actions">';
+    $html[] = '        <button type="button" class="btn comparison-report-btn" data-scope-print>Imprimir</button>';
+    $html[] = '        <button type="button" class="btn ghost" data-modal-close>Fechar</button>';
+    $html[] = '      </div>';
     $html[] = '    </div>';
     $html[] = '    <div class="leader-modal__summary" id="scopeModalSummary"></div>';
-    $html[] = '    <p class="panel-note" id="scopeModalNote">O detalhe territorial mostrará o total de votos de 2022 apenas como comparativo e destacará a projeção atual construída pelas lideranças cadastradas.</p>';
+    $html[] = '    <p class="panel-note" id="scopeModalNote">O detalhe territorial mostrará o total de votos de ' . premium_escape_html($baselineLabel) . ' apenas como comparativo e destacará a projeção atual construída pelas lideranças cadastradas.</p>';
     $html[] = '    <div class="table-wrap">';
     $html[] = '      <table class="scope-modal-table">';
     $html[] = '        <thead id="scopeModalHead">';
@@ -608,8 +633,9 @@ function premium_render_scope_modal(): string
     return implode('', $html);
 }
 
-function premium_render_city_comparison_modal(array $forecast): string
+function premium_render_city_comparison_modal(array $forecast, int $baselineYear = 2022): string
 {
+    $baselineLabel = premium_baseline_label($baselineYear);
     $cities = array_values((array) ($forecast['cities'] ?? []));
     usort($cities, static function (array $a, array $b): int {
         $projectedCompare = (int) ($b['system_projection'] ?? $b['projected_base'] ?? 0) <=> (int) ($a['system_projection'] ?? $a['projected_base'] ?? 0);
@@ -662,8 +688,8 @@ function premium_render_city_comparison_modal(array $forecast): string
     $html[] = '    <div class="leader-modal__header">';
     $html[] = '      <div>';
     $html[] = '        <div class="eyebrow">Comparativo municipal</div>';
-    $html[] = '        <h3 id="cityComparisonTitle">2022 x projeção 2026 em todas as cidades</h3>';
-    $html[] = '        <p class="muted" id="cityComparisonSubtitle">Compare o histórico de 2022 com a projeção do sistema, separando claramente os votos das lideranças e os votos independentes.</p>';
+    $html[] = '        <h3 id="cityComparisonTitle">' . premium_escape_html($baselineLabel) . ' x projeção 2026 em todas as cidades</h3>';
+    $html[] = '        <p class="muted" id="cityComparisonSubtitle">Compare o histórico de ' . premium_escape_html($baselineLabel) . ' com a projeção do sistema, separando claramente os votos das lideranças e os votos independentes.</p>';
     $html[] = '      </div>';
     $html[] = '      <div class="modal-header-actions">';
     $html[] = '        <button type="button" class="btn comparison-report-btn" data-city-comparison-print>Imprimir relatório</button>';
@@ -672,7 +698,7 @@ function premium_render_city_comparison_modal(array $forecast): string
     $html[] = '    </div>';
     $html[] = '    <div class="leader-modal__summary comparison-summary-grid">';
     $html[] = '      <div class="summary-metric summary-metric--primary">';
-    $html[] = '        <div class="summary-metric__label">Comparativo 2022</div>';
+    $html[] = '        <div class="summary-metric__label">Comparativo ' . premium_escape_html($baselineLabel) . '</div>';
     $html[] = '        <div class="summary-metric__value">' . premium_fmt_int($baselineTotal) . '</div>';
     $html[] = '        <div class="summary-metric__sub">Base histórica de todas as cidades</div>';
     $html[] = '      </div>';
@@ -703,14 +729,14 @@ function premium_render_city_comparison_modal(array $forecast): string
     $html[] = '      <button type="button" class="agenda-filter-btn" data-city-comparison-filter="leaders">Com lideranças (' . premium_fmt_int($withLeaders) . ')</button>';
     $html[] = '      <button type="button" class="agenda-filter-btn" data-city-comparison-filter="fallback">Sem lideranças (' . premium_fmt_int($withoutLeaders) . ')</button>';
     $html[] = '    </div>';
-    $html[] = '    <p class="panel-note" id="cityComparisonNote">Os votos de liderança mostram a força das lideranças cadastradas; os votos independentes mostram a parcela não atribuída a lideranças. Nas cidades sem liderança, a projeção do sistema usa o fallback de 2022.</p>';
+    $html[] = '    <p class="panel-note" id="cityComparisonNote">Os votos de liderança mostram a força das lideranças cadastradas; os votos independentes mostram a parcela não atribuída a lideranças. Nas cidades sem liderança, a projeção do sistema usa a votação de ' . premium_escape_html($baselineLabel) . '.</p>';
     $html[] = '    <div class="table-wrap">';
     $html[] = '      <table class="comparison-modal-table">';
     $html[] = '        <thead>';
     $html[] = '          <tr>';
     $html[] = '            <th>Município</th>';
     $html[] = '            <th>Região</th>';
-    $html[] = '            <th>2022</th>';
+    $html[] = '            <th>' . premium_escape_html($baselineLabel) . '</th>';
     $html[] = '            <th>Lideranças</th>';
     $html[] = '            <th>Votos Liderança</th>';
     $html[] = '            <th>Votos independentes</th>';
@@ -794,6 +820,7 @@ function premium_render_leaf_card(array $leader): string
     $html[] = '<form class="leader-form" method="post" action="premium_actions.php">';
     $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html(premium_csrf_token()) . '">';
     $html[] = '<input type="hidden" name="action" value="update_leader">';
+    $html[] = '<input type="hidden" name="redirect_tab" value="liderancas">';
     $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SESSION['premium_campaign_id'] ?? 0) . '">';
     $html[] = '<input type="hidden" name="leader_id" value="' . $leaderId . '">';
     $html[] = '<div class="form-grid compact">';
@@ -816,6 +843,7 @@ function premium_render_leaf_card(array $leader): string
     $html[] = '<form method="post" action="premium_actions.php" onsubmit="return confirm(\'Remover esta liderança da campanha?\');">';
     $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html(premium_csrf_token()) . '">';
     $html[] = '<input type="hidden" name="action" value="delete_leader">';
+    $html[] = '<input type="hidden" name="redirect_tab" value="liderancas">';
     $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SESSION['premium_campaign_id'] ?? 0) . '">';
     $html[] = '<input type="hidden" name="leader_id" value="' . $leaderId . '">';
     $html[] = '<button class="btn danger" type="submit">Excluir liderança</button>';
@@ -834,6 +862,7 @@ function premium_render_agenda_card(array $item): string
     $html = [];
     $html[] = '<article class="agenda-card">';
     $html[] = '<form method="post" action="premium_actions.php" class="agenda-form">';
+    $html[] = '<input type="hidden" name="redirect_tab" value="agenda">';
     $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html(premium_csrf_token()) . '">';
     $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SESSION['premium_campaign_id'] ?? 0) . '">';
     $html[] = '<input type="hidden" name="agenda_id" value="' . $agendaId . '">';
@@ -851,6 +880,7 @@ function premium_render_agenda_card(array $item): string
     $html[] = '<form method="post" action="premium_actions.php" onsubmit="return confirm(\'Remover esta tarefa da agenda?\');">';
     $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html(premium_csrf_token()) . '">';
     $html[] = '<input type="hidden" name="action" value="delete_agenda">';
+    $html[] = '<input type="hidden" name="redirect_tab" value="agenda">';
     $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($_SESSION['premium_campaign_id'] ?? 0) . '">';
     $html[] = '<input type="hidden" name="agenda_id" value="' . $agendaId . '">';
     $html[] = '<button class="btn danger" type="submit">Excluir tarefa</button>';
@@ -1017,6 +1047,7 @@ function premium_render_agenda_detail_modal(?array $campaign, string $csrf): str
     $html[] = '    <form method="post" action="premium_actions.php" class="agenda-form" id="agendaModalForm">';
     $html[] = '      <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
     $html[] = '      <input type="hidden" name="action" value="update_agenda">';
+    $html[] = '      <input type="hidden" name="redirect_tab" value="agenda">';
     $html[] = '      <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
     $html[] = '      <input type="hidden" name="agenda_id" id="modalAgendaId" value="">';
     $html[] = '      <div class="form-grid compact modal-grid">';
@@ -1060,6 +1091,7 @@ function premium_render_agenda_detail_modal(?array $campaign, string $csrf): str
     $html[] = '      <form method="post" action="premium_actions.php" class="agenda-modal__inline">';
     $html[] = '        <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
     $html[] = '        <input type="hidden" name="action" value="archive_agenda">';
+    $html[] = '        <input type="hidden" name="redirect_tab" value="agenda">';
     $html[] = '        <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
     $html[] = '        <input type="hidden" name="agenda_id" id="modalAgendaArchiveId" value="">';
     $html[] = '        <button class="btn ghost" type="submit">Arquivar tarefa</button>';
@@ -1067,6 +1099,7 @@ function premium_render_agenda_detail_modal(?array $campaign, string $csrf): str
     $html[] = '      <form method="post" action="premium_actions.php" class="agenda-modal__inline" onsubmit="return confirm(\'Remover esta tarefa da agenda?\');">';
     $html[] = '        <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
     $html[] = '        <input type="hidden" name="action" value="delete_agenda">';
+    $html[] = '        <input type="hidden" name="redirect_tab" value="agenda">';
     $html[] = '        <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
     $html[] = '        <input type="hidden" name="agenda_id" id="modalAgendaDeleteId" value="">';
     $html[] = '        <button class="btn danger" type="submit">Excluir tarefa</button>';
@@ -1121,6 +1154,17 @@ function premium_render_agenda_list_modal(array $items): string
     return implode('', $html);
 }
 
+function premium_tab_href(string $tab, ?array $campaign = null): string
+{
+    $params = ['tab=' . urlencode($tab)];
+    $campaignId = (int) ($campaign['id'] ?? 0);
+    if ($campaignId > 0) {
+        array_unshift($params, 'campaign_id=' . $campaignId);
+    }
+
+    return 'premium?' . implode('&', $params);
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -1142,7 +1186,7 @@ function premium_render_agenda_list_modal(array $items): string
         <div>
             <div class="eyebrow">Apoia Candidato Premium</div>
             <h1>Escritório de campanha</h1>
-            <p class="muted">Baseline de 2022, lideranças de 2024, agenda, pesos configuráveis e previsões em um só lugar.</p>
+            <p class="muted">Baseline configurável, lideranças de 2024, agenda, pesos configuráveis e previsões em um só lugar.</p>
         </div>
         <div class="topbar-right">
             <div class="topbar-actions">
@@ -1168,20 +1212,6 @@ function premium_render_agenda_list_modal(array $items): string
                 <div class="pill">Olá, <?= premium_escape_html((string) ($user['name'] ?? '')) ?></div>
                 <a class="btn ghost" href="premium_logout.php">Sair</a>
             </div>
-            <?php if ($campaign): ?>
-                <details class="desktop-campaign-delete">
-                    <summary>Opcoes avancadas</summary>
-                    <form method="post" action="premium_actions.php" class="campaign-delete-form" onsubmit="return confirm('Excluir esta campanha permanentemente? Esta acao nao pode ser desfeita.');">
-                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                        <input type="hidden" name="action" value="delete_campaign">
-                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
-                        <label>Digite EXCLUIR CAMPANHA para confirmar
-                            <input type="text" name="delete_confirmation" autocomplete="off" required>
-                        </label>
-                        <button class="btn danger btn-small" type="submit">Excluir campanha</button>
-                    </form>
-                </details>
-            <?php endif; ?>
         <?php endif; ?>
         </div>
     </header>
@@ -1202,7 +1232,7 @@ function premium_render_agenda_list_modal(array $items): string
                     calibrar pesos do modelo e enxergar projeções por cidade, região e estado.
                 </p>
                 <div class="pill-row">
-                    <span class="pill">Comparativo 2022 x previsão</span>
+                    <span class="pill">Comparativo histórico x previsão</span>
                     <span class="pill">Agenda estratégica</span>
                     <span class="pill">Lideranças 2024</span>
                     <span class="pill">Relatórios premium</span>
@@ -1234,6 +1264,12 @@ function premium_render_agenda_list_modal(array $items): string
             if ($activeCampaignNumber === null) {
                 $activeCampaignNumber = premium_parse_candidate_number($baseline['candidate_number'] ?? null);
             }
+            $homeHeroMessages = [
+                'Este sistema transforma dados eleitorais em leitura estratégica para indicar prioridades, riscos e oportunidades da campanha. As projeções servem como apoio técnico à decisão, não como garantia de resultado: vitória exige organização, presença, disciplina de execução e trabalho político consistente no território.',
+                'Inteligência analítica para converter dados em estratégia. Nosso sistema processa o histórico de 2022 e 2024 para oferecer projeções precisas, permitindo ajustes em tempo real sobre visibilidade e investimento. Lembre-se: os dados iluminam o caminho, mas a vitória é construída com trabalho árduo e organização em campo. Transforme informação em sucesso.',
+                'Onde a ciência de dados encontra a força da militância. Esta plataforma oferece uma bússola baseada em evidências reais, comparando ciclos eleitorais e fatores de porte regional. Entendemos que a ferramenta maximiza suas chances, mas o resultado final depende da execução incansável do seu gabinete. Com dados organizados e trabalho constante, o sucesso está ao seu alcance.',
+                'Decisões baseadas em dados, vitórias conquistadas com trabalho. Utilize nossa base analítica para ajustar o rumo da sua campanha com precisão cirúrgica. O sistema fornece o mapa e as previsões; a organização e o suor da sua equipe garantem o destino final. Estruture sua campanha, otimize seus recursos e aproxime-se do êxito.',
+            ];
 
             $activeCampaignLabel = trim(implode(' • ', array_filter([
                 (string) ($campaign['campaign_name'] ?? 'Campanha'),
@@ -1242,6 +1278,23 @@ function premium_render_agenda_list_modal(array $items): string
             $activeCampaignSubtitle = premium_selected_campaign_subtitle($campaign, $activeCampaignNumber);
             $candidatePhotoPath = trim((string) ($campaign['candidate_photo_path'] ?? ''));
         ?>
+        <section class="premium-workspace">
+            <aside class="premium-sidebar panel">
+                <div class="premium-sidebar__campaign">
+                    <div class="eyebrow">Navegação</div>
+                    <h3><?= premium_escape_html($campaign ? ((string) ($campaign['campaign_name'] ?? 'Campanha ativa')) : 'Sem campanha ativa') ?></h3>
+                    <p class="muted"><?= premium_escape_html($campaign ? ((string) ($campaign['candidate_name'] ?? '')) : 'Use as opções avançadas para criar a campanha.') ?></p>
+                </div>
+                <nav class="premium-sidebar__nav" aria-label="Seções do premium">
+                    <a class="premium-sidebar__link<?= $activeTab === 'home' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('home', $campaign)) ?>">Home</a>
+                    <a class="premium-sidebar__link<?= $activeTab === 'liderancas' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('liderancas', $campaign)) ?>">Lideranças</a>
+                    <a class="premium-sidebar__link<?= $activeTab === 'agenda' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('agenda', $campaign)) ?>">Agenda de campanha</a>
+                    <a class="premium-sidebar__link<?= $activeTab === 'relatorios' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('relatorios', $campaign)) ?>">Relatórios</a>
+                    <a class="premium-sidebar__link<?= $activeTab === 'opcoes' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('opcoes', $campaign)) ?>">Opções avançadas</a>
+                </nav>
+            </aside>
+            <div class="premium-main">
+        <?php if ($campaign && $activeTab === 'home'): ?>
         <section class="panel hero hero--active">
             <div class="copy">
                 <div class="eyebrow">Escritório ativo</div>
@@ -1249,14 +1302,28 @@ function premium_render_agenda_list_modal(array $items): string
                 <?php if ($activeCampaignSubtitle !== ''): ?>
                     <p class="muted" style="margin-top: 12px;"><?= premium_escape_html($activeCampaignSubtitle) ?></p>
                 <?php endif; ?>
-                <p class="muted" style="margin-top: 12px;">
-                    Baseline de 2022, leitura regional e comparação com 2024, com fatores ajustáveis para alinhamento,
-                    visibilidade, investimento e porte do município.
-                </p>
-                <div class="pill-row">
-                    <span class="pill">Usuário: <?= premium_escape_html((string) ($user['email'] ?? '')) ?></span>
-                    <span class="pill">Campanhas: <?= premium_fmt_int(count($campaigns)) ?></span>
-                    <span class="pill">Regiões: 8</span>
+                <div class="hero-message-rotator" data-hero-rotator data-hero-interval="300000" aria-label="Mensagens estratégicas da campanha">
+                    <div class="hero-message-viewport">
+                        <?php foreach ($homeHeroMessages as $messageIndex => $homeHeroMessage): ?>
+                            <p class="muted hero-message<?= $messageIndex === 0 ? ' is-active' : '' ?>"<?= $messageIndex === 0 ? '' : ' hidden' ?> data-hero-message style="margin-top: 12px;">
+                                <?= premium_escape_html($homeHeroMessage) ?>
+                            </p>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php if (count($homeHeroMessages) > 1): ?>
+                    <div class="hero-message-controls" role="group" aria-label="Selecionar mensagem">
+                        <?php foreach ($homeHeroMessages as $messageIndex => $homeHeroMessage): ?>
+                            <button
+                                class="hero-message-control<?= $messageIndex === 0 ? ' is-active' : '' ?>"
+                                type="button"
+                                data-hero-message-trigger
+                                data-hero-message-index="<?= $messageIndex ?>"
+                                aria-label="Exibir mensagem <?= $messageIndex + 1 ?>"
+                                aria-pressed="<?= $messageIndex === 0 ? 'true' : 'false' ?>"
+                            ></button>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
             <div class="candidate-photo-card">
@@ -1276,8 +1343,9 @@ function premium_render_agenda_list_modal(array $items): string
                 </div>
             </div>
         </section>
+        <?php endif; ?>
 
-        <?php if ($isAdmin): ?>
+        <?php if ($isAdmin && $activeTab === 'opcoes'): ?>
             <section class="panel" id="premiumUsersPanel">
                 <div class="section-title">
                     <div>
@@ -1469,7 +1537,7 @@ function premium_render_agenda_list_modal(array $items): string
                 </div>
             </section>
         <?php endif; ?>
-        <?php if (!$campaign): ?>
+        <?php if (!$campaign && $activeTab === 'opcoes'): ?>
             <section class="panel">
                 <div class="section-title">
                     <div>
@@ -1477,9 +1545,10 @@ function premium_render_agenda_list_modal(array $items): string
                         <h2>Criar a primeira campanha</h2>
                     </div>
                 </div>
-                <form method="post" action="premium_actions.php" class="campaign-form">
+                <form method="post" action="premium_actions.php" class="campaign-form baseline-form" enctype="multipart/form-data">
                     <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                     <input type="hidden" name="action" value="create_campaign">
+                    <input type="hidden" name="redirect_tab" value="opcoes">
                     <div class="form-grid">
                         <label>Nome da campanha
                             <input type="text" name="campaign_name" placeholder="Gabinete de campanha" required>
@@ -1492,25 +1561,38 @@ function premium_render_agenda_list_modal(array $items): string
                         </label>
                         <label>Nº campanha 2026
                             <input type="text" name="candidate_number" inputmode="numeric" placeholder="Opcional">
-                            <span class="field-help">Se houver número em 2022, ele será sugerido automaticamente depois de criar a campanha.</span>
+                            <span class="field-help">Se houver número no ano-base escolhido, ele será sugerido automaticamente depois de criar a campanha.</span>
                         </label>
                         <label>Ano-base
-                            <input type="number" name="baseline_year" value="2022" min="2022" step="1">
+                            <input type="number" name="baseline_year" value="2022" min="2018" step="4">
+                        </label>
+                        <label>Município-base
+                            <input type="text" name="current_municipio" placeholder="Cidade principal, se houver">
                         </label>
                     </div>
-                    <label style="margin-top:12px;">Notas
-                        <textarea name="notes" rows="3" placeholder="Contexto da campanha, público, restrições e metas."></textarea>
+                    <label style="margin-top:12px;">Região-base
+                        <input type="text" name="current_region" placeholder="Região principal, se houver">
                     </label>
+                    <div class="baseline-notes-photo">
+                        <label>Notas
+                            <textarea name="notes" rows="3" placeholder="Contexto da campanha, público, restrições e metas."></textarea>
+                        </label>
+                        <label>Foto do candidato
+                            <input type="file" name="candidate_photo" accept="image/jpeg,image/png,image/webp">
+                            <span class="field-help">JPG, PNG ou WEBP até 3 MB.</span>
+                        </label>
+                    </div>
                     <div class="action-row">
                         <button class="btn primary" type="submit">Criar campanha</button>
                     </div>
                 </form>
             </section>
-        <?php else: ?>
+        <?php elseif ($campaign): ?>
+            <?php if ($activeTab === 'home'): ?>
             <section class="stats-grid campaign-stats-grid">
-                <?= premium_render_stat('Baseline 2022', premium_fmt_int((int) ($baseline['total_votes'] ?? 0)), 'Votação histórica do candidato'); ?>
+                <?= premium_render_stat('Baseline ' . $campaignBaselineLabel, premium_fmt_int((int) ($baseline['total_votes'] ?? 0)), 'Votação histórica do candidato'); ?>
                 <?= premium_render_stat('Projeção base', premium_fmt_int((int) ($forecast['totals']['projected_base'] ?? 0)), 'Cenário com os pesos atuais'); ?>
-                <?= premium_render_stat('Delta vs 2022', premium_fmt_int((int) ($forecast['totals']['delta_base'] ?? 0)), 'Diferença absoluta sobre a base'); ?>
+                <?= premium_render_stat('Delta vs ' . $campaignBaselineLabel, premium_fmt_int((int) ($forecast['totals']['delta_base'] ?? 0)), 'Diferença absoluta sobre a base'); ?>
                 <?= premium_render_stat('Lideranças ativas', premium_fmt_int(count($leaders)), 'Lideranças adicionadas ao escritório'); ?>
             </section>
 
@@ -1550,7 +1632,23 @@ function premium_render_agenda_list_modal(array $items): string
                 </section>
             <?php endif; ?>
 
-            <?php if ($baselinePanelHidden || $settingsPanelHidden): ?>
+            <section class="panel">
+                <div class="section-title">
+                    <div>
+                        <div class="eyebrow">Atalhos</div>
+                        <h2>Ferramentas principais da campanha</h2>
+                    </div>
+                    <a class="btn ghost" href="<?= premium_escape_html(premium_tab_href('relatorios', $campaign)) ?>">Ver relatórios</a>
+                </div>
+                    <div class="campaign-shortcuts__actions premium-home-shortcuts">
+                    <a class="btn ghost" href="<?= premium_escape_html(premium_tab_href('agenda', $campaign)) ?>">Agenda de campanha</a>
+                    <button class="btn comparison-cta" type="button" data-city-comparison-open>Comparar cidades</button>
+                    <a class="btn ghost" href="premium_conselheiro.php?campaign_id=<?= (int) $campaign['id'] ?>">Abrir Conselheiro</a>
+                </div>
+            </section>
+            <?php endif; ?>
+
+            <?php if (false && $activeTab === 'opcoes' && ($baselinePanelHidden || $settingsPanelHidden)): ?>
                 <section class="campaign-shortcuts">
                     <div class="campaign-shortcuts__copy">
                         <div class="campaign-shortcuts__title">Seus blocos estratégicos estão recolhidos</div>
@@ -1577,14 +1675,14 @@ function premium_render_agenda_list_modal(array $items): string
                 </section>
             <?php endif; ?>
 
-            <?php if (!$baselinePanelHidden || !$settingsPanelHidden): ?>
-                <?php $dashboardPanelsClass = (!$baselinePanelHidden && !$settingsPanelHidden) ? 'grid-2 dashboard-panels-split' : 'dashboard-single'; ?>
+            <?php if ($activeTab === 'opcoes'): ?>
+                <?php $dashboardPanelsClass = 'grid-2 dashboard-panels-split'; ?>
                 <section class="<?= premium_escape_html($dashboardPanelsClass) ?>">
-                <div class="panel panel-tint panel-tint--baseline"<?= $baselinePanelHidden ? ' hidden' : '' ?>>
+                <div class="panel panel-tint panel-tint--baseline">
                     <div class="section-title">
                         <div>
                             <div class="eyebrow">Baseline</div>
-                            <h2>Comparativo 2022</h2>
+                            <h2>Comparativo <?= premium_escape_html($campaignBaselineLabel) ?></h2>
                         </div>
                         <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="baselineBody" aria-controls="baselineBody" aria-expanded="false">Abrir</button>
                     </div>
@@ -1597,9 +1695,13 @@ function premium_render_agenda_list_modal(array $items): string
                     ?>
                     <form method="post" action="premium_actions.php" class="campaign-form baseline-form" enctype="multipart/form-data">
                         <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                        <input type="hidden" name="action" value="save_baseline">
+                        <input type="hidden" name="action" value="update_campaign">
+                        <input type="hidden" name="redirect_tab" value="opcoes">
                         <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
                         <div class="form-grid">
+                            <label>Nome da campanha
+                                <input type="text" name="campaign_name" value="<?= premium_escape_html((string) ($campaign['campaign_name'] ?? '')) ?>" required>
+                            </label>
                             <label>Candidato
                                 <input type="text" name="candidate_name" value="<?= premium_escape_html((string) ($campaign['candidate_name'] ?? '')) ?>" required>
                             </label>
@@ -1610,13 +1712,13 @@ function premium_render_agenda_list_modal(array $items): string
                                 <input type="text" name="candidate_number" inputmode="numeric" value="<?= premium_escape_html(premium_fmt_candidate_number_plain($campaignCandidateNumber)) ?>" placeholder="Opcional">
                             </label>
                             <label>Ano-base
-                                <input type="number" name="baseline_year" value="<?= (int) ($campaign['baseline_year'] ?? 2022) ?>" min="2022" step="1">
+                                <input type="number" name="baseline_year" value="<?= (int) ($campaign['baseline_year'] ?? 2022) ?>" min="2018" step="4">
                             </label>
                             <label>Município-base
                                 <input type="text" name="current_municipio" value="<?= premium_escape_html((string) ($campaign['current_municipio'] ?? '')) ?>" placeholder="Cidade principal, se houver">
                             </label>
                         </div>
-                        <label style="margin-top:12px;">Região-base
+                        <label>Região-base
                             <input type="text" name="current_region" value="<?= premium_escape_html((string) ($campaign['current_region'] ?? '')) ?>" placeholder="Região principal, se houver">
                         </label>
                         <div class="baseline-notes-photo">
@@ -1629,7 +1731,7 @@ function premium_render_agenda_list_modal(array $items): string
                             </label>
                         </div>
                         <div class="action-row">
-                            <button class="btn primary" type="submit">Salvar baseline</button>
+                            <button class="btn primary" type="submit">Salvar campanha</button>
                         </div>
                     </form>
                     <?php if (!empty($baseline['found'])): ?>
@@ -1640,18 +1742,17 @@ function premium_render_agenda_list_modal(array $items): string
                             </div>
                             <div class="table-wrap baseline-preview-table-wrap" style="margin-top:12px;">
                                 <table class="baseline-preview-table">
+                                    <caption>Cidades com maior votação em <?= premium_escape_html($campaignBaselineLabel) ?></caption>
                                     <thead>
                                         <tr>
                                             <th>Município</th>
-                                            <th>Região</th>
-                                            <th>Votos</th>
+                                            <th>Votos <?= premium_escape_html($campaignBaselineLabel) ?></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                     <?php foreach (array_slice((array) $baseline['municipalities'], 0, 8) as $row): ?>
                                         <tr>
                                             <td><?= premium_escape_html((string) ($row['municipio'] ?? '')) ?></td>
-                                            <td><?= premium_escape_html((string) ($row['regiao'] ?? '')) ?></td>
                                             <td><?= premium_fmt_int((int) ($row['total_votos'] ?? 0)) ?></td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -1661,13 +1762,13 @@ function premium_render_agenda_list_modal(array $items): string
                         </div>
                     <?php else: ?>
                         <div class="empty-state" style="margin-top:16px;">
-                            Nenhum baseline encontrado ainda. Salve o nome do candidato e o cargo para carregar os votos de 2022.
+                            Nenhum baseline encontrado ainda. Salve o nome do candidato, o cargo e o ano-base para carregar os votos históricos.
                         </div>
                     <?php endif; ?>
                     </div>
                 </div>
 
-                <div class="panel panel-tint panel-tint--model"<?= $settingsPanelHidden ? ' hidden' : '' ?>>
+                <div class="panel panel-tint panel-tint--model">
                     <div class="section-title">
                         <div>
                             <div class="eyebrow">Modelo</div>
@@ -1676,12 +1777,14 @@ function premium_render_agenda_list_modal(array $items): string
                         <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="settingsBody" aria-controls="settingsBody" aria-expanded="false">Abrir</button>
                     </div>
                     <div id="settingsBody" hidden>
-                    <p class="panel-note">Cada peso ajusta uma parte da projeção. A base de 2022 fica como comparativo e só entra no fallback onde não houver liderança cadastrada.</p>
+                    <p class="panel-note">Cada peso ajusta uma parte da projeção. A base de <?= premium_escape_html($campaignBaselineLabel) ?> fica como comparativo e só entra no fallback onde não houver liderança cadastrada.</p>
                     <form method="post" action="premium_actions.php" class="settings-form">
                         <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                         <input type="hidden" name="action" value="save_settings">
+                        <input type="hidden" name="redirect_tab" value="opcoes">
+                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
                         <div class="form-grid">
-                            <label>Fallback 2022
+                            <label>Fallback <?= premium_escape_html($campaignBaselineLabel) ?>
                                 <input type="number" name="baseline_retention" value="<?= premium_escape_html((string) ($settings['baseline_retention'] ?? 0.30)) ?>" step="0.01" min="0" max="1">
                                 <span class="field-help">Usado apenas quando o município ou a região não tem lideranças cadastradas; nesse caso, a base histórica vira referência de projeção.</span>
                             </label>
@@ -1747,6 +1850,61 @@ function premium_render_agenda_list_modal(array $items): string
             </section>
             <?php endif; ?>
 
+            <?php if ($activeTab === 'opcoes'): ?>
+            <section class="grid-2 premium-options-grid">
+                <div class="panel">
+                    <div class="section-title">
+                        <div>
+                            <div class="eyebrow">Segurança</div>
+                            <h2>Alterar senha</h2>
+                        </div>
+                    </div>
+                    <form method="post" action="premium_actions.php" class="campaign-form">
+                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                        <input type="hidden" name="action" value="change_password">
+                        <input type="hidden" name="redirect_tab" value="opcoes">
+                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                        <div class="form-grid compact">
+                            <label>Senha atual
+                                <input type="password" name="current_password" required>
+                            </label>
+                            <label>Nova senha
+                                <input type="password" name="new_password" minlength="8" required>
+                            </label>
+                            <label>Confirmar nova senha
+                                <input type="password" name="new_password_confirm" minlength="8" required>
+                            </label>
+                        </div>
+                        <div class="action-row">
+                            <button class="btn primary" type="submit">Salvar nova senha</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="panel">
+                    <div class="section-title">
+                        <div>
+                            <div class="eyebrow">Risco</div>
+                            <h2>Excluir campanha</h2>
+                        </div>
+                    </div>
+                    <p class="panel-note">A exclusão é permanente e remove baseline, lideranças, agenda, pesos e histórico de projeção.</p>
+                    <form method="post" action="premium_actions.php" class="campaign-delete-form" onsubmit="return confirm('Excluir esta campanha permanentemente? Esta ação não pode ser desfeita.');">
+                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                        <input type="hidden" name="action" value="delete_campaign">
+                        <input type="hidden" name="redirect_tab" value="opcoes">
+                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                        <label>Digite EXCLUIR CAMPANHA para confirmar
+                            <input type="text" name="delete_confirmation" autocomplete="off" required>
+                        </label>
+                        <div class="action-row">
+                            <button class="btn danger" type="submit">Excluir campanha</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+            <?php endif; ?>
+
+            <?php if ($activeTab === 'liderancas'): ?>
             <section class="panel panel-tint panel-tint--leaders-search">
                 <div class="section-title">
                     <div>
@@ -1812,6 +1970,7 @@ function premium_render_agenda_list_modal(array $items): string
                             <form method="post" action="premium_actions.php" id="leaderBatchForm" class="leader-batch-form">
                                 <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                                 <input type="hidden" name="action" value="add_leaders_batch">
+                                <input type="hidden" name="redirect_tab" value="liderancas">
                                 <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
                                 <input type="hidden" name="leaders_json" id="leaderBatchPayload">
                                 <input type="hidden" name="batch_cargo" id="leaderBatchCargo" value="">
@@ -1832,6 +1991,7 @@ function premium_render_agenda_list_modal(array $items): string
                             <form method="post" action="premium_actions.php" id="leaderForm">
                                 <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                                 <input type="hidden" name="action" value="add_leader">
+                                <input type="hidden" name="redirect_tab" value="liderancas">
                                 <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
                                 <input type="hidden" name="source_sq_candidato" id="sourceSq">
                                 <input type="hidden" name="source_nr_votavel" id="sourceNrVotavel">
@@ -1918,14 +2078,17 @@ function premium_render_agenda_list_modal(array $items): string
                     <?php endif; ?>
                 </div>
             </section>
+            <?php endif; ?>
 
             <?= premium_render_leader_modal($campaign, $csrf) ?>
-            <?= premium_render_scope_modal() ?>
-            <?= premium_render_city_comparison_modal($forecast) ?>
+            <?= premium_render_scope_modal($campaignBaselineYear) ?>
+            <?= premium_render_city_comparison_modal($forecast, $campaignBaselineYear) ?>
             <?= premium_render_agenda_list_modal($agenda) ?>
             <?= premium_render_agenda_detail_modal($campaign, $csrf) ?>
 
+            <?php if ($activeTab === 'relatorios' || $activeTab === 'home' || $activeTab === 'agenda'): ?>
             <section class="grid-2 forecast-agenda-split">
+                <?php if ($activeTab === 'relatorios'): ?>
                 <div class="panel">
                     <div class="section-title">
                         <div>
@@ -1940,7 +2103,7 @@ function premium_render_agenda_list_modal(array $items): string
                         <?= premium_render_stat('Otimista', premium_fmt_int((int) ($forecast['totals']['projected_optimistic'] ?? 0)), 'Hipótese de maior conversão'); ?>
                     </div>
                     <p class="panel-note" style="margin-top:-4px; margin-bottom:12px;">
-                        <strong>Votos totais</strong> é o voto bruto da liderança em 2024. <strong>Base transferível</strong> é a parcela considerada pelo modelo antes dos demais ajustes. Os votos de 2022 entram só como comparativo e como fallback onde não existir liderança cadastrada.
+                        <strong>Votos totais</strong> é o voto bruto da liderança em 2024. <strong>Base transferível</strong> é o percentual de transferência aplicado. <strong>Projeção</strong> é o total calculado após atribuições de peso dos cenários.
                     </p>
                     <?php if ($forecast['leaders']): ?>
                         <div class="table-wrap" style="margin-top: 12px;">
@@ -1973,13 +2136,13 @@ function premium_render_agenda_list_modal(array $items): string
                     <div class="grid-2" style="margin-top: 16px;">
                         <div class="panel panel-tint panel-tint--regions" style="margin:0;">
                             <h4 style="margin-bottom:12px;">Regiões com maior projeção</h4>
-                            <p class="panel-note" style="margin-top:-2px; margin-bottom:10px;">Clique em uma região para ver todas as lideranças, as projeções individuais e o comparativo com 2022.</p>
+                            <p class="panel-note" style="margin-top:-2px; margin-bottom:10px;">Clique em uma região para ver todas as lideranças, as projeções individuais e o comparativo com <?= premium_escape_html($campaignBaselineLabel) ?>.</p>
                             <div class="table-wrap">
                                 <table style="min-width: 100%;">
                                     <thead>
                                         <tr>
                                             <th>Região</th>
-                                            <th>Votos 2022</th>
+                                            <th>Votos <?= premium_escape_html($campaignBaselineLabel) ?></th>
                                             <th>Projeção<br>2026</th>
                                             <th>Ação</th>
                                         </tr>
@@ -2012,7 +2175,7 @@ function premium_render_agenda_list_modal(array $items): string
                                     <thead>
                                         <tr>
                                             <th>Município</th>
-                                            <th>Votos 2022</th>
+                                            <th>Votos <?= premium_escape_html($campaignBaselineLabel) ?></th>
                                             <th>Projeção<br>2026</th>
                                             <th>Ação</th>
                                         </tr>
@@ -2039,20 +2202,26 @@ function premium_render_agenda_list_modal(array $items): string
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
 
+                <?php if ($activeTab === 'home' || $activeTab === 'agenda'): ?>
                 <div class="panel">
                     <div class="section-title">
                         <div>
                             <div class="eyebrow">Agenda</div>
-                            <h2>Escritório de campanha</h2>
+                            <h2><?= $activeTab === 'agenda' ? 'Agenda de campanha' : 'Agendamentos pendentes' ?></h2>
                         </div>
-                        <?php if ($agenda): ?>
+                        <?php if ($activeTab === 'home'): ?>
+                            <a class="btn ghost btn-small" href="<?= premium_escape_html(premium_tab_href('agenda', $campaign)) ?>">Abrir agenda</a>
+                        <?php elseif ($agenda): ?>
                             <button class="btn ghost btn-small" type="button" data-agenda-list-open>Ver todas as tarefas</button>
                         <?php endif; ?>
                     </div>
+                    <?php if ($activeTab === 'agenda'): ?>
                     <form method="post" action="premium_actions.php" class="agenda-form">
                         <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                         <input type="hidden" name="action" value="add_agenda">
+                        <input type="hidden" name="redirect_tab" value="agenda">
                         <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
                         <div class="form-grid">
                             <label>Título
@@ -2091,30 +2260,39 @@ function premium_render_agenda_list_modal(array $items): string
                             <button class="btn primary" type="submit">Adicionar tarefa</button>
                         </div>
                     </form>
+                    <?php endif; ?>
 
                     <div style="margin-top:16px;">
                         <?php if ($agenda): ?>
-                            <div class="agenda-filter-bar" role="group" aria-label="Filtrar tarefas da agenda">
-                                <button class="agenda-filter-btn is-active" type="button" data-agenda-filter="pending">Pendentes: <?= premium_fmt_int($agendaSummary['open'] + $agendaSummary['doing']) ?></button>
-                                <button class="agenda-filter-btn" type="button" data-agenda-filter="done">Concluídas: <?= premium_fmt_int($agendaSummary['done']) ?></button>
-                                <button class="agenda-filter-btn" type="button" data-agenda-filter="archived">Arquivadas: <?= premium_fmt_int($agendaSummary['archived']) ?></button>
-                            </div>
+                            <?php if ($activeTab === 'agenda'): ?>
+                                <div class="agenda-filter-bar" role="group" aria-label="Filtrar tarefas da agenda">
+                                    <button class="agenda-filter-btn is-active" type="button" data-agenda-filter="pending">Pendentes: <?= premium_fmt_int($agendaSummary['open'] + $agendaSummary['doing']) ?></button>
+                                    <button class="agenda-filter-btn" type="button" data-agenda-filter="done">Concluídas: <?= premium_fmt_int($agendaSummary['done']) ?></button>
+                                    <button class="agenda-filter-btn" type="button" data-agenda-filter="archived">Arquivadas: <?= premium_fmt_int($agendaSummary['archived']) ?></button>
+                                </div>
+                            <?php endif; ?>
                             <div id="agendaPreviewArea">
-                                <?php if ($agendaPendingPreview): ?>
+                                <?php if ($activeTab === 'agenda' && $agenda): ?>
+                                    <?= premium_render_agenda_table($agenda, true) ?>
+                                <?php elseif ($agendaPendingPreview): ?>
                                     <?= premium_render_agenda_table($agendaPendingPreview, true) ?>
                                 <?php else: ?>
-                                    <div class="empty-state">Não há tarefas pendentes no momento. Use um dos botões acima para ver outra visão da agenda.</div>
+                                    <div class="empty-state">Não há tarefas pendentes no momento.</div>
                                 <?php endif; ?>
                             </div>
                             <p class="panel-note" id="agendaPreviewNote" style="margin-top:12px;">
-                                Mostrando apenas as 5 tarefas pendentes mais recentes.
+                                <?= $activeTab === 'home' ? 'Mostrando apenas os 5 agendamentos pendentes mais recentes.' : 'Mostrando a lista de pendências da campanha. Use "Ver todas as tarefas" para abrir a visão completa.' ?>
                             </p>
                         <?php else: ?>
-                            <div class="empty-state">A agenda ainda está vazia. Adicione as primeiras tarefas do escritório de campanha.</div>
+                            <div class="empty-state">A agenda ainda está vazia. <?= $activeTab === 'agenda' ? 'Adicione as primeiras tarefas da campanha.' : 'Abra a agenda para começar o planejamento.' ?></div>
                         <?php endif; ?>
                     </div>
                 </div>
+                <?php endif; ?>
             </section>
+            <?php endif; ?>
+            </div>
+        </section>
         <?php endif; ?>
     <?php endif; ?>
 </div>

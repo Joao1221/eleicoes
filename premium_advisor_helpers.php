@@ -110,68 +110,68 @@ function premium_advisor_recommendation(array $city): array
         if ($baselineVotes > 0 && $retention !== null && $retention < 0.75) {
             return [
                 'title' => 'Defender base',
-                'text' => 'A cidade ainda tem forca no ranking, mas a projecao esta abaixo da base historica. Reforce liderancas, agenda presencial e defesa do territorio antes de tratar como expansao.',
+                'text' => 'A cidade ainda tem força no ranking, mas a projeção está abaixo da base histórica. Reforce lideranças, agenda presencial e defesa do território antes de tratar como expansão.',
             ];
         }
 
         if ($baselineVotes > 0 && $retention !== null && $retention >= 0.80) {
             return [
                 'title' => 'Consolidar base',
-                'text' => 'Cidade forte, com liderancas cadastradas e projecao proxima ou acima da base historica. Mantenha presenca, agenda com aliados e defesa ativa do territorio.',
+                'text' => 'Cidade forte, com lideranças cadastradas e projeção próxima ou acima da base histórica. Mantenha presença, agenda com aliados e defesa ativa do território.',
             ];
         }
 
         return [
             'title' => 'Prioridade alta',
-            'text' => 'Cidade com lideranca ativa e boa capacidade projetada. Recomendo visita presencial, agenda com liderancas e reforco territorial.',
+            'text' => 'Cidade com liderança ativa e boa capacidade projetada. Recomendo visita presencial, agenda com lideranças e reforço territorial.',
         ];
     }
 
     if ($leaderCount > 0 && $rentability >= 65) {
         return [
             'title' => 'Alta rentabilidade',
-            'text' => 'A relacao entre votos projetados e esforco estimado e favoravel. Vale a pena ampliar presenca com custo controlado.',
+            'text' => 'A relação entre votos projetados e esforço estimado é favorável. Vale a pena ampliar presença com custo controlado.',
         ];
     }
 
     if ($leaderCount > 0 && $baselineVotes <= 0 && $projectedBase > 0) {
         return [
             'title' => 'Oportunidade nova',
-            'text' => 'A campanha nao tinha base historica relevante, mas a lideranca de 2024 abre caminho de entrada.',
+            'text' => 'A campanha não tinha base histórica relevante, mas a liderança de 2024 abre caminho de entrada.',
         ];
     }
 
     if (premium_advisor_is_defense_candidate($city)) {
         return [
             'title' => 'Defender base',
-            'text' => 'O candidato tem voto historico relevante, mas falta sustentacao atual ou a projecao caiu demais. Priorize articulacao local antes que a base seja ocupada por adversarios.',
+            'text' => 'O candidato tem voto histórico relevante, mas falta sustentação atual ou a projeção caiu demais. Priorize articulação local antes que a base seja ocupada por adversários.',
         ];
     }
 
     if (premium_advisor_is_hole_candidate($city)) {
         return [
             'title' => 'Buraco eleitoral',
-            'text' => 'A cidade esta abaixo do potencial regional e tem baixa sustentacao local. Busque lideranca e teste entrada com agenda pequena antes de ampliar gasto.',
+            'text' => 'A cidade está abaixo do potencial regional e tem baixa sustentação local. Busque liderança e teste entrada com agenda pequena antes de ampliar gasto.',
         ];
     }
 
     if (premium_advisor_is_expansion_candidate($city)) {
         return [
-            'title' => 'Expandir territorio',
-            'text' => 'A regiao oferece sinal de forca e a cidade pode ser trabalhada como extensao natural da base regional.',
+            'title' => 'Expandir território',
+            'text' => 'A região oferece sinal de força e a cidade pode ser trabalhada como extensão natural da base regional.',
         ];
     }
 
     if ($leaderCount <= 0 && $baselineVotes > 0) {
         return [
             'title' => 'Base em risco',
-            'text' => 'Houve voto historico, mas nao ha lideranca cadastrada. Antes de gastar esforcos, busque prefeito, vereador ou coordenador local.',
+            'text' => 'Houve voto histórico, mas não há liderança cadastrada. Antes de gastar esforços, busque prefeito, vereador ou coordenador local.',
         ];
     }
 
     return [
         'title' => 'Monitorar',
-        'text' => 'Mantenha acompanhamento e use apenas acoes pontuais ate existir melhor sinal de retorno.',
+        'text' => 'Mantenha acompanhamento e use apenas ações pontuais até existir melhor sinal de retorno.',
     ];
 }
 
@@ -213,7 +213,7 @@ function premium_build_campaign_advisor(array $campaign, array $baseline, array 
         $leaderProjection = (int) ($city['leader_projection'] ?? $city['leader_effect'] ?? 0);
         $leaderCount = (int) ($city['leader_count'] ?? 0);
         $baselineVotes = (int) ($city['baseline_votes'] ?? 0);
-        $region = (string) ($city['regiao'] ?? 'Sem regiao');
+        $region = (string) ($city['regiao'] ?? 'Sem região');
         $mode = (string) ($city['projection_mode'] ?? '');
 
         $projectionScore = ($projectedBase / $maxProjected) * 100;
@@ -312,15 +312,15 @@ function premium_build_campaign_advisor(array $campaign, array $baseline, array 
         $alerts[] = [
             'type' => 'priority',
             'title' => 'Prioridade imediata',
-            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' combina lideranca ativa, projecao relevante e bom retorno politico estimado.',
+            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' combina liderança ativa, projeção relevante e bom retorno político estimado.',
         ];
     }
     if ($withoutLeaders) {
         $city = $withoutLeaders[0];
         $alerts[] = [
             'type' => 'risk',
-            'title' => 'Base historica sem lideranca',
-            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' teve votos em 2022, mas ainda nao tem lideranca cadastrada. Evite gastos pesados antes de montar apoio local.',
+            'title' => 'Base histórica sem liderança',
+            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' teve votos em ' . premium_baseline_label((int) ($campaign['baseline_year'] ?? 2022)) . ', mas ainda não tem liderança cadastrada. Evite gastos pesados antes de montar apoio local.',
         ];
     }
     if ($highRentability) {
@@ -328,7 +328,7 @@ function premium_build_campaign_advisor(array $campaign, array $baseline, array 
         $alerts[] = [
             'type' => 'return',
             'title' => 'Melhor retorno estimado',
-            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' aparece como cidade rentavel para agenda, material e articulacao.',
+            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' aparece como cidade rentável para agenda, material e articulação.',
         ];
     }
     if ($newOpportunities) {
@@ -336,7 +336,7 @@ function premium_build_campaign_advisor(array $campaign, array $baseline, array 
         $alerts[] = [
             'type' => 'opportunity',
             'title' => 'Oportunidade de entrada',
-            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' nao tinha base historica relevante, mas liderancas de 2024 criam porta de entrada.',
+            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' não tinha base histórica relevante, mas lideranças de 2024 criam porta de entrada.',
         ];
     }
     if ($electoralHoles) {
@@ -344,7 +344,7 @@ function premium_build_campaign_advisor(array $campaign, array $baseline, array 
         $alerts[] = [
             'type' => 'hole',
             'title' => 'Buraco eleitoral relevante',
-            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' esta abaixo do potencial da regiao e deve ser tratada como alvo de prospeccao.',
+            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' está abaixo do potencial da região e deve ser tratada como alvo de prospecção.',
         ];
     }
     if ($defenseBases) {
@@ -352,7 +352,7 @@ function premium_build_campaign_advisor(array $campaign, array $baseline, array 
         $alerts[] = [
             'type' => 'defense',
             'title' => 'Defesa de base',
-            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' tem voto historico, mas precisa de reforco de lideranca para reduzir risco de perda.',
+            'text' => (string) ($city['municipio'] ?? 'Cidade') . ' tem voto histórico, mas precisa de reforço de liderança para reduzir risco de perda.',
         ];
     }
 
@@ -363,7 +363,7 @@ function premium_build_campaign_advisor(array $campaign, array $baseline, array 
             $expansion[] = [
                 'municipio' => (string) ($city['municipio'] ?? ''),
                 'regiao' => $region,
-                'reason' => 'Esta na mesma regiao de maior forca da campanha, mas ainda precisa de lideranca local.',
+                'reason' => 'Está na mesma região de maior força da campanha, mas ainda precisa de liderança local.',
                 'baseline_votes' => (int) ($city['baseline_votes'] ?? 0),
                 'projected_base' => (int) ($city['projected_base'] ?? 0),
             ];

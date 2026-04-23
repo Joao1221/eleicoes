@@ -83,7 +83,8 @@ $summary = [
 
 if ($campaign) {
     $settings = premium_load_campaign_settings($conn, (int) $campaign['id']);
-    $baseline = premium_candidate_baseline($conn, (string) ($campaign['candidate_name'] ?? ''), (string) ($campaign['candidate_cargo'] ?? ''));
+    $baselineYear = premium_resolve_baseline_year((int) ($campaign['baseline_year'] ?? 2022));
+    $baseline = premium_candidate_baseline($conn, (string) ($campaign['candidate_name'] ?? ''), (string) ($campaign['candidate_cargo'] ?? ''), $baselineYear);
     $leaders = premium_get_campaign_leaders($conn, (int) $campaign['id']);
     $agenda = premium_load_agenda($conn, (int) $campaign['id']);
     $forecast = premium_build_forecast($baseline, $leaders, $settings);

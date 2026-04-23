@@ -23,12 +23,17 @@ if (!premium_validate_csrf($_POST['csrf'] ?? null)) {
 
 $action = trim((string) ($_POST['action'] ?? ''));
 $selectedCampaignId = (int) ($_POST['campaign_id'] ?? ($_SESSION['premium_campaign_id'] ?? 0));
+$redirectTab = trim((string) ($_POST['redirect_tab'] ?? ($_GET['tab'] ?? '')));
 
 $redirectToCampaign = static function (int $campaignId = 0): void {
     $url = 'premium';
     if ($campaignId > 0) {
         premium_set_active_campaign($campaignId);
         $url .= '?campaign_id=' . $campaignId;
+    }
+    global $redirectTab;
+    if ($redirectTab !== '') {
+        $url .= ($campaignId > 0 ? '&' : '?') . 'tab=' . urlencode($redirectTab);
     }
     header('Location: ' . $url);
     exit;
@@ -326,8 +331,10 @@ switch ($action) {
         $candidateName = trim((string) ($_POST['candidate_name'] ?? ''));
         $candidateCargo = trim((string) ($_POST['candidate_cargo'] ?? ''));
         $candidateNumber = premium_parse_candidate_number($_POST['candidate_number'] ?? null);
-        $baselineYear = (int) ($_POST['baseline_year'] ?? 2022);
+        $baselineYear = premium_resolve_baseline_year((int) ($_POST['baseline_year'] ?? 2022));
         $notes = trim((string) ($_POST['notes'] ?? ''));
+        $currentMunicipio = trim((string) ($_POST['current_municipio'] ?? ''));
+        $currentRegion = trim((string) ($_POST['current_region'] ?? ''));
 
         if ($campaignName === '' || $candidateName === '' || $candidateCargo === '') {
             premium_flash('error', 'Informe o nome da campanha, o candidato e o cargo.');
@@ -335,7 +342,7 @@ switch ($action) {
         }
 
         if ($candidateNumber === null) {
-            $candidateBaseline = premium_candidate_baseline($conn, $candidateName, $candidateCargo);
+            $candidateBaseline = premium_candidate_baseline($conn, $candidateName, $candidateCargo, $baselineYear);
             $candidateNumber = premium_parse_candidate_number($candidateBaseline['candidate_number'] ?? null);
         }
 
@@ -347,15 +354,19 @@ switch ($action) {
                 candidate_cargo,
                 candidate_number,
                 baseline_year,
-                notes
+                notes,
+                current_municipio,
+                current_region
             ) VALUES (
                 " . (int) $user['id'] . ",
                 " . premium_sql_quote($conn, $campaignName) . ",
                 " . premium_sql_quote($conn, $candidateName) . ",
                 " . premium_sql_quote($conn, $candidateCargo) . ",
                 " . ($candidateNumber !== null ? (string) $candidateNumber : 'NULL') . ",
-                " . max(2022, $baselineYear) . ",
-                " . premium_sql_quote($conn, $notes !== '' ? $notes : null) . "
+                " . $baselineYear . ",
+                " . premium_sql_quote($conn, $notes !== '' ? $notes : null) . ",
+                " . premium_sql_quote($conn, $currentMunicipio !== '' ? $currentMunicipio : null) . ",
+                " . premium_sql_quote($conn, $currentRegion !== '' ? $currentRegion : null) . "
             )
         ");
 
@@ -365,6 +376,23 @@ switch ($action) {
         }
 
         $campaignId = (int) $conn->insert_id;
+        try {
+            $candidatePhotoPath = premium_store_candidate_photo_upload($campaignId, null);
+        } catch (RuntimeException $exception) {
+            premium_delete_campaign($conn, $campaignId);
+            premium_flash('error', $exception->getMessage());
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if ($candidatePhotoPath) {
+            $conn->query("
+                UPDATE premium_campaigns
+                SET candidate_photo_path = " . premium_sql_quote($conn, $candidatePhotoPath) . "
+                WHERE id = {$campaignId}
+                LIMIT 1
+            ");
+        }
+
         $settingsJson = json_encode(premium_default_settings(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $conn->query("
             INSERT INTO premium_campaign_settings (campaign_id, settings_json)
@@ -376,6 +404,67 @@ switch ($action) {
 
         premium_flash('success', 'Campanha premium criada com sucesso.');
         $redirectToCampaign($campaignId);
+        break;
+
+    case 'update_campaign':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de atualizar os dados.');
+            $redirectToCampaign();
+        }
+
+        $campaignName = trim((string) ($_POST['campaign_name'] ?? ''));
+        $candidateName = trim((string) ($_POST['candidate_name'] ?? ''));
+        $candidateCargo = trim((string) ($_POST['candidate_cargo'] ?? ''));
+        $candidateNumber = premium_parse_candidate_number($_POST['candidate_number'] ?? null);
+        $baselineYear = premium_resolve_baseline_year((int) ($_POST['baseline_year'] ?? 2022));
+        $notes = trim((string) ($_POST['notes'] ?? ''));
+        $currentMunicipio = trim((string) ($_POST['current_municipio'] ?? ''));
+        $currentRegion = trim((string) ($_POST['current_region'] ?? ''));
+
+        if ($campaignName === '' || $candidateName === '' || $candidateCargo === '') {
+            premium_flash('error', 'Informe o nome da campanha, o candidato e o cargo.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if ($candidateNumber === null) {
+            $candidateNumber = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
+        }
+
+        if ($candidateNumber === null) {
+            $candidateBaseline = premium_candidate_baseline($conn, $candidateName, $candidateCargo, $baselineYear);
+            $candidateNumber = premium_parse_candidate_number($candidateBaseline['candidate_number'] ?? null);
+        }
+
+        try {
+            $candidatePhotoPath = premium_store_candidate_photo_upload($selectedCampaignId, (string) ($campaign['candidate_photo_path'] ?? ''));
+        } catch (RuntimeException $exception) {
+            premium_flash('error', $exception->getMessage());
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $conn->query("
+            UPDATE premium_campaigns
+            SET campaign_name = " . premium_sql_quote($conn, $campaignName) . ",
+                candidate_name = " . premium_sql_quote($conn, $candidateName) . ",
+                candidate_cargo = " . premium_sql_quote($conn, $candidateCargo) . ",
+                candidate_number = " . ($candidateNumber !== null ? (string) $candidateNumber : 'NULL') . ",
+                baseline_year = " . $baselineYear . ",
+                candidate_photo_path = " . premium_sql_quote($conn, $candidatePhotoPath !== '' ? $candidatePhotoPath : null) . ",
+                notes = " . premium_sql_quote($conn, $notes !== '' ? $notes : null) . ",
+                current_municipio = " . premium_sql_quote($conn, $currentMunicipio !== '' ? $currentMunicipio : null) . ",
+                current_region = " . premium_sql_quote($conn, $currentRegion !== '' ? $currentRegion : null) . "
+            WHERE id = " . (int) $selectedCampaignId . "
+              AND user_id = " . (int) $user['id'] . "
+            LIMIT 1
+        ");
+
+        if ($conn->errno) {
+            premium_flash('error', 'Não foi possível atualizar a campanha.');
+        } else {
+            premium_flash('success', 'Campanha atualizada.');
+        }
+
+        $redirectToCampaign($selectedCampaignId);
         break;
 
     case 'select_campaign':
@@ -587,7 +676,7 @@ switch ($action) {
         $candidateName = trim((string) ($_POST['candidate_name'] ?? ''));
         $candidateCargo = trim((string) ($_POST['candidate_cargo'] ?? ''));
         $candidateNumber = premium_parse_candidate_number($_POST['candidate_number'] ?? null);
-        $baselineYear = (int) ($_POST['baseline_year'] ?? 2022);
+        $baselineYear = premium_resolve_baseline_year((int) ($_POST['baseline_year'] ?? 2022));
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $currentMunicipio = trim((string) ($_POST['current_municipio'] ?? ''));
         $currentRegion = trim((string) ($_POST['current_region'] ?? ''));
@@ -603,7 +692,7 @@ switch ($action) {
         }
 
         if ($candidateNumber === null) {
-            $candidateBaseline = premium_candidate_baseline($conn, $candidateName, $candidateCargo);
+            $candidateBaseline = premium_candidate_baseline($conn, $candidateName, $candidateCargo, $baselineYear);
             $candidateNumber = premium_parse_candidate_number($candidateBaseline['candidate_number'] ?? null);
         }
 
@@ -612,7 +701,7 @@ switch ($action) {
             SET candidate_name = " . premium_sql_quote($conn, $candidateName) . ",
                 candidate_cargo = " . premium_sql_quote($conn, $candidateCargo) . ",
                 candidate_number = " . ($candidateNumber !== null ? (string) $candidateNumber : 'NULL') . ",
-                baseline_year = " . max(2022, $baselineYear) . ",
+                baseline_year = " . $baselineYear . ",
                 baseline_panel_hidden = 1,
                 candidate_photo_path = " . premium_sql_quote($conn, $candidatePhotoPath !== '' ? $candidatePhotoPath : null) . ",
                 notes = " . premium_sql_quote($conn, $notes !== '' ? $notes : null) . ",
@@ -715,6 +804,59 @@ switch ($action) {
             premium_flash('error', 'Não foi possível reabrir os pesos.');
         } else {
             premium_flash('success', 'Pesos reabertos.');
+        }
+
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
+    case 'change_password':
+        $currentPassword = (string) ($_POST['current_password'] ?? '');
+        $newPassword = (string) ($_POST['new_password'] ?? '');
+        $confirmPassword = (string) ($_POST['new_password_confirm'] ?? '');
+        $authUser = querySingle($conn, "
+            SELECT id, password_hash
+            FROM premium_users
+            WHERE id = " . (int) ($user['id'] ?? 0) . "
+            LIMIT 1
+        ");
+
+        if ($currentPassword === '' || $newPassword === '' || $confirmPassword === '') {
+            premium_flash('error', 'Preencha a senha atual, a nova senha e a confirmação.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if (!$authUser || !password_verify($currentPassword, (string) ($authUser['password_hash'] ?? ''))) {
+            premium_flash('error', 'A senha atual não confere.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if (strlen($newPassword) < 8) {
+            premium_flash('error', 'A nova senha precisa ter pelo menos 8 caracteres.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if ($newPassword !== $confirmPassword) {
+            premium_flash('error', 'A confirmação da nova senha não confere.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $passwordHash = password_hash($newPassword, PASSWORD_DEFAULT);
+        if ($passwordHash === false) {
+            premium_flash('error', 'Não foi possível atualizar a senha.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $conn->query("
+            UPDATE premium_users
+            SET password_hash = " . premium_sql_quote($conn, $passwordHash) . "
+            WHERE id = " . (int) ($user['id'] ?? 0) . "
+            LIMIT 1
+        ");
+
+        if ($conn->errno) {
+            premium_flash('error', 'Não foi possível salvar a nova senha.');
+        } else {
+            premium_flash('success', 'Senha alterada com sucesso.');
         }
 
         $redirectToCampaign($selectedCampaignId);
