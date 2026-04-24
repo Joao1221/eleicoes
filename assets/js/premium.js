@@ -11,6 +11,7 @@
     const heroRotators = Array.from(document.querySelectorAll('[data-hero-rotator]'));
 
     const searchBtn = document.getElementById('searchLeadersBtn');
+    const searchQueryInput = document.getElementById('searchQuery');
     const resultsBody = document.getElementById('leaderSearchResults');
     const leaderSelectAll = document.getElementById('leaderSelectAll');
     const leaderBatchForm = document.getElementById('leaderBatchForm');
@@ -59,9 +60,14 @@
     const studyModalTitle = document.getElementById('studyModalTitle');
     const studyModalSubtitle = document.getElementById('studyModalSubtitle');
     const leaderModal = document.getElementById('leaderModal');
+    const externalLeaderModal = document.getElementById('externalLeaderModal');
     const leaderModalTitle = document.getElementById('leaderModalTitle');
     const leaderModalSubtitle = document.getElementById('leaderModalSubtitle');
     const leaderModalSummary = document.getElementById('leaderModalSummary');
+    const leaderModeButtons = Array.from(document.querySelectorAll('[data-leader-mode-target]'));
+    const leaderModePanels = Array.from(document.querySelectorAll('[data-leader-mode-panel]'));
+    const optionsModeButtons = Array.from(document.querySelectorAll('[data-options-mode-target]'));
+    const optionsModePanels = Array.from(document.querySelectorAll('[data-options-mode-panel]'));
     const scopeModal = document.getElementById('scopeModal');
     const scopeModalTitle = document.getElementById('scopeModalTitle');
     const scopeModalSubtitle = document.getElementById('scopeModalSubtitle');
@@ -115,6 +121,8 @@
     const premiumThemeStorageKey = 'premium-theme';
     const premiumThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     let premiumThemePreference = null;
+    let leaderSearchDebounceId = null;
+    let leaderSearchAbortController = null;
 
     function normalizePremiumTheme(value) {
         return String(value) === 'light' ? 'light' : 'dark';
@@ -424,29 +432,29 @@
             scopeModalTitle.textContent = 'Selecione um recorte territorial';
         }
         if (scopeModalSubtitle) {
-            scopeModalSubtitle.textContent = `Clique em uma cidade ou região para ver as lideranças, as projeções individuais e o comparativo com ${baselineYearLabel}.`;
+            scopeModalSubtitle.textContent = `Clique em uma cidade ou regiÃ£o para ver as lideranÃ§as, as projeÃ§Ãµes individuais e o comparativo com ${baselineYearLabel}.`;
         }
         if (scopeModalSummary) {
             scopeModalSummary.innerHTML = '';
         }
         if (scopeModalNote) {
-            scopeModalNote.textContent = `O detalhe territorial mostrará o total de votos de ${baselineYearLabel} apenas como comparativo e destacará a projeção atual construída pelas lideranças cadastradas.`;
+            scopeModalNote.textContent = `O detalhe territorial mostrarÃ¡ o total de votos de ${baselineYearLabel} apenas como comparativo e destacarÃ¡ a projeÃ§Ã£o atual construÃ­da pelas lideranÃ§as cadastradas.`;
         }
         if (scopeModalHead) {
             scopeModalHead.innerHTML = `
                 <tr>
-                    <th>Liderança</th>
-                    <th>Município</th>
+                    <th>LideranÃ§a</th>
+                    <th>MunicÃ­pio</th>
                     <th>Votos 2024</th>
-                    <th>Base transferível</th>
-                    <th>Projeção 2026</th>
-                    <th>Transferência</th>
-                    <th>Ação</th>
+                    <th>Base transferÃ­vel</th>
+                    <th>ProjeÃ§Ã£o 2026</th>
+                    <th>TransferÃªncia</th>
+                    <th>AÃ§Ã£o</th>
                 </tr>
             `;
         }
         if (scopeModalBody) {
-            scopeModalBody.innerHTML = `<tr><td colspan="${scopeModalColspan}" class="muted">Selecione uma cidade ou região para carregar os líderes.</td></tr>`;
+            scopeModalBody.innerHTML = `<tr><td colspan="${scopeModalColspan}" class="muted">Selecione uma cidade ou regiÃ£o para carregar os lÃ­deres.</td></tr>`;
         }
     }
 
@@ -477,14 +485,14 @@
         const baseTransferable = leaders.reduce((sum, leader) => sum + Number(leader.base_effect || 0), 0);
 
         if (scopeModalTitle) {
-            scopeModalTitle.textContent = `${scopeName || 'Recorte territorial'} - ${normalizedType === 'region' ? 'Região' : 'Cidade'}`;
+            scopeModalTitle.textContent = `${scopeName || 'Recorte territorial'} - ${normalizedType === 'region' ? 'RegiÃ£o' : 'Cidade'}`;
         }
 
         if (scopeModalSubtitle) {
             const comparativeBase = Number(scopeData?.baseline_votes || 0);
             const projected = Number(scopeData?.projected_base || 0);
             const delta = projected - comparativeBase;
-            scopeModalSubtitle.textContent = `${scopeName || 'Recorte territorial'} • Comparativo ${baselineYearLabel}: ${formatNumber(comparativeBase)} • Projeção atual: ${formatNumber(projected)} • Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}`;
+            scopeModalSubtitle.textContent = `${scopeName || 'Recorte territorial'} â€¢ Comparativo ${baselineYearLabel}: ${formatNumber(comparativeBase)} â€¢ ProjeÃ§Ã£o atual: ${formatNumber(projected)} â€¢ Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}`;
         }
 
         if (scopeModalSummary) {
@@ -496,44 +504,44 @@
             const baseTransferable = leaders.reduce((sum, leader) => sum + Number(leader.base_effect || 0), 0);
             scopeModalSummary.innerHTML = [
                 `<span class="table-pill">${baselineYearLabel}: ${formatNumber(comparativeBase)}</span>`,
-                `<span class="table-pill">Projeção: ${formatNumber(projected)}</span>`,
+                `<span class="table-pill">ProjeÃ§Ã£o: ${formatNumber(projected)}</span>`,
                 `<span class="table-pill">Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}</span>`,
-                `<span class="table-pill">Lideranças: ${formatNumber(leaders.length)}</span>`,
+                `<span class="table-pill">LideranÃ§as: ${formatNumber(leaders.length)}</span>`,
                 `<span class="table-pill">Votos 2024: ${formatNumber(totalVotes2024)}</span>`,
-                `<span class="table-pill">Base transferível: ${formatNumber(baseTransferable)}</span>`,
-                `<span class="table-pill">efeito das lideranças: ${formatNumber(leaderEffect)}</span>`,
+                `<span class="table-pill">Base transferÃ­vel: ${formatNumber(baseTransferable)}</span>`,
+                `<span class="table-pill">efeito das lideranÃ§as: ${formatNumber(leaderEffect)}</span>`,
             ].join('');
         }
 
         if (scopeModalNote) {
             const hasLeaders = leaders.length > 0;
             scopeModalNote.textContent = hasLeaders
-                ? `As lideranças abaixo são as cadastradas para este recorte. A projeção total da cidade ou região é calculada a partir dos votos das lideranças; o total de ${baselineYearLabel} aparece apenas como comparativo.`
-                : `Nenhuma liderança cadastrada neste recorte. Nesse caso, a projeção do território pode cair no fallback de ${baselineYearLabel} para manter a leitura estratégica.`;
+                ? `As lideranÃ§as abaixo sÃ£o as cadastradas para este recorte. A projeÃ§Ã£o total da cidade ou regiÃ£o Ã© calculada a partir dos votos das lideranÃ§as; o total de ${baselineYearLabel} aparece apenas como comparativo.`
+                : `Nenhuma lideranÃ§a cadastrada neste recorte. Nesse caso, a projeÃ§Ã£o do territÃ³rio pode cair no fallback de ${baselineYearLabel} para manter a leitura estratÃ©gica.`;
         }
 
         if (scopeModalHead) {
             if (normalizedType === 'city') {
                 scopeModalHead.innerHTML = `
                     <tr>
-                        <th>Liderança</th>
+                        <th>LideranÃ§a</th>
                         <th>Votos 2024</th>
-                        <th>Base transferível</th>
-                        <th>Projeção 2026</th>
-                        <th>Transferência</th>
-                        <th>Ação</th>
+                        <th>Base transferÃ­vel</th>
+                        <th>ProjeÃ§Ã£o 2026</th>
+                        <th>TransferÃªncia</th>
+                        <th>AÃ§Ã£o</th>
                     </tr>
                 `;
             } else {
                 scopeModalHead.innerHTML = `
                     <tr>
-                        <th>Município</th>
-                        <th>Liderança</th>
+                        <th>MunicÃ­pio</th>
+                        <th>LideranÃ§a</th>
                         <th>Votos 2024</th>
-                        <th>Base transferível</th>
-                        <th>Projeção 2026</th>
-                        <th>Transferência</th>
-                        <th>Ação</th>
+                        <th>Base transferÃ­vel</th>
+                        <th>ProjeÃ§Ã£o 2026</th>
+                        <th>TransferÃªncia</th>
+                        <th>AÃ§Ã£o</th>
                     </tr>
                 `;
             }
@@ -541,10 +549,10 @@
 
         if (scopeModalBody) {
             if (!leaders.length) {
-                scopeModalBody.innerHTML = `<tr><td colspan="${scopeModalColspan}" class="muted">Nenhuma liderança cadastrada neste recorte.</td></tr>`;
+                scopeModalBody.innerHTML = `<tr><td colspan="${scopeModalColspan}" class="muted">Nenhuma lideranÃ§a cadastrada neste recorte.</td></tr>`;
             } else {
                 scopeModalBody.innerHTML = leaders.map((leader) => {
-                    const leaderDisplayName = leader.leader_display_name || leader.leader_name || 'Liderança';
+                    const leaderDisplayName = leader.leader_display_name || leader.leader_name || 'LideranÃ§a';
                     const municipality = leader.municipality || scopeName || '-';
                     const votes = formatNumber(leader.leader_votes_2024 || 0);
                     const baseEffect = formatNumber(leader.base_effect || 0);
@@ -583,26 +591,26 @@
         }
 
         if (scopeModalSubtitle) {
-            scopeModalSubtitle.textContent = `${scopeName || 'Recorte territorial'} • Ranking por projeção individual • Comparativo ${baselineYearLabel}: ${formatNumber(comparativeBase)} • Projeção atual: ${formatNumber(projected)} • Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}`;
+            scopeModalSubtitle.textContent = `${scopeName || 'Recorte territorial'} â€¢ Ranking por projeÃ§Ã£o individual â€¢ Comparativo ${baselineYearLabel}: ${formatNumber(comparativeBase)} â€¢ ProjeÃ§Ã£o atual: ${formatNumber(projected)} â€¢ Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}`;
         }
 
         if (scopeModalSummary) {
             const topLeader = leaders[0] || null;
-            const topLeaderName = topLeader ? (topLeader.leader_display_name || topLeader.leader_name || 'Liderança') : 'Sem liderança';
+            const topLeaderName = topLeader ? (topLeader.leader_display_name || topLeader.leader_name || 'LideranÃ§a') : 'Sem lideranÃ§a';
             scopeModalSummary.innerHTML = `
                 <div class="scope-summary-grid">
                     <div class="summary-metric summary-metric--primary">
-                        <div class="summary-metric__label">Projeção total</div>
+                        <div class="summary-metric__label">ProjeÃ§Ã£o total</div>
                         <div class="summary-metric__value">${formatNumber(projected)}</div>
                         <div class="summary-metric__sub">Total projetado do recorte territorial</div>
                     </div>
                     <div class="summary-metric summary-metric--delta">
-                        <div class="summary-metric__label">Diferença para ${baselineYearLabel}</div>
+                        <div class="summary-metric__label">DiferenÃ§a para ${baselineYearLabel}</div>
                         <div class="summary-metric__value">${delta >= 0 ? '+' : ''}${formatNumber(delta)}</div>
-                        <div class="summary-metric__sub">Comparativo sobre a base histórica</div>
+                        <div class="summary-metric__sub">Comparativo sobre a base histÃ³rica</div>
                     </div>
                     <div class="summary-metric">
-                        <div class="summary-metric__label">Lideranças</div>
+                        <div class="summary-metric__label">LideranÃ§as</div>
                         <div class="summary-metric__value">${formatNumber(leaders.length)}</div>
                         <div class="summary-metric__sub">Ordenadas pelo ranking interno do recorte</div>
                     </div>
@@ -610,8 +618,8 @@
                 <div class="scope-summary-meta">
                     <span class="table-pill">${baselineYearLabel}: ${formatNumber(comparativeBase)}</span>
                     <span class="table-pill">Votos 2024: ${formatNumber(totalVotes2024)}</span>
-                    <span class="table-pill">Base transferível: ${formatNumber(baseTransferable)}</span>
-                    <span class="table-pill">efeito das lideranças: ${formatNumber(leaderEffect)}</span>
+                    <span class="table-pill">Base transferÃ­vel: ${formatNumber(baseTransferable)}</span>
+                    <span class="table-pill">efeito das lideranÃ§as: ${formatNumber(leaderEffect)}</span>
                     <span class="table-pill">Top 1: ${escapeHtml(topLeaderName)}</span>
                 </div>
             `;
@@ -619,34 +627,34 @@
 
         if (scopeModalNote) {
             scopeModalNote.textContent = leaders.length
-                ? 'Ranking ordenado por projeção individual. A projeção total soma as lideranças cadastradas.'
-                : `Nenhuma liderança cadastrada neste recorte. A projeção pode usar o fallback de ${baselineYearLabel} para manter a leitura estratégica.`;
+                ? 'Ranking ordenado por projeÃ§Ã£o individual. A projeÃ§Ã£o total soma as lideranÃ§as cadastradas.'
+                : `Nenhuma lideranÃ§a cadastrada neste recorte. A projeÃ§Ã£o pode usar o fallback de ${baselineYearLabel} para manter a leitura estratÃ©gica.`;
         }
 
         if (scopeModalHead) {
             if (normalizedType === 'city') {
                 scopeModalHead.innerHTML = `
                     <tr>
-                        <th>Posição</th>
-                        <th>Liderança</th>
+                        <th>PosiÃ§Ã£o</th>
+                        <th>LideranÃ§a</th>
                         <th>Votos 2024</th>
-                        <th>Transferência</th>
-                        <th>Base transferível</th>
-                        <th>Projeção 2026</th>
-                        <th>Ação</th>
+                        <th>TransferÃªncia</th>
+                        <th>Base transferÃ­vel</th>
+                        <th>ProjeÃ§Ã£o 2026</th>
+                        <th>AÃ§Ã£o</th>
                     </tr>
                 `;
             } else {
                 scopeModalHead.innerHTML = `
                     <tr>
-                        <th>Posição</th>
-                        <th>Município</th>
-                        <th>Liderança</th>
+                        <th>PosiÃ§Ã£o</th>
+                        <th>MunicÃ­pio</th>
+                        <th>LideranÃ§a</th>
                         <th>Votos 2024</th>
-                        <th>Transferência</th>
-                        <th>Base transferível</th>
-                        <th>Projeção 2026</th>
-                        <th>Ação</th>
+                        <th>TransferÃªncia</th>
+                        <th>Base transferÃ­vel</th>
+                        <th>ProjeÃ§Ã£o 2026</th>
+                        <th>AÃ§Ã£o</th>
                     </tr>
                 `;
             }
@@ -654,13 +662,13 @@
 
         if (scopeModalBody) {
             if (!leaders.length) {
-                scopeModalBody.innerHTML = `<tr><td colspan="${scopeModalColspan}" class="muted">Nenhuma liderança cadastrada neste recorte.</td></tr>`;
+                scopeModalBody.innerHTML = `<tr><td colspan="${scopeModalColspan}" class="muted">Nenhuma lideranÃ§a cadastrada neste recorte.</td></tr>`;
             } else {
                 scopeModalBody.innerHTML = leaders.map((leader, index) => {
                     const rank = String(index + 1).padStart(2, '0');
                     const rankClass = index === 0 ? 'scope-rank-badge scope-rank-badge--top' : index === 1 ? 'scope-rank-badge scope-rank-badge--silver' : index === 2 ? 'scope-rank-badge scope-rank-badge--bronze' : 'scope-rank-badge';
                     const rowClass = index === 0 ? 'scope-row--top' : '';
-                    const leaderDisplayName = leader.leader_display_name || leader.leader_name || 'Liderança';
+                    const leaderDisplayName = leader.leader_display_name || leader.leader_name || 'LideranÃ§a';
                     const municipality = leader.municipality || scopeName || '-';
                     const votes = formatNumber(leader.leader_votes_2024 || 0);
                     const baseEffect = formatNumber(leader.base_effect || 0);
@@ -772,10 +780,10 @@
 
     function getCityComparisonFilterLabel(filter) {
         if (filter === 'leaders') {
-            return 'Com lideranças';
+            return 'Com lideranÃ§as';
         }
         if (filter === 'fallback') {
-            return 'Sem lideranças';
+            return 'Sem lideranÃ§as';
         }
 
         return 'Todas as cidades';
@@ -801,11 +809,11 @@
             premiumCampaign.campaign_name || 'Campanha Premium',
             premiumCampaign.candidate_name || '',
             premiumCampaign.candidate_cargo || '',
-        ].filter(Boolean).join(' • ');
+        ].filter(Boolean).join(' â€¢ ');
         const coverageLabel = [
             premiumCampaign.current_region || '',
             premiumCampaign.current_municipio || '',
-        ].filter(Boolean).join(' • ') || 'Sergipe';
+        ].filter(Boolean).join(' â€¢ ') || 'Sergipe';
         const filterLabel = getCityComparisonFilterLabel(filter);
 
         const baselineTotal = rows.reduce((sum, city) => sum + Number(city.baseline_votes || 0), 0);
@@ -818,7 +826,7 @@
 
         const rowsHtml = rows.length ? rows.map((city, index) => {
             const municipality = city.municipio || '';
-            const region = city.regiao || 'Sem região';
+            const region = city.regiao || 'Sem regiÃ£o';
             const baselineVotes = Number(city.baseline_votes || 0);
             const leaderCount = Number(city.leader_count || 0);
             const leaderVotes = Number(city.leader_projection || city.leader_effect || 0);
@@ -826,7 +834,7 @@
             const systemProjection = Number(city.system_projection || city.projected_base || 0);
             const delta = systemProjection - baselineVotes;
             const hasLeaders = leaderCount > 0;
-            const statusLabel = hasLeaders ? 'Com lideranças' : `Fallback ${baselineYearLabel}`;
+            const statusLabel = hasLeaders ? 'Com lideranÃ§as' : `Fallback ${baselineYearLabel}`;
             const statusClass = hasLeaders ? 'report-status report-status--leaders' : 'report-status report-status--fallback';
             const rank = String(index + 1).padStart(2, '0');
 
@@ -854,7 +862,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Relatório Comparativo | ${escapeHtml(campaignLabel)}</title>
+    <title>RelatÃ³rio Comparativo | ${escapeHtml(campaignLabel)}</title>
     <style>
         :root {
             --bg: #f6f8fb;
@@ -1364,7 +1372,7 @@
             <div class="report-hero__top">
                 <div>
                     <div class="report-brand">Apoia Candidato Premium</div>
-                    <h1>Comparativo municipal ${baselineYearLabel} x projeção 2026</h1>
+                    <h1>Comparativo municipal ${baselineYearLabel} x projeÃ§Ã£o 2026</h1>
                     <p>${escapeHtml(campaignLabel)}</p>
                     <div class="report-meta">
                         <span class="report-pill">Cobertura: ${escapeHtml(coverageLabel)}</span>
@@ -1379,10 +1387,10 @@
             </div>
             <div class="report-notes" style="margin-top: 16px;">
                 <div class="report-note">
-                    <strong>Votos de liderança</strong> representam a parcela da projeção atribuída às lideranças cadastradas em cada município.
+                    <strong>Votos de lideranÃ§a</strong> representam a parcela da projeÃ§Ã£o atribuÃ­da Ã s lideranÃ§as cadastradas em cada municÃ­pio.
                 </div>
                 <div class="report-note">
-                    <strong>Votos independentes</strong> representam a parcela da projeção que não depende de liderança cadastrada; nas cidades sem liderança, o sistema usa o fallback de ${baselineYearLabel}.
+                    <strong>Votos independentes</strong> representam a parcela da projeÃ§Ã£o que nÃ£o depende de lideranÃ§a cadastrada; nas cidades sem lideranÃ§a, o sistema usa o fallback de ${baselineYearLabel}.
                 </div>
             </div>
         </section>
@@ -1391,53 +1399,53 @@
             <div class="report-card">
                 <div class="report-card__label">Comparativo ${baselineYearLabel}</div>
                 <div class="report-card__value">${formatNumber(baselineTotal)}</div>
-                <div class="report-card__sub">Base histórica do recorte exibido</div>
+                <div class="report-card__sub">Base histÃ³rica do recorte exibido</div>
             </div>
             <div class="report-card">
-                <div class="report-card__label">Projeção 2026</div>
+                <div class="report-card__label">ProjeÃ§Ã£o 2026</div>
                 <div class="report-card__value">${formatNumber(systemTotal)}</div>
                 <div class="report-card__sub">Total projetado pelo modelo</div>
             </div>
             <div class="report-card">
                 <div class="report-card__label">Delta total</div>
                 <div class="report-card__value">${deltaTotal >= 0 ? '+' : ''}${formatNumber(deltaTotal)}</div>
-                <div class="report-card__sub">Diferença entre projeção e ${baselineYearLabel}</div>
+                <div class="report-card__sub">DiferenÃ§a entre projeÃ§Ã£o e ${baselineYearLabel}</div>
             </div>
             <div class="report-card">
-                <div class="report-card__label">Com lideranças</div>
+                <div class="report-card__label">Com lideranÃ§as</div>
                 <div class="report-card__value">${formatNumber(withLeaders)}</div>
-                <div class="report-card__sub">Municípios com apoio cadastrado</div>
+                <div class="report-card__sub">MunicÃ­pios com apoio cadastrado</div>
             </div>
             <div class="report-card">
-                <div class="report-card__label">Sem lideranças</div>
+                <div class="report-card__label">Sem lideranÃ§as</div>
                 <div class="report-card__value">${formatNumber(withoutLeaders)}</div>
-                <div class="report-card__sub">Municípios que usam fallback</div>
+                <div class="report-card__sub">MunicÃ­pios que usam fallback</div>
             </div>
             <div class="report-card">
-                <div class="report-card__label">Votos de liderança</div>
+                <div class="report-card__label">Votos de lideranÃ§a</div>
                 <div class="report-card__value">${formatNumber(leaderVotesTotal)}</div>
-                <div class="report-card__sub">Parcela atribuída às lideranças</div>
+                <div class="report-card__sub">Parcela atribuÃ­da Ã s lideranÃ§as</div>
             </div>
         </section>
 
         <div class="report-legend">
-            <span class="report-legend__item"><span class="report-dot report-dot--leaders"></span>Municípios com lideranças</span>
-            <span class="report-legend__item"><span class="report-dot report-dot--fallback"></span>Municípios sem lideranças</span>
-            <span class="report-legend__item">Votos independentes = projeção fora das lideranças</span>
+            <span class="report-legend__item"><span class="report-dot report-dot--leaders"></span>MunicÃ­pios com lideranÃ§as</span>
+            <span class="report-legend__item"><span class="report-dot report-dot--fallback"></span>MunicÃ­pios sem lideranÃ§as</span>
+            <span class="report-legend__item">Votos independentes = projeÃ§Ã£o fora das lideranÃ§as</span>
         </div>
 
         <section class="report-table-wrap">
             <table class="report-table">
                 <thead>
                     <tr>
-                        <th>Município</th>
-                        <th>Região</th>
+                        <th>MunicÃ­pio</th>
+                        <th>RegiÃ£o</th>
                         <th>${baselineYearLabel}</th>
-                        <th>Votos Liderança</th>
+                        <th>Votos LideranÃ§a</th>
                         <th>Votos independentes</th>
-                        <th>Projeção 2026</th>
+                        <th>ProjeÃ§Ã£o 2026</th>
                         <th>Delta</th>
-                        <th>Situação</th>
+                        <th>SituaÃ§Ã£o</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1447,7 +1455,7 @@
         </section>
 
         <div class="report-footer">
-            Relatório elaborado a partir do módulo premium. Os votos de ${baselineYearLabel} entram como comparativo e como fallback apenas nos municípios sem lideranças cadastradas.
+            RelatÃ³rio elaborado a partir do mÃ³dulo premium. Os votos de ${baselineYearLabel} entram como comparativo e como fallback apenas nos municÃ­pios sem lideranÃ§as cadastradas.
         </div>
     </div>
 </body>
@@ -1461,7 +1469,7 @@
 
         const reportWindow = window.open('', '_blank', 'width=1280,height=900');
         if (!reportWindow) {
-            alert('Não foi possível abrir o relatório de impressão. Verifique se o navegador bloqueou a janela.');
+            alert('NÃ£o foi possÃ­vel abrir o relatÃ³rio de impressÃ£o. Verifique se o navegador bloqueou a janela.');
             return;
         }
 
@@ -1486,7 +1494,7 @@
             const label = (lastCell.textContent || '').trim().toLowerCase();
             const hasActionButton = !!lastCell.querySelector('button, .btn');
 
-            if (label === 'ação' || hasActionButton) {
+            if (label === 'aÃ§Ã£o' || hasActionButton) {
                 lastCell.remove();
             }
         });
@@ -1500,7 +1508,7 @@
             premiumCampaign.candidate_name || '',
             premiumCampaign.candidate_cargo || '',
         ].filter(Boolean);
-        const campaignLabel = campaignParts.join(' • ');
+        const campaignLabel = campaignParts.join(' â€¢ ');
         const generatedAt = new Date().toLocaleString('pt-BR');
         const scopeLabel = scopeModalTitle?.textContent || 'Recorte territorial';
         const subtitle = scopeModalSubtitle?.textContent || '';
@@ -1514,7 +1522,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${escapeHtml(scopeLabel)} | Impressão</title>
+    <title>${escapeHtml(scopeLabel)} | ImpressÃ£o</title>
     <style>
         :root { color-scheme: light; --bg:#f5f7fb; --panel:#fff; --line:rgba(15,23,42,.12); --text:#0f172a; --muted:#475569; --brand:#0ea5e9; --brand-soft:rgba(14,165,233,.10); }
         * { box-sizing: border-box; }
@@ -1575,8 +1583,8 @@
                     <h1>${escapeHtml(scopeLabel)}</h1>
                     <p>${escapeHtml(campaignLabel)}</p>
                     <div class="report-meta">
-                        <span class="report-pill">Tipo: ${escapeHtml(scopeModalState.type === 'region' ? 'Região' : 'Cidade')}</span>
-                        <span class="report-pill">Recorte: ${escapeHtml(scopeModalState.name || 'Território')}</span>
+                        <span class="report-pill">Tipo: ${escapeHtml(scopeModalState.type === 'region' ? 'RegiÃ£o' : 'Cidade')}</span>
+                        <span class="report-pill">Recorte: ${escapeHtml(scopeModalState.name || 'TerritÃ³rio')}</span>
                         <span class="report-pill">Gerado em: ${escapeHtml(generatedAt)}</span>
                     </div>
                 </div>
@@ -1607,7 +1615,7 @@
 
         const reportWindow = window.open('', '_blank', 'width=1280,height=900');
         if (!reportWindow) {
-            alert('Não foi possível abrir o relatório de impressão. Verifique se o navegador bloqueou a janela.');
+            alert('NÃ£o foi possÃ­vel abrir o relatÃ³rio de impressÃ£o. Verifique se o navegador bloqueou a janela.');
             return;
         }
 
@@ -1720,7 +1728,7 @@
             return 'Grande';
         }
 
-        return 'Médio';
+        return 'MÃ©dio';
     }
 
     function formatAgendaDate(value) {
@@ -1742,7 +1750,7 @@
             return 'xm andamento';
         }
         if (status === 'done') {
-            return 'Concluída';
+            return 'ConcluÃ­da';
         }
         if (status === 'archived') {
             return 'Arquivada';
@@ -1762,12 +1770,12 @@
             return 'Urgente';
         }
 
-        return 'Média';
+        return 'MÃ©dia';
     }
 
     function agendaFilterLabel(filter) {
         if (filter === 'done') {
-            return 'Concluídas';
+            return 'ConcluÃ­das';
         }
         if (filter === 'archived') {
             return 'Arquivadas';
@@ -1809,14 +1817,14 @@
 
         if (!rows.length) {
             const emptyMessage = filter === 'done'
-                ? 'Ainda não há tarefas concluídas.'
+                ? 'Ainda nÃ£o hÃ¡ tarefas concluÃ­das.'
                 : filter === 'archived'
-                    ? 'Ainda não há tarefas arquivadas.'
-                    : 'Não há tarefas pendentes no momento.';
+                    ? 'Ainda nÃ£o hÃ¡ tarefas arquivadas.'
+                    : 'NÃ£o hÃ¡ tarefas pendentes no momento.';
 
-            agendaPreviewArea.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)} Use outro botão para trocar a visão da agenda.</div>`;
+            agendaPreviewArea.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)} Use outro botÃ£o para trocar a visÃ£o da agenda.</div>`;
             if (agendaPreviewNote) {
-                agendaPreviewNote.textContent = 'Nenhuma tarefa para esta visão.';
+                agendaPreviewNote.textContent = 'Nenhuma tarefa para esta visÃ£o.';
             }
             return;
         }
@@ -1828,7 +1836,7 @@
             const statusClass = String(item.status || 'open');
             const city = escapeHtml(item.municipality || '-');
             const title = escapeHtml(item.title || 'Tarefa');
-            const leader = item.leader_name ? ` • ${escapeHtml(item.leader_name)}` : '';
+            const leader = item.leader_name ? ` â€¢ ${escapeHtml(item.leader_name)}` : '';
             html.push('<article class="agenda-mini-card agenda-mini-card--' + escapeHtml(statusClass) + '">');
             html.push('  <div class="agenda-mini-card__main">');
             html.push('    <button type="button" class="agenda-mini-title agenda-open-btn" data-agenda-id="' + escapeHtml(item.id || '') + '">' + title + '</button>');
@@ -1893,18 +1901,18 @@
 
         if (agendaModalSubtitle) {
             const bits = [
-                item.municipality || 'Município',
-                item.leader_name || 'Sem liderança',
+                item.municipality || 'MunicÃ­pio',
+                item.leader_name || 'Sem lideranÃ§a',
                 agendaStatusLabel(item.status || 'open'),
             ].filter(Boolean);
-            agendaModalSubtitle.textContent = bits.join(' • ');
+            agendaModalSubtitle.textContent = bits.join(' â€¢ ');
         }
 
         if (agendaModalSummary) {
             agendaModalSummary.innerHTML = [
                 `<span class="table-pill">${escapeHtml(formatAgendaDate(item.due_date || ''))}</span>`,
-                `<span class="table-pill">${escapeHtml(item.municipality || 'Sem município')}</span>`,
-                `<span class="table-pill">${escapeHtml(item.leader_name || 'Sem liderança')}</span>`,
+                `<span class="table-pill">${escapeHtml(item.municipality || 'Sem municÃ­pio')}</span>`,
+                `<span class="table-pill">${escapeHtml(item.leader_name || 'Sem lideranÃ§a')}</span>`,
                 `<span class="table-pill">${escapeHtml(agendaStatusLabel(item.status || 'open'))}</span>`,
                 `<span class="table-pill">${escapeHtml(agendaPriorityLabel(item.priority || 'medium'))}</span>`,
             ].join('');
@@ -1984,6 +1992,7 @@
 
     function closeAllModals() {
         closeLeaderModal(false);
+        closeExternalLeaderModal(false);
         closeScopeModal(false);
         closeCityComparisonModal(false);
         closeAgendaModal(false);
@@ -2058,6 +2067,11 @@
         set('sourceSq', dataset.sq || '');
         set('sourceNrVotavel', dataset.nrVotavel || '');
         set('sourceTurno', dataset.turno || '1');
+        setLeaderMode('add', { scroll: false });
+        if (externalLeaderModal) {
+            openExternalLeaderModal();
+            return;
+        }
 
         const leaderAddBody = document.getElementById('leaderAddBody');
         const leaderAddToggle = document.querySelector('[data-toggle-target="leaderAddBody"]');
@@ -2077,11 +2091,11 @@
         }
 
         leaderModalSummary.innerHTML = [
-            `<span class="table-pill">${escapeHtml(leader.region_name || 'Sem região')}</span>`,
-            `<span class="table-pill">${escapeHtml(leader.municipality || 'Sem município')}</span>`,
+            `<span class="table-pill">${escapeHtml(leader.region_name || 'Sem regiÃ£o')}</span>`,
+            `<span class="table-pill">${escapeHtml(leader.municipality || 'Sem municÃ­pio')}</span>`,
             `<span class="table-pill">${formatNumber(leader.leader_votes_2024 || 0)} votos</span>`,
             `<span class="table-pill">${formatNumber(leader.margin_percent || 0)}% margem</span>`,
-            `<span class="table-pill">${formatNumber(leader.transfer_rate || 0)}% transferência</span>`,
+            `<span class="table-pill">${formatNumber(leader.transfer_rate || 0)}% transferÃªncia</span>`,
             `<span class="table-pill">${escapeHtml(formatSizeLabel(leader.size_class || 'medium'))}</span>`,
         ].join('');
     }
@@ -2109,11 +2123,11 @@
         };
 
         if (leaderModalTitle) {
-            leaderModalTitle.textContent = leader.leader_display_name || leader.leader_name || 'Liderança';
+            leaderModalTitle.textContent = leader.leader_display_name || leader.leader_name || 'LideranÃ§a';
         }
 
         if (leaderModalSubtitle) {
-            leaderModalSubtitle.textContent = `${leader.municipality || 'Município'} • ${leader.leader_cargo || 'Cargo'}${leader.leader_party ? ` • ${leader.leader_party}` : ''}`;
+            leaderModalSubtitle.textContent = `${leader.municipality || 'MunicÃ­pio'} â€¢ ${leader.leader_cargo || 'Cargo'}${leader.leader_party ? ` â€¢ ${leader.leader_party}` : ''}`;
         }
 
         set('modalLeaderId', leader.id ?? '');
@@ -2158,6 +2172,82 @@
         }
     }
 
+    function setLeaderMode(mode, options = {}) {
+        const normalizedMode = String(mode || '').toLowerCase() === 'consult' ? 'consult' : 'add';
+        const shouldScroll = options.scroll !== false;
+
+        if (!leaderModeButtons.length || !leaderModePanels.length) {
+            return;
+        }
+
+        leaderModeButtons.forEach((button) => {
+            const isActive = String(button.dataset.leaderModeTarget || '') === normalizedMode;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        leaderModePanels.forEach((panel) => {
+            const isActive = String(panel.dataset.leaderModePanel || '') === normalizedMode;
+            panel.hidden = !isActive;
+        });
+
+        if (shouldScroll) {
+            const activePanel = leaderModePanels.find((panel) => !panel.hidden);
+            if (activePanel) {
+                activePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    }
+
+    function setOptionsMode(mode) {
+        const requestedMode = String(mode || '').toLowerCase();
+        const normalizedMode = ['campaign', 'settings', 'security', 'delete'].includes(requestedMode) ? requestedMode : 'campaign';
+
+        if (!optionsModeButtons.length || !optionsModePanels.length) {
+            return;
+        }
+
+        optionsModeButtons.forEach((button) => {
+            const isActive = String(button.dataset.optionsModeTarget || '') === normalizedMode;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        optionsModePanels.forEach((panel) => {
+            const isActive = String(panel.dataset.optionsModePanel || '') === normalizedMode;
+            panel.hidden = !isActive;
+        });
+    }
+
+    function openExternalLeaderModal() {
+        if (!externalLeaderModal) {
+            return;
+        }
+
+        closeLeaderModal(false);
+        closeCityComparisonModal(false);
+        closeScopeModal(false);
+        closeAgendaModal(false);
+        closeAgendaListModal(false);
+        closeStudyModal(false);
+
+        externalLeaderModal.hidden = false;
+        externalLeaderModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+    }
+
+    function closeExternalLeaderModal(updateBody = true) {
+        if (!externalLeaderModal) {
+            return;
+        }
+
+        externalLeaderModal.hidden = true;
+        externalLeaderModal.setAttribute('aria-hidden', 'true');
+        if (updateBody) {
+            document.body.classList.remove('modal-open');
+        }
+    }
+
     function toggleCollapsiblePanel(targetId, triggerButton) {
         const target = document.getElementById(targetId);
         if (!target) {
@@ -2181,6 +2271,28 @@
     function focusHashTarget() {
         const hashId = decodeURIComponent(String(window.location.hash || '').replace(/^#/, ''));
         if (!hashId) {
+            return;
+        }
+
+        if (['leaderSearchBody', 'leaderModeAdd', 'leaderExternalAdd', 'leaderAddBody'].includes(hashId)) {
+            setLeaderMode('add', { scroll: false });
+            if (hashId === 'leaderExternalAdd' || hashId === 'leaderAddBody') {
+                openExternalLeaderModal();
+                return;
+            }
+            const addPanel = document.getElementById('leaderSearchBody');
+            if (addPanel) {
+                addPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+        }
+
+        if (['leadersBody', 'leaderModeConsult'].includes(hashId)) {
+            setLeaderMode('consult', { scroll: false });
+            const consultPanel = document.getElementById('leadersBody');
+            if (consultPanel) {
+                consultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
             return;
         }
 
@@ -2211,7 +2323,11 @@
             baselineBody: 0,
             settingsBody: 1,
             leaderSearchBody: 2,
+            leaderModeAdd: 2,
+            leaderModeConsult: 2,
+            leaderExternalAdd: 2,
             leaderAddBody: 2,
+            leadersBody: 2,
             agendaPanel: 3,
             reportsPanel: 4,
         };
@@ -2315,7 +2431,7 @@
         }
 
         if (onboardingStepTitle) {
-            onboardingStepTitle.textContent = step.title || 'Guia rápido';
+            onboardingStepTitle.textContent = step.title || 'Guia rÃ¡pido';
         }
 
         if (onboardingStepCopy) {
@@ -2415,12 +2531,22 @@
 
     syncOnboardingGuide();
 
-    async function searchLeaders() {
+    async function searchLeaders(options = {}) {
         if (!resultsBody) {
             return;
         }
 
+        const fromTyping = Boolean(options.fromTyping);
         const cargoValue = getLeaderSearchCargo();
+        const municipalityValue = document.getElementById('searchMunicipality')?.value || '';
+        const normalizedQuery = String(searchQueryInput?.value || '').trim();
+
+        if (fromTyping && normalizedQuery.length < 2) {
+            resultsBody.innerHTML = '<tr><td colspan="7" class="muted">Digite pelo menos 2 letras para buscar nomes.</td></tr>';
+            resetLeaderBatchSelectionState();
+            return;
+        }
+
         if (leaderBatchCargo) {
             leaderBatchCargo.value = cargoValue;
         }
@@ -2428,16 +2554,23 @@
         resultsBody.innerHTML = '<tr><td colspan="7" class="muted">Buscando...</td></tr>';
         resetLeaderBatchSelectionState();
 
+        if (leaderSearchAbortController) {
+            leaderSearchAbortController.abort();
+        }
+        leaderSearchAbortController = new AbortController();
+
         const params = new URLSearchParams({
             action: 'search_leaders',
             cargo: cargoValue,
-            municipio: document.getElementById('searchMunicipality')?.value || '',
-            query: document.getElementById('searchQuery')?.value || '',
-            turno: document.getElementById('searchTurno')?.value || '1',
+            municipio: municipalityValue,
+            query: normalizedQuery,
         });
 
         try {
-            const response = await fetch('api_premium.php?' + params.toString(), { cache: 'no-store' });
+            const response = await fetch('api_premium.php?' + params.toString(), {
+                cache: 'no-store',
+                signal: leaderSearchAbortController.signal,
+            });
             const data = await response.json();
             const rows = data.results || [];
 
@@ -2495,14 +2628,47 @@
             `).join('');
             updateLeaderBatchSelectionState();
         } catch (error) {
+            if (error && error.name === 'AbortError') {
+                return;
+            }
             console.error(error);
             resultsBody.innerHTML = '<tr><td colspan="7" class="muted">Falha ao buscar lideranças.</td></tr>';
             resetLeaderBatchSelectionState();
+        } finally {
+            leaderSearchAbortController = null;
         }
     }
 
     if (searchBtn) {
-        searchBtn.addEventListener('click', searchLeaders);
+        searchBtn.addEventListener('click', () => {
+            searchLeaders({ fromTyping: false });
+        });
+    }
+
+    function scheduleTypedLeaderSearch() {
+        if (!searchQueryInput) {
+            return;
+        }
+
+        if (leaderSearchDebounceId) {
+            window.clearTimeout(leaderSearchDebounceId);
+        }
+
+        leaderSearchDebounceId = window.setTimeout(() => {
+            searchLeaders({ fromTyping: true });
+        }, 280);
+    }
+
+    if (searchQueryInput) {
+        searchQueryInput.addEventListener('input', scheduleTypedLeaderSearch);
+    }
+
+    const searchMunicipalityInput = document.getElementById('searchMunicipality');
+    if (searchMunicipalityInput) {
+        searchMunicipalityInput.addEventListener('change', () => {
+            const hasTypedQuery = String(searchQueryInput?.value || '').trim().length >= 2;
+            searchLeaders({ fromTyping: hasTypedQuery });
+        });
     }
 
     if (resultsBody) {
@@ -2553,7 +2719,7 @@
             const payload = buildLeaderBatchPayload();
             if (!payload.length) {
                 event.preventDefault();
-                alert('Selecione pelo menos uma liderança antes de adicionar ao escritório.');
+                alert('Selecione pelo menos uma lideranÃ§a antes de adicionar ao escritÃ³rio.');
                 return;
             }
 
@@ -2561,8 +2727,8 @@
                 leaderBatchPayload.value = JSON.stringify(payload);
             }
 
-            const countLabel = payload.length === 1 ? '1 liderança' : `${payload.length} lideranças`;
-            const confirmed = window.confirm(`Adicionar ${countLabel} usando os pesos padrão da campanha?`);
+            const countLabel = payload.length === 1 ? '1 lideranÃ§a' : `${payload.length} lideranÃ§as`;
+            const confirmed = window.confirm(`Adicionar ${countLabel} usando os pesos padrÃ£o da campanha?`);
             if (!confirmed) {
                 event.preventDefault();
                 return;
@@ -2643,7 +2809,7 @@
 
             if (!Number.isFinite(transferRate) || transferRate < 0 || transferRate > 100) {
                 event.preventDefault();
-                alert('Informe uma transferência entre 0 e 100.');
+                alert('Informe uma transferÃªncia entre 0 e 100.');
                 return;
             }
 
@@ -2651,8 +2817,8 @@
             if (!payload.length) {
                 event.preventDefault();
                 alert(scope === 'all'
-                    ? 'Não há lideranças na campanha para atualizar.'
-                    : 'Selecione pelo menos uma liderança antes de alterar a transferência.');
+                    ? 'NÃ£o hÃ¡ lideranÃ§as na campanha para atualizar.'
+                    : 'Selecione pelo menos uma lideranÃ§a antes de alterar a transferÃªncia.');
                 return;
             }
 
@@ -2664,11 +2830,11 @@
             }
 
             const scopeLabel = scope === 'all'
-                ? 'todas as lideranças da campanha'
+                ? 'todas as lideranÃ§as da campanha'
                 : scope === 'visible'
-                    ? 'as lideranças visíveis'
-                    : 'as lideranças selecionadas';
-            const countLabel = payload.length === 1 ? '1 liderança' : `${payload.length} lideranças`;
+                    ? 'as lideranÃ§as visÃ­veis'
+                    : 'as lideranÃ§as selecionadas';
+            const countLabel = payload.length === 1 ? '1 lideranÃ§a' : `${payload.length} lideranÃ§as`;
             const confirmed = window.confirm(`Aplicar ${formatNumber(transferRate)}% para ${countLabel} (${scopeLabel})?`);
             if (!confirmed) {
                 event.preventDefault();
@@ -2693,7 +2859,7 @@
             const payload = buildActiveLeaderBulkDeletePayload();
             if (!payload.length) {
                 event.preventDefault();
-                alert('Selecione pelo menos uma liderança antes de excluir.');
+                alert('Selecione pelo menos uma lideranÃ§a antes de excluir.');
                 return;
             }
 
@@ -2701,14 +2867,16 @@
                 leaderBulkDeletePayload.value = JSON.stringify(payload);
             }
 
-            const countLabel = payload.length === 1 ? '1 liderança' : `${payload.length} lideranças`;
-            const confirmed = window.confirm(`Excluir ${countLabel} da campanha? Esta ação não pode ser desfeita.`);
+            const countLabel = payload.length === 1 ? '1 lideranÃ§a' : `${payload.length} lideranÃ§as`;
+            const confirmed = window.confirm(`Excluir ${countLabel} da campanha? Esta aÃ§Ã£o nÃ£o pode ser desfeita.`);
             if (!confirmed) {
                 event.preventDefault();
             }
         });
     }
 
+    setLeaderMode('add', { scroll: false });
+    setOptionsMode('campaign');
     applyActiveLeadersFilters();
     focusHashTarget();
 
@@ -2732,6 +2900,25 @@
         const studyButton = event.target.closest('[data-study-open]');
         if (studyButton) {
             openStudyModal();
+            return;
+        }
+
+        const leaderModeButton = event.target.closest('[data-leader-mode-target]');
+        if (leaderModeButton) {
+            setLeaderMode(leaderModeButton.dataset.leaderModeTarget || 'add');
+            return;
+        }
+
+        const optionsModeButton = event.target.closest('[data-options-mode-target]');
+        if (optionsModeButton) {
+            setOptionsMode(optionsModeButton.dataset.optionsModeTarget || 'campaign');
+            return;
+        }
+
+        const externalLeaderButton = event.target.closest('[data-external-leader-open]');
+        if (externalLeaderButton) {
+            setLeaderMode('add', { scroll: false });
+            openExternalLeaderModal();
             return;
         }
 
@@ -2799,6 +2986,7 @@
             event.key === 'Escape' &&
             (
                 (leaderModal && !leaderModal.hidden) ||
+                (externalLeaderModal && !externalLeaderModal.hidden) ||
                 (scopeModal && !scopeModal.hidden) ||
                 (cityComparisonModal && !cityComparisonModal.hidden) ||
                 (agendaModal && !agendaModal.hidden) ||

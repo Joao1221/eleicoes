@@ -2142,6 +2142,16 @@
             text-overflow: clip;
         }
 
+        .leaders-table-leader-cargo {
+            display: block;
+            color: var(--muted);
+            font-size: 0.62rem;
+            line-height: 1.25;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+        }
+
         .scope-summary-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2414,7 +2424,7 @@
             display: block;
             min-width: 0;
             flex: 1 1 auto;
-            font-size: 0.74rem;
+            font-size: 0.72rem;
             font-weight: 700;
             line-height: 1.2;
             white-space: normal;
@@ -2713,6 +2723,15 @@
         .leader-search-table tbody td:first-child {
             width: 54px;
             text-align: center;
+        }
+
+        .leader-search-scroll {
+            max-height: 520px;
+            overflow-y: auto;
+        }
+
+        .leader-search-scroll--compact {
+            max-height: 440px;
         }
 
         .leader-search-row.is-selected {
@@ -3480,6 +3499,70 @@
             margin-bottom: 12px;
         }
 
+        .leaders-search-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            width: 100%;
+        }
+
+        .leaders-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .leaders-tab-btn {
+            appearance: none;
+            border: 1px solid var(--line);
+            background: rgba(255,255,255,0.04);
+            color: var(--text);
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+        }
+
+        .leaders-tab-btn:hover {
+            border-color: var(--accent);
+        }
+
+        .leaders-tab-btn.is-active {
+            background: rgba(110, 243, 197, 0.16);
+            border-color: rgba(110, 243, 197, 0.34);
+            color: var(--accent);
+        }
+
+        html[data-theme="light"] .leaders-tab-btn.is-active {
+            background: rgba(15, 118, 110, 0.10);
+            border-color: rgba(15, 118, 110, 0.28);
+            color: #0f766e;
+        }
+
+        .leaders-tab-panel[hidden] {
+            display: none !important;
+        }
+
+        .leaders-consult-head {
+            margin-bottom: 8px;
+        }
+
+        .leaders-consult-head h2 {
+            margin: 0;
+            font-size: 1.18rem;
+        }
+
+        .leaders-external-entry {
+            margin-top: 14px;
+            display: grid;
+            gap: 6px;
+            justify-items: flex-start;
+        }
+
+        .leaders-external-entry .muted {
+            margin: 0;
+        }
+
         .empty-state {
             color: var(--muted);
             padding: 16px;
@@ -3850,6 +3933,15 @@
 
             .campaign-selection-actions .campaign-delete-form {
                 width: 100%;
+            }
+
+            .leaders-tabs {
+                flex-direction: column;
+            }
+
+            .leaders-tab-btn {
+                width: 100%;
+                text-align: left;
             }
 
             .leader-batch-toolbar {

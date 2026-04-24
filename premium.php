@@ -437,7 +437,7 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
         $html[] = '      <div class="leaders-table-toolbar__bulk-title">Alterar transferência em lote</div>';
         $html[] = '      <div class="leaders-table-toolbar__bulk-sub">Defina um novo percentual e aplique aos registros selecionados, aos visíveis ou a toda a campanha.</div>';
         $html[] = '    </div>';
-        $html[] = '    <div class="leaders-table-toolbar__bulk-sub" hidden id="leaderBulkTransferSub">Defina um novo percentual e aplique aos registros selecionados, aos visÃ­veis ou a toda a campanha.</div>';
+        $html[] = '    <div class="leaders-table-toolbar__bulk-sub" hidden id="leaderBulkTransferSub">Defina um novo percentual e aplique aos registros selecionados, aos visíveis ou a toda a campanha.</div>';
         $html[] = '    <button class="btn ghost btn-small" type="button" data-toggle-target="leaderBulkTransferForm" aria-controls="leaderBulkTransferForm" aria-expanded="false">Abrir</button>';
         $html[] = '    <form method="post" action="premium_actions.php" id="leaderBulkTransferForm" class="leaders-table-bulk-form leader-bulk-transfer-form" hidden>';
         $html[] = '      <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
@@ -531,6 +531,9 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
         $html[] = '<td class="leaders-table-city-cell"><span class="leaders-table-city">' . premium_escape_html($municipality) . '</span></td>';
         $html[] = '<td class="leaders-table-leader-cell"><span class="leaders-table-leader-content">';
         $html[] = '<button type="button" class="leader-open-btn leader-open-btn--compact" data-leader-id="' . $leaderId . '" title="' . premium_escape_html($leaderName) . '">' . premium_escape_html($leaderName) . '</button>';
+        if ($leaderCargo !== '') {
+            $html[] = '<span class="leaders-table-leader-cargo">' . premium_escape_html($leaderCargo) . '</span>';
+        }
         if ($leaderParty !== '') {
             $html[] = '<span class="leaders-table-leader-meta">' . premium_escape_html($leaderParty) . '</span>';
         }
@@ -2018,217 +2021,231 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
             <?php endif; ?>
 
             <?php if ($activeTab === 'opcoes'): ?>
-                <?php $dashboardPanelsClass = 'grid-2 dashboard-panels-split'; ?>
-                <section class="<?= premium_escape_html($dashboardPanelsClass) ?>">
-                <div class="panel panel-tint panel-tint--baseline" id="baselinePanel">
+                <?php
+                    $campaignCandidateNumber = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
+                    if ($campaignCandidateNumber === null) {
+                        $campaignCandidateNumber = premium_parse_candidate_number($baseline['candidate_number'] ?? null);
+                    }
+                ?>
+                <section class="panel">
                     <div class="section-title">
                         <div>
-                            <div class="eyebrow">Dados da campanha</div>
-                            <h2>Dados da campanha</h2>
+                            <div class="eyebrow">Opções avançadas</div>
+                            <h2>Gerenciar conta e campanha</h2>
                         </div>
-                        <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="baselineBody" aria-controls="baselineBody" aria-expanded="false">Abrir</button>
                     </div>
-                    <div id="baselineBody" hidden>
-                    <?php
-                        $campaignCandidateNumber = premium_parse_candidate_number($campaign['candidate_number'] ?? null);
-                        if ($campaignCandidateNumber === null) {
-                            $campaignCandidateNumber = premium_parse_candidate_number($baseline['candidate_number'] ?? null);
-                        }
-                    ?>
-                    <form method="post" action="premium_actions.php" class="campaign-form baseline-form" enctype="multipart/form-data">
-                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                        <input type="hidden" name="action" value="update_campaign">
-                        <input type="hidden" name="redirect_tab" value="opcoes">
-                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
-                        <div class="form-grid">
-                            <label>Nome da campanha
-                                <input type="text" name="campaign_name" value="<?= premium_escape_html((string) ($campaign['campaign_name'] ?? '')) ?>" required>
-                            </label>
-                            <label>Candidato
-                                <input type="text" name="candidate_name" value="<?= premium_escape_html((string) ($campaign['candidate_name'] ?? '')) ?>" required>
-                            </label>
-                            <label>Cargo
-                                <input type="text" name="candidate_cargo" value="<?= premium_escape_html((string) ($campaign['candidate_cargo'] ?? '')) ?>" required>
-                            </label>
-                            <label>Nº campanha 2026
-                                <input type="text" name="candidate_number" inputmode="numeric" value="<?= premium_escape_html(premium_fmt_candidate_number_plain($campaignCandidateNumber)) ?>" placeholder="Opcional">
-                            </label>
-                            <label>Ano-base
-                                <input type="number" name="baseline_year" value="<?= (int) ($campaign['baseline_year'] ?? 2022) ?>" min="2018" step="4">
-                            </label>
-                            <label>Município-base
-                                <input type="text" name="current_municipio" value="<?= premium_escape_html((string) ($campaign['current_municipio'] ?? '')) ?>" placeholder="Cidade principal, se houver">
-                            </label>
-                        </div>
-                        <label style="margin-top:6px;">Região-base
-                            <input type="text" name="current_region" value="<?= premium_escape_html((string) ($campaign['current_region'] ?? '')) ?>" placeholder="Região principal, se houver">
-                        </label>
-                        <div class="baseline-notes-photo">
-                            <label>Notas
-                                <textarea name="notes" rows="3"><?= premium_escape_html((string) ($campaign['notes'] ?? '')) ?></textarea>
-                            </label>
-                            <label>Foto do candidato
-                                <input type="file" name="candidate_photo" accept="image/jpeg,image/png,image/webp">
-                                <span class="field-help">JPG, PNG ou WEBP ate 3 MB. A foto aparece no card Escritorio ativo.</span>
-                            </label>
-                        </div>
-                        <div class="action-row">
-                            <button class="btn primary" type="submit">Salvar campanha</button>
-                        </div>
-                    </form>
-                    </div>
-                </div>
 
-                <div class="panel panel-tint panel-tint--model" id="settingsPanel">
-                    <div class="section-title">
-                        <div>
-                            <div class="eyebrow">Modelo</div>
-                            <h2>Peso dos cenários</h2>
-                            <p class="panel-inline-link">
-                                <button type="button" class="panel-inline-link__btn" data-study-open>Ler base técnica</button>
-                            </p>
-                        </div>
-                        <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="settingsBody" aria-controls="settingsBody" aria-expanded="false">Abrir</button>
+                    <div class="leaders-tabs" role="tablist" aria-label="Fluxo de opções avançadas">
+                        <button class="leaders-tab-btn is-active" type="button" id="optionsModeCampaign"
+                            data-options-mode-target="campaign" role="tab" aria-controls="optionsCampaignBody"
+                            aria-selected="true">Dados da campanha</button>
+                        <button class="leaders-tab-btn" type="button" id="optionsModeSettings"
+                            data-options-mode-target="settings" role="tab" aria-controls="optionsSettingsBody"
+                            aria-selected="false">Pesos do modelo</button>
+                        <button class="leaders-tab-btn" type="button" id="optionsModeSecurity"
+                            data-options-mode-target="security" role="tab" aria-controls="optionsSecurityBody"
+                            aria-selected="false">Alterar senha</button>
+                        <button class="leaders-tab-btn" type="button" id="optionsModeDelete"
+                            data-options-mode-target="delete" role="tab" aria-controls="optionsDeleteBody"
+                            aria-selected="false">Excluir campanha</button>
                     </div>
-                    <div id="settingsBody" hidden>
-                    <p class="panel-note">Cada peso ajusta uma parte da projeção. A base de <?= premium_escape_html($campaignBaselineLabel) ?> fica como comparativo e só entra no fallback onde não houver liderança cadastrada.</p>
-                    <form method="post" action="premium_actions.php" class="settings-form">
-                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                        <input type="hidden" name="action" value="save_settings">
-                        <input type="hidden" name="redirect_tab" value="opcoes">
-                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
-                        <div class="form-grid">
-                            <label>Fallback <?= premium_escape_html($campaignBaselineLabel) ?>
-                                <input type="number" name="baseline_retention" value="<?= premium_escape_html((string) ($settings['baseline_retention'] ?? 0.30)) ?>" step="0.01" min="0" max="1">
-                                <span class="field-help">Usado apenas quando o município ou a região não tem lideranças cadastradas; nesse caso, a base histórica vira referência de projeção.</span>
-                            </label>
-                            <label>Transferência %
-                                <input type="number" name="transfer_rate_default" value="<?= premium_escape_html((string) ($settings['transfer_rate_default'] ?? 30)) ?>" step="0.01" min="0" max="100">
-                                <span class="field-help">Percentual médio da votação de uma liderança que pode migrar para o candidato apoiado.</span>
-                            </label>
-                            <label>Bônus alinhamento
-                                <input type="number" name="alignment_bonus" value="<?= premium_escape_html((string) ($settings['alignment_bonus'] ?? 0.20)) ?>" step="0.01" min="0" max="1">
-                                <span class="field-help">Reforço aplicado quando a liderança está alinhada ao executivo estadual ou ao grupo dominante.</span>
-                            </label>
-                            <label>Peso visibilidade
-                                <input type="number" name="visibility_weight" value="<?= premium_escape_html((string) ($settings['visibility_weight'] ?? 0.12)) ?>" step="0.01" min="0" max="1">
-                                <span class="field-help">Quanto a presença pública e o reconhecimento da liderança aumentam a chance de transferência.</span>
-                            </label>
-                            <label>Peso investimento
-                                <input type="number" name="investment_weight" value="<?= premium_escape_html((string) ($settings['investment_weight'] ?? 0.10)) ?>" step="0.01" min="0" max="1">
-                                <span class="field-help">Quanto obras, entregas e ações visíveis ampliam o valor político da liderança.</span>
-                            </label>
-                            <label>Peso margem
-                                <input type="number" name="margin_weight" value="<?= premium_escape_html((string) ($settings['margin_weight'] ?? 0.15)) ?>" step="0.01" min="0" max="1">
-                                <span class="field-help">Maior margem de vitória significa mais folga política e maior potencial de transferência.</span>
-                            </label>
-                            <label>Bônus cidade pequena
-                                <input type="number" name="small_city_bonus" value="<?= premium_escape_html((string) ($settings['small_city_bonus'] ?? 0.15)) ?>" step="0.01" min="0" max="1">
-                                <span class="field-help">Peso extra para municípios menores, onde a relação entre eleitor e liderança é mais direta.</span>
-                            </label>
-                            <label>Bônus cidade média
-                                <input type="number" name="medium_city_bonus" value="<?= premium_escape_html((string) ($settings['medium_city_bonus'] ?? 0.08)) ?>" step="0.01" min="0" max="1">
-                                <span class="field-help">Ajuste intermediário para cidades de porte médio, com rede territorial mais distribuída.</span>
-                            </label>
-                            <label>Bônus cidade grande
-                                <input type="number" name="large_city_bonus" value="<?= premium_escape_html((string) ($settings['large_city_bonus'] ?? 0.00)) ?>" step="0.01" min="0" max="1">
-                                <span class="field-help">Ajuste para grandes centros, onde a transferência costuma ser mais diluída.</span>
-                            </label>
-                            <label>Cenário conservador
-                                <input type="number" name="scenario_conservative" value="<?= premium_escape_html((string) ($settings['scenario_conservative'] ?? 0.90)) ?>" step="0.01" min="0" max="2">
-                                <span class="field-help">Multiplicador de cautela para uma leitura mais dura da conversão em votos.</span>
-                            </label>
-                            <label>Cenário base
-                                <input type="number" name="scenario_base" value="<?= premium_escape_html((string) ($settings['scenario_base'] ?? 1.00)) ?>" step="0.01" min="0" max="2">
-                                <span class="field-help">Leitura principal do modelo, usada como referência da campanha.</span>
-                            </label>
-                            <label>Cenário otimista
-                                <input type="number" name="scenario_optimistic" value="<?= premium_escape_html((string) ($settings['scenario_optimistic'] ?? 1.12)) ?>" step="0.01" min="0" max="3">
-                                <span class="field-help">Hipótese de maior eficiência da campanha e da rede de lideranças.</span>
-                            </label>
-                            <label>Pequeno até votos
-                                <input type="number" name="small_city_threshold" value="<?= premium_escape_html((string) ($settings['small_city_threshold'] ?? 10000)) ?>" step="1" min="0">
-                                <span class="field-help">Limite de votos totais para classificar um município como pequeno no modelo.</span>
-                            </label>
-                            <label>Médio até votos
-                                <input type="number" name="medium_city_threshold" value="<?= premium_escape_html((string) ($settings['medium_city_threshold'] ?? 30000)) ?>" step="1" min="0">
-                                <span class="field-help">Limite superior para classificar um município como médio antes de virar grande.</span>
-                            </label>
-                        </div>
-                        <div class="action-row">
-                            <button class="btn primary" type="submit">Salvar pesos</button>
-                        </div>
-                    </form>
-                    </div>
-                </div>
-            </section>
-            <?php endif; ?>
 
-            <?php if ($activeTab === 'opcoes'): ?>
-            <section class="grid-2 premium-options-grid">
-                <div class="panel">
-                    <div class="section-title">
-                        <div>
-                            <div class="eyebrow">Segurança</div>
-                            <h2>Alterar senha</h2>
-                        </div>
+                    <div id="optionsCampaignBody" class="leaders-tab-panel" data-options-mode-panel="campaign"
+                        role="tabpanel" aria-labelledby="optionsModeCampaign">
+                        <form method="post" action="premium_actions.php" class="campaign-form baseline-form"
+                            enctype="multipart/form-data" id="baselineBody">
+                            <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                            <input type="hidden" name="action" value="update_campaign">
+                            <input type="hidden" name="redirect_tab" value="opcoes">
+                            <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                            <div class="form-grid">
+                                <label>Nome da campanha
+                                    <input type="text" name="campaign_name"
+                                        value="<?= premium_escape_html((string) ($campaign['campaign_name'] ?? '')) ?>" required>
+                                </label>
+                                <label>Candidato
+                                    <input type="text" name="candidate_name"
+                                        value="<?= premium_escape_html((string) ($campaign['candidate_name'] ?? '')) ?>" required>
+                                </label>
+                                <label>Cargo
+                                    <input type="text" name="candidate_cargo"
+                                        value="<?= premium_escape_html((string) ($campaign['candidate_cargo'] ?? '')) ?>" required>
+                                </label>
+                                <label>Nº campanha 2026
+                                    <input type="text" name="candidate_number" inputmode="numeric"
+                                        value="<?= premium_escape_html(premium_fmt_candidate_number_plain($campaignCandidateNumber)) ?>"
+                                        placeholder="Opcional">
+                                </label>
+                                <label>Ano-base
+                                    <input type="number" name="baseline_year"
+                                        value="<?= (int) ($campaign['baseline_year'] ?? 2022) ?>" min="2018" step="4">
+                                </label>
+                                <label>Município-base
+                                    <input type="text" name="current_municipio"
+                                        value="<?= premium_escape_html((string) ($campaign['current_municipio'] ?? '')) ?>"
+                                        placeholder="Cidade principal, se houver">
+                                </label>
+                            </div>
+                            <label style="margin-top:6px;">Região-base
+                                <input type="text" name="current_region"
+                                    value="<?= premium_escape_html((string) ($campaign['current_region'] ?? '')) ?>"
+                                    placeholder="Região principal, se houver">
+                            </label>
+                            <div class="baseline-notes-photo">
+                                <label>Notas
+                                    <textarea name="notes" rows="3"><?= premium_escape_html((string) ($campaign['notes'] ?? '')) ?></textarea>
+                                </label>
+                                <label>Foto do candidato
+                                    <input type="file" name="candidate_photo" accept="image/jpeg,image/png,image/webp">
+                                    <span class="field-help">JPG, PNG ou WEBP até 3 MB.</span>
+                                </label>
+                            </div>
+                            <div class="action-row">
+                                <button class="btn primary" type="submit">Salvar dados da campanha</button>
+                            </div>
+                        </form>
                     </div>
-                    <form method="post" action="premium_actions.php" class="campaign-form">
-                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                        <input type="hidden" name="action" value="change_password">
-                        <input type="hidden" name="redirect_tab" value="opcoes">
-                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
-                        <div class="form-grid compact">
-                            <label>Senha atual
-                                <input type="password" name="current_password" required>
-                            </label>
-                            <label>Nova senha
-                                <input type="password" name="new_password" minlength="8" required>
-                            </label>
-                            <label>Confirmar nova senha
-                                <input type="password" name="new_password_confirm" minlength="8" required>
-                            </label>
-                        </div>
-                        <div class="action-row">
-                            <button class="btn primary" type="submit">Salvar nova senha</button>
-                        </div>
-                    </form>
-                </div>
-                <div class="panel">
-                    <div class="section-title">
-                        <div>
-                            <div class="eyebrow">Risco</div>
-                            <h2>Excluir campanha</h2>
-                        </div>
+
+                    <div id="optionsSettingsBody" class="leaders-tab-panel" data-options-mode-panel="settings"
+                        role="tabpanel" aria-labelledby="optionsModeSettings" hidden>
+                        <p class="panel-note">Cada peso ajusta uma parte da projeção. A base de <?= premium_escape_html($campaignBaselineLabel) ?> fica como comparativo e só entra no fallback onde não houver liderança cadastrada.</p>
+                        <p class="panel-inline-link">
+                            <button type="button" class="panel-inline-link__btn" data-study-open>Ler base técnica</button>
+                        </p>
+                        <form method="post" action="premium_actions.php" class="settings-form">
+                            <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                            <input type="hidden" name="action" value="save_settings">
+                            <input type="hidden" name="redirect_tab" value="opcoes">
+                            <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                            <div class="form-grid">
+                                <label>Fallback <?= premium_escape_html($campaignBaselineLabel) ?>
+                                    <input type="number" name="baseline_retention" value="<?= premium_escape_html((string) ($settings['baseline_retention'] ?? 0.30)) ?>" step="0.01" min="0" max="1">
+                                    <span class="field-help">Usado apenas quando o município ou a região não tem lideranças cadastradas; nesse caso, a base histórica vira referência de projeção.</span>
+                                </label>
+                                <label>Transferência %
+                                    <input type="number" name="transfer_rate_default" value="<?= premium_escape_html((string) ($settings['transfer_rate_default'] ?? 30)) ?>" step="0.01" min="0" max="100">
+                                    <span class="field-help">Percentual médio da votação de uma liderança que pode migrar para o candidato apoiado.</span>
+                                </label>
+                                <label>Bônus alinhamento
+                                    <input type="number" name="alignment_bonus" value="<?= premium_escape_html((string) ($settings['alignment_bonus'] ?? 0.20)) ?>" step="0.01" min="0" max="1">
+                                    <span class="field-help">Reforço aplicado quando a liderança está alinhada ao executivo estadual ou ao grupo dominante.</span>
+                                </label>
+                                <label>Peso visibilidade
+                                    <input type="number" name="visibility_weight" value="<?= premium_escape_html((string) ($settings['visibility_weight'] ?? 0.12)) ?>" step="0.01" min="0" max="1">
+                                    <span class="field-help">Quanto a presença pública e o reconhecimento da liderança aumentam a chance de transferência.</span>
+                                </label>
+                                <label>Peso investimento
+                                    <input type="number" name="investment_weight" value="<?= premium_escape_html((string) ($settings['investment_weight'] ?? 0.10)) ?>" step="0.01" min="0" max="1">
+                                    <span class="field-help">Quanto obras, entregas e ações visíveis ampliam o valor político da liderança.</span>
+                                </label>
+                                <label>Peso margem
+                                    <input type="number" name="margin_weight" value="<?= premium_escape_html((string) ($settings['margin_weight'] ?? 0.15)) ?>" step="0.01" min="0" max="1">
+                                    <span class="field-help">Maior margem de vitória significa mais folga política e maior potencial de transferência.</span>
+                                </label>
+                                <label>Bônus cidade pequena
+                                    <input type="number" name="small_city_bonus" value="<?= premium_escape_html((string) ($settings['small_city_bonus'] ?? 0.15)) ?>" step="0.01" min="0" max="1">
+                                    <span class="field-help">Peso extra para municípios menores, onde a relação entre eleitor e liderança é mais direta.</span>
+                                </label>
+                                <label>Bônus cidade média
+                                    <input type="number" name="medium_city_bonus" value="<?= premium_escape_html((string) ($settings['medium_city_bonus'] ?? 0.08)) ?>" step="0.01" min="0" max="1">
+                                    <span class="field-help">Ajuste intermediário para cidades de porte médio, com rede territorial mais distribuída.</span>
+                                </label>
+                                <label>Bônus cidade grande
+                                    <input type="number" name="large_city_bonus" value="<?= premium_escape_html((string) ($settings['large_city_bonus'] ?? 0.00)) ?>" step="0.01" min="0" max="1">
+                                    <span class="field-help">Ajuste para grandes centros, onde a transferência costuma ser mais diluída.</span>
+                                </label>
+                                <label>Cenário conservador
+                                    <input type="number" name="scenario_conservative" value="<?= premium_escape_html((string) ($settings['scenario_conservative'] ?? 0.90)) ?>" step="0.01" min="0" max="2">
+                                    <span class="field-help">Multiplicador de cautela para uma leitura mais dura da conversão em votos.</span>
+                                </label>
+                                <label>Cenário base
+                                    <input type="number" name="scenario_base" value="<?= premium_escape_html((string) ($settings['scenario_base'] ?? 1.00)) ?>" step="0.01" min="0" max="2">
+                                    <span class="field-help">Leitura principal do modelo, usada como referência da campanha.</span>
+                                </label>
+                                <label>Cenário otimista
+                                    <input type="number" name="scenario_optimistic" value="<?= premium_escape_html((string) ($settings['scenario_optimistic'] ?? 1.12)) ?>" step="0.01" min="0" max="3">
+                                    <span class="field-help">Hipótese de maior eficiência da campanha e da rede de lideranças.</span>
+                                </label>
+                                <label>Pequeno até votos
+                                    <input type="number" name="small_city_threshold" value="<?= premium_escape_html((string) ($settings['small_city_threshold'] ?? 10000)) ?>" step="1" min="0">
+                                    <span class="field-help">Limite de votos totais para classificar um município como pequeno no modelo.</span>
+                                </label>
+                                <label>Médio até votos
+                                    <input type="number" name="medium_city_threshold" value="<?= premium_escape_html((string) ($settings['medium_city_threshold'] ?? 30000)) ?>" step="1" min="0">
+                                    <span class="field-help">Limite superior para classificar um município como médio antes de virar grande.</span>
+                                </label>
+                            </div>
+                            <div class="action-row">
+                                <button class="btn primary" type="submit">Salvar pesos</button>
+                            </div>
+                        </form>
                     </div>
-                    <p class="panel-note">A exclusão é permanente e remove dados da campanha, lideranças, agenda, pesos e histórico de projeção.</p>
-                    <form method="post" action="premium_actions.php" class="campaign-delete-form" onsubmit="return confirm('Excluir esta campanha permanentemente? Esta ação não pode ser desfeita.');">
-                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                        <input type="hidden" name="action" value="delete_campaign">
-                        <input type="hidden" name="redirect_tab" value="opcoes">
-                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
-                        <label>Digite EXCLUIR CAMPANHA para confirmar
-                            <input type="text" name="delete_confirmation" autocomplete="off" required>
-                        </label>
-                        <div class="action-row">
-                            <button class="btn danger" type="submit">Excluir campanha</button>
-                        </div>
-                    </form>
-                </div>
-            </section>
+
+                    <div id="optionsSecurityBody" class="leaders-tab-panel" data-options-mode-panel="security"
+                        role="tabpanel" aria-labelledby="optionsModeSecurity" hidden>
+                        <form method="post" action="premium_actions.php" class="campaign-form">
+                            <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                            <input type="hidden" name="action" value="change_password">
+                            <input type="hidden" name="redirect_tab" value="opcoes">
+                            <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                            <div class="form-grid compact">
+                                <label>Senha atual
+                                    <input type="password" name="current_password" required>
+                                </label>
+                                <label>Nova senha
+                                    <input type="password" name="new_password" minlength="8" required>
+                                </label>
+                                <label>Confirmar nova senha
+                                    <input type="password" name="new_password_confirm" minlength="8" required>
+                                </label>
+                            </div>
+                            <div class="action-row">
+                                <button class="btn primary" type="submit">Salvar nova senha</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div id="optionsDeleteBody" class="leaders-tab-panel" data-options-mode-panel="delete"
+                        role="tabpanel" aria-labelledby="optionsModeDelete" hidden>
+                        <p class="panel-note">A exclusão é permanente e remove dados da campanha, lideranças, agenda, pesos e histórico de projeção.</p>
+                        <form method="post" action="premium_actions.php" class="campaign-delete-form"
+                            onsubmit="return confirm('Excluir esta campanha permanentemente? Esta ação não pode ser desfeita.');">
+                            <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                            <input type="hidden" name="action" value="delete_campaign">
+                            <input type="hidden" name="redirect_tab" value="opcoes">
+                            <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                            <label>Digite EXCLUIR CAMPANHA para confirmar
+                                <input type="text" name="delete_confirmation" autocomplete="off" required>
+                            </label>
+                            <div class="action-row">
+                                <button class="btn danger" type="submit">Excluir campanha</button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
             <?php endif; ?>
 
             <?php if ($activeTab === 'liderancas'): ?>
             <section class="panel panel-tint panel-tint--leaders-search">
                 <div class="section-title">
                     <div>
-                        <div class="eyebrow">Lideranças 2024</div>
-                        <h2>Adicionar lideranças à campanha</h2>
+                        <div class="eyebrow">Lideranças</div>
+                        <h2>Gerenciar lideranças da campanha</h2>
                     </div>
-                    <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="leaderSearchBody" aria-controls="leaderSearchBody" aria-expanded="false">Abrir</button>
                 </div>
-                <div id="leaderSearchBody" hidden>
-                    <div class="search-grid">
+
+                <div class="leaders-tabs" role="tablist" aria-label="Fluxo de lideranças">
+                    <button class="leaders-tab-btn is-active" type="button" id="leaderModeAdd"
+                        data-leader-mode-target="add" role="tab" aria-controls="leaderSearchBody"
+                        aria-selected="true">Adicionar lideranças à campanha</button>
+                    <button class="leaders-tab-btn" type="button" id="leaderModeConsult"
+                        data-leader-mode-target="consult" role="tab" aria-controls="leadersBody"
+                        aria-selected="false">Consultar lideranças da campanha</button>
+                </div>
+
+                <div id="leaderSearchBody" class="leaders-tab-panel" data-leader-mode-panel="add" role="tabpanel"
+                    aria-labelledby="leaderModeAdd">
+                    <div class="search-grid leaders-search-grid">
                         <label>Cargo
                             <select id="searchCargo">
                                 <option value="Prefeito">Prefeito</option>
@@ -2244,17 +2261,11 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                         <label>Busca
                             <input type="text" id="searchQuery" placeholder="Nome da urna, candidato ou número">
                         </label>
-                        <label>Turno
-                            <select id="searchTurno">
-                                <option value="1">1º turno</option>
-                                <option value="2">2º turno</option>
-                            </select>
-                        </label>
                     </div>
                     <div class="action-row">
                         <button class="btn primary" type="button" id="searchLeadersBtn">Buscar lideranças</button>
                     </div>
-                    <div class="table-wrap" style="margin-top: 14px;">
+                    <div class="table-wrap leader-search-scroll leader-search-scroll--compact" style="margin-top: 14px;">
                         <table class="leader-search-table">
                             <thead>
                                 <tr>
@@ -2293,62 +2304,54 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                         </div>
                     </div>
 
-                    <div style="margin-top:18px;" class="panel">
-                        <div class="section-title" style="margin-bottom:12px;">
-                            <div>
-                                <div class="eyebrow">Adicionar liderança fora de 2024</div>
-                                <h3 style="font-size:1.08rem;">Aqui você adiciona as lideranças que não foram candidados em 2024</h3>
-                            </div>
-                            <button class="btn ghost btn-small" type="button" data-toggle-target="leaderAddBody" aria-controls="leaderAddBody" aria-expanded="false">Abrir</button>
-                        </div>
-                        <div id="leaderAddBody" hidden>
-                            <form method="post" action="premium_actions.php" id="leaderForm">
-                                <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                                <input type="hidden" name="action" value="add_leader">
-                                <input type="hidden" name="redirect_tab" value="liderancas">
-                                <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
-                                <input type="hidden" name="source_sq_candidato" id="sourceSq">
-                                <input type="hidden" name="source_nr_votavel" id="sourceNrVotavel">
-                                <input type="hidden" name="source_turno" id="sourceTurno" value="1">
-                                <div class="form-grid compact">
-                                    <label>Município
-                                        <select name="municipality" id="leaderMunicipality" required onchange="syncLeaderRegionFromMunicipality(this)">
-                                            <option value="">Selecione</option>
-                                            <?= premium_render_municipality_options() ?>
-                                        </select>
-                                    </label>
-                                    <label>Nome
-                                        <input type="text" name="leader_name" id="leaderName" required>
-                                    </label>
-                                    <label>Votos esperados
-                                        <input type="number" name="leader_votes_2024" id="leaderVotes" value="0" min="0" step="1">
-                                    </label>
-                                </div>
-                                <div class="action-row">
-                                    <button class="btn primary" type="submit">Adicionar liderança</button>
-                                </div>
-                            </form>
-                        </div>
+                    <div class="leaders-external-entry">
+                        <button class="btn ghost btn-small" type="button" data-toggle-target="leaderAddBody"
+                            aria-controls="leaderAddBody" aria-expanded="false">Adicionar liderança fora de 2024</button>
+                        <p class="muted">Use para inserir lideranças que não participaram de 2024 sem poluir a tela principal.</p>
                     </div>
-                </div>
-            </section>
 
-            <section class="panel panel-tint panel-tint--leaders-active">
-                <div class="section-title">
-                    <div>
-                        <div class="eyebrow">Lideranças ativas</div>
-                        <h2>Lideranças participantes da campanha</h2>
+                    <div id="leaderAddBody" hidden style="margin-top: 10px;">
+                        <form method="post" action="premium_actions.php" id="leaderForm">
+                            <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                            <input type="hidden" name="action" value="add_leader">
+                            <input type="hidden" name="redirect_tab" value="liderancas">
+                            <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                            <input type="hidden" name="source_sq_candidato" id="sourceSq">
+                            <input type="hidden" name="source_nr_votavel" id="sourceNrVotavel">
+                            <input type="hidden" name="source_turno" id="sourceTurno" value="1">
+                            <div class="form-grid compact">
+                                <label>Município
+                                    <select name="municipality" id="leaderMunicipality" required onchange="syncLeaderRegionFromMunicipality(this)">
+                                        <option value="">Selecione</option>
+                                        <?= premium_render_municipality_options() ?>
+                                    </select>
+                                </label>
+                                <label>Nome
+                                    <input type="text" name="leader_name" id="leaderName" required>
+                                </label>
+                                <label>Votos esperados
+                                    <input type="number" name="leader_votes_2024" id="leaderVotes" value="0" min="0" step="1">
+                                </label>
+                            </div>
+                            <div class="action-row">
+                                <button class="btn primary" type="submit">Adicionar liderança</button>
+                            </div>
+                        </form>
                     </div>
-                    <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="leadersBody" aria-controls="leadersBody" aria-expanded="false">Abrir</button>
                 </div>
-                <div id="leadersBody" hidden>
-                    <p class="muted" style="margin-bottom: 14px;">
-                        Lista resumida para leitura rápida. A tabela está ordenada por cidade e por votos dentro de cada cidade. Clique no nome ou em <strong>Abrir</strong> para ver todos os dados, editar pesos e ajustar a estratégia sem ocupar espaço demais na tela.
-                    </p>
+
+                <div id="leadersBody" class="leaders-tab-panel" data-leader-mode-panel="consult" role="tabpanel"
+                    aria-labelledby="leaderModeConsult" hidden>
+                    <div class="leaders-consult-head">
+                        <h2>Lideranças participantes da campanha</h2>
+                        <p class="muted">
+                            Lista resumida para leitura rápida. A tabela está ordenada por cidade e por votos dentro de cada cidade. Clique no nome ou em <strong>Abrir</strong> para ver todos os dados, editar pesos e ajustar a estratégia.
+                        </p>
+                    </div>
                     <?php if ($leaders): ?>
                         <?= premium_render_leaders_table($leaders, (int) ($baseline['total_votes'] ?? 0), (int) ($forecast['totals']['projected_base'] ?? 0), (array) ($forecast['settings'] ?? $settings ?? []), $campaign, $csrf) ?>
                     <?php else: ?>
-                        <div class="empty-state">Ainda não há lideranças cadastradas. Use a busca acima para adicionar prefeitos e vereadores à campanha.</div>
+                        <div class="empty-state">Ainda não há lideranças cadastradas. Use a busca para adicionar prefeitos e vereadores à campanha.</div>
                     <?php endif; ?>
                 </div>
             </section>
