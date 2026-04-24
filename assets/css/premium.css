@@ -1711,6 +1711,19 @@
             gap: 8px;
         }
 
+        .onboarding-panel__step-jump {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+
+        .onboarding-panel__step-jump select {
+            min-width: 170px;
+            max-width: 100%;
+        }
+
         .onboarding-panel__footer {
             display: flex;
             align-items: center;

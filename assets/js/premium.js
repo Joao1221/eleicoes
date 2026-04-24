@@ -55,6 +55,7 @@
     const onboardingStepTitle = onboardingRoot?.querySelector('[data-onboarding-step-title]') || null;
     const onboardingStepCopy = onboardingRoot?.querySelector('[data-onboarding-step-copy]') || null;
     const onboardingStepAction = onboardingRoot?.querySelector('[data-onboarding-step-action]') || null;
+    const onboardingStepJumpSelect = onboardingRoot?.querySelector('[data-onboarding-step-jump]') || null;
     const onboardingStorageKey = 'premium-onboarding-state-v2';
     const studyModal = document.getElementById('studyModal');
     const studyModalTitle = document.getElementById('studyModalTitle');
@@ -2481,6 +2482,10 @@
             onboardingStepAction.setAttribute('href', step.href || '#');
             onboardingStepAction.dataset.onboardingIndex = String(safeIndex);
         }
+
+        if (onboardingStepJumpSelect) {
+            onboardingStepJumpSelect.value = String(safeIndex);
+        }
     }
 
     function syncOnboardingGuide() {
@@ -2491,7 +2496,9 @@
         const contextualStep = resolveOnboardingStepForContext();
 
         if (contextualStep !== null) {
-            onboardingState.step = Math.max(0, Math.min(contextualStep, onboardingSteps.length - 1));
+            const clampedContextStep = Math.max(0, Math.min(contextualStep, onboardingSteps.length - 1));
+            // Keep the highest reached step so page reloads/tabs do not regress progress.
+            onboardingState.step = Math.max(onboardingState.step, clampedContextStep);
             onboardingState.completed = false;
         }
 
@@ -2521,9 +2528,14 @@
         saveOnboardingState(onboardingState);
     }
 
-    function hideOnboardingGuide(completed = false) {
+    function hideOnboardingGuide(completed = false, resetToStart = false) {
         onboardingState.hidden = true;
         onboardingState.completed = Boolean(completed);
+        if (resetToStart) {
+            onboardingState.step = 0;
+            onboardingState.completed = false;
+            onboardingState.campaignStartRequested = false;
+        }
         saveOnboardingState(onboardingState);
         if (onboardingRoot) {
             onboardingRoot.hidden = true;
@@ -2534,7 +2546,11 @@
     function showOnboardingGuide() {
         onboardingState.hidden = false;
         onboardingState.completed = false;
-        onboardingState.step = 0;
+        if (!onboardingData.hasCampaign) {
+            onboardingState.step = 0;
+        } else {
+            onboardingState.step = Math.max(0, Math.min(onboardingState.step, onboardingSteps.length - 1));
+        }
         if (onboardingRoot) {
             onboardingRoot.hidden = false;
         }
@@ -2568,6 +2584,22 @@
     }
 
     syncOnboardingGuide();
+
+    if (onboardingStepJumpSelect) {
+        onboardingStepJumpSelect.addEventListener('change', () => {
+            const selectedStep = Number.parseInt(onboardingStepJumpSelect.value || '0', 10);
+            if (!Number.isFinite(selectedStep)) {
+                return;
+            }
+
+            onboardingState.step = Math.max(0, Math.min(selectedStep, onboardingSteps.length - 1));
+            onboardingState.hidden = false;
+            onboardingState.completed = false;
+            renderOnboardingStep(onboardingState.step);
+            updateOnboardingToggleButtons();
+            saveOnboardingState(onboardingState);
+        });
+    }
 
     async function searchLeaders(options = {}) {
         if (!resultsBody) {
@@ -2935,7 +2967,7 @@
             if (onboardingState.hidden) {
                 showOnboardingGuide();
             } else {
-                hideOnboardingGuide(Boolean(onboardingState.completed));
+                hideOnboardingGuide(false, true);
             }
             return;
         }

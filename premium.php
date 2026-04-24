@@ -967,6 +967,16 @@ function premium_render_onboarding_panel(?array $campaign, string $activeTab, st
                 </div>
                 <div class="onboarding-panel__step-actions">
                     <a class="btn primary btn-small" data-onboarding-step-action href="<?= premium_escape_html((string) ($initialStep['href'] ?? '#')) ?>"><?= premium_escape_html((string) ($initialStep['buttonLabel'] ?? 'Abrir')) ?></a>
+                    <label class="onboarding-panel__step-jump">
+                        <span>Ir para</span>
+                        <select data-onboarding-step-jump>
+                            <?php foreach ($steps as $stepIndex => $stepItem): ?>
+                                <option value="<?= (int) $stepIndex ?>"<?= $stepIndex === 0 ? ' selected' : '' ?>>
+                                    <?= premium_escape_html((string) ($stepItem['number'] ?? (string) ($stepIndex + 1)) . ' - ' . (string) ($stepItem['title'] ?? 'Passo')) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
                 </div>
             </article>
             <div class="onboarding-panel__footer">
