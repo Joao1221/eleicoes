@@ -69,6 +69,8 @@
     const leaderModePanels = Array.from(document.querySelectorAll('[data-leader-mode-panel]'));
     const optionsModeButtons = Array.from(document.querySelectorAll('[data-options-mode-target]'));
     const optionsModePanels = Array.from(document.querySelectorAll('[data-options-mode-panel]'));
+    const reportModeButtons = Array.from(document.querySelectorAll('[data-report-mode-target]'));
+    const reportModePanels = Array.from(document.querySelectorAll('[data-report-mode-panel]'));
     const scopeModal = document.getElementById('scopeModal');
     const scopeModalTitle = document.getElementById('scopeModalTitle');
     const scopeModalSubtitle = document.getElementById('scopeModalSubtitle');
@@ -2220,6 +2222,26 @@
         });
     }
 
+    function setReportMode(mode) {
+        const requestedMode = String(mode || '').toLowerCase();
+        const normalizedMode = requestedMode === 'cities' ? 'cities' : 'regions';
+
+        if (!reportModeButtons.length || !reportModePanels.length) {
+            return;
+        }
+
+        reportModeButtons.forEach((button) => {
+            const isActive = String(button.dataset.reportModeTarget || '') === normalizedMode;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        reportModePanels.forEach((panel) => {
+            const isActive = String(panel.dataset.reportModePanel || '') === normalizedMode;
+            panel.hidden = !isActive;
+        });
+    }
+
     function openExternalLeaderModal() {
         if (!externalLeaderModal) {
             return;
@@ -2333,6 +2355,24 @@
             return;
         }
 
+        if (['reportsRegionsBody', 'reportsPanel'].includes(hashId)) {
+            setReportMode('regions');
+            const regionsPanel = document.getElementById(hashId === 'reportsPanel' ? 'reportsPanel' : 'reportsRegionsBody');
+            if (regionsPanel) {
+                regionsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+        }
+
+        if (hashId === 'reportsCitiesBody') {
+            setReportMode('cities');
+            const citiesPanel = document.getElementById('reportsCitiesBody');
+            if (citiesPanel) {
+                citiesPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+        }
+
         const target = document.getElementById(hashId);
         if (!target) {
             return;
@@ -2369,6 +2409,8 @@
             leadersBody: 2,
             agendaPanel: 3,
             reportsPanel: 4,
+            reportsRegionsBody: 4,
+            reportsCitiesBody: 4,
         };
         const tabStepMap = {
             home: 0,
@@ -2947,6 +2989,7 @@
 
     setLeaderMode('add', { scroll: false });
     setOptionsMode('campaign');
+    setReportMode('regions');
     applyActiveLeadersFilters();
     focusHashTarget();
 
@@ -2987,6 +3030,12 @@
         const optionsModeButton = event.target.closest('[data-options-mode-target]');
         if (optionsModeButton) {
             setOptionsMode(optionsModeButton.dataset.optionsModeTarget || 'campaign');
+            return;
+        }
+
+        const reportModeButton = event.target.closest('[data-report-mode-target]');
+        if (reportModeButton) {
+            setReportMode(reportModeButton.dataset.reportModeTarget || 'regions');
             return;
         }
 

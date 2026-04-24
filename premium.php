@@ -2387,103 +2387,78 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                         <?= premium_render_stat('Base', premium_fmt_int((int) ($forecast['totals']['projected_base'] ?? 0)), 'Cálculo principal'); ?>
                         <?= premium_render_stat('Otimista', premium_fmt_int((int) ($forecast['totals']['projected_optimistic'] ?? 0)), 'Hipótese de maior conversão'); ?>
                     </div>
-                    <p class="panel-note" style="margin-top:-4px; margin-bottom:12px;">
-                        <strong>Votos totais</strong> é o voto bruto da liderança em 2024. <strong>Base transferível</strong> é o percentual de transferência aplicado. <strong>Projeção</strong> é o total calculado após atribuições de peso dos cenários.
-                    </p>
-                    <?php if ($forecast['leaders']): ?>
-                        <div class="table-wrap" style="margin-top: 12px;">
-                            <table>
+                    <div class="leaders-tabs" role="tablist" aria-label="Escolher relatório territorial" style="margin-top: 14px;">
+                        <button class="leaders-tab-btn is-active" type="button" id="reportModeRegions"
+                            data-report-mode-target="regions" role="tab" aria-controls="reportsRegionsBody"
+                            aria-selected="true">Regiões com maior projeção</button>
+                        <button class="leaders-tab-btn" type="button" id="reportModeCities"
+                            data-report-mode-target="cities" role="tab" aria-controls="reportsCitiesBody"
+                            aria-selected="false">Cidades com maior projeção</button>
+                    </div>
+
+                    <div id="reportsRegionsBody" class="leaders-tab-panel" data-report-mode-panel="regions"
+                        role="tabpanel" aria-labelledby="reportModeRegions">
+                        <div class="table-wrap">
+                            <table style="min-width: 100%;">
                                 <thead>
                                     <tr>
-                                        <th>Liderança</th>
-                                        <th>Município</th>
-                                        <th>Votos totais</th>
-                                        <th>Base transferível</th>
-                                        <th>Transferência</th>
-                                        <th>Projeção</th>
+                                        <th>Região</th>
+                                        <th>Votos <?= premium_escape_html($campaignBaselineLabel) ?></th>
+                                        <th>Projeção<br>2026</th>
+                                        <th>Ação</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach (array_slice((array) $forecast['leaders'], 0, 8) as $leaderRow): ?>
+                                    <?php foreach (array_slice((array) ($forecast['regions'] ?? []), 0, 6) as $regionRow): ?>
                                         <tr>
-                                            <td><?= premium_escape_html((string) ($leaderRow['leader_display_name'] ?? $leaderRow['leader_name'] ?? '')) ?></td>
-                                            <td><?= premium_escape_html((string) ($leaderRow['municipality'] ?? '')) ?></td>
-                                            <td><?= premium_fmt_int((int) ($leaderRow['leader_votes_2024'] ?? 0)) ?></td>
-                                            <td><?= premium_fmt_int((int) ($leaderRow['base_effect'] ?? 0)) ?></td>
-                                            <td><?= premium_fmt_percent((float) ($leaderRow['transfer_rate'] ?? 0)) ?></td>
-                                            <td><?= premium_fmt_int((int) ($leaderRow['projected_votes'] ?? 0)) ?></td>
+                                            <td><?= premium_escape_html((string) ($regionRow['regiao'] ?? '')) ?></td>
+                                            <td><?= premium_fmt_int((int) ($regionRow['baseline_votes'] ?? 0)) ?></td>
+                                            <td><?= premium_fmt_int((int) ($regionRow['projected_base'] ?? 0)) ?></td>
+                                            <td>
+                                                <button
+                                                    type="button"
+                                                    class="btn ghost btn-small scope-open-btn"
+                                                    data-scope-type="region"
+                                                    data-scope-name="<?= premium_escape_html((string) ($regionRow['regiao'] ?? '')) ?>"
+                                                >Relatório das cidades</button>
+                                            </td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
-                    <?php endif; ?>
-                    <div class="grid-2" style="margin-top: 16px;">
-                        <div class="panel panel-tint panel-tint--regions" style="margin:0;">
-                            <h4 style="margin-bottom:12px;">Regiões com maior projeção</h4>
-                            <p class="panel-note" style="margin-top:-2px; margin-bottom:10px;">Clique em uma região para ver todas as lideranças, as projeções individuais e o comparativo com <?= premium_escape_html($campaignBaselineLabel) ?>.</p>
-                            <div class="table-wrap">
-                                <table style="min-width: 100%;">
-                                    <thead>
+                    </div>
+
+                    <div id="reportsCitiesBody" class="leaders-tab-panel" data-report-mode-panel="cities"
+                        role="tabpanel" aria-labelledby="reportModeCities" hidden>
+                        <div class="table-wrap">
+                            <table style="min-width: 100%;">
+                                <thead>
+                                    <tr>
+                                        <th>Município</th>
+                                        <th>Votos <?= premium_escape_html($campaignBaselineLabel) ?></th>
+                                        <th>Projeção<br>2026</th>
+                                        <th>Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach (array_slice((array) ($forecast['cities'] ?? []), 0, 6) as $cityRow): ?>
                                         <tr>
-                                            <th>Região</th>
-                                            <th>Votos <?= premium_escape_html($campaignBaselineLabel) ?></th>
-                                            <th>Projeção<br>2026</th>
-                                            <th>Ação</th>
+                                            <td><?= premium_escape_html((string) ($cityRow['municipio'] ?? '')) ?></td>
+                                            <td><?= premium_fmt_int((int) ($cityRow['baseline_votes'] ?? 0)) ?></td>
+                                            <td><?= premium_fmt_int((int) ($cityRow['projected_base'] ?? 0)) ?></td>
+                                            <td>
+                                                <button
+                                                    type="button"
+                                                    class="btn ghost btn-small scope-open-btn"
+                                                    data-scope-type="city"
+                                                    data-scope-name="<?= premium_escape_html((string) ($cityRow['municipio'] ?? '')) ?>"
+                                                >Relatórios de líderes</button>
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach (array_slice((array) ($forecast['regions'] ?? []), 0, 6) as $regionRow): ?>
-                                            <tr>
-                                                <td><?= premium_escape_html((string) ($regionRow['regiao'] ?? '')) ?></td>
-                                                <td><?= premium_fmt_int((int) ($regionRow['baseline_votes'] ?? 0)) ?></td>
-                                                <td><?= premium_fmt_int((int) ($regionRow['projected_base'] ?? 0)) ?></td>
-                                                <td>
-                                                    <button
-                                                        type="button"
-                                                        class="btn ghost btn-small scope-open-btn"
-                                                        data-scope-type="region"
-                                                        data-scope-name="<?= premium_escape_html((string) ($regionRow['regiao'] ?? '')) ?>"
-                                                    >Líderes</button>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <div class="panel panel-tint panel-tint--cities" style="margin:0;">
-                            <h4 style="margin-bottom:12px;">Cidades com maior projeção</h4>
-                            <p class="panel-note" style="margin-top:-2px; margin-bottom:10px;">Clique em uma cidade para abrir o resumo completo com os líderes cadastrados e o efeito no modelo.</p>
-                            <div class="table-wrap">
-                                <table style="min-width: 100%;">
-                                    <thead>
-                                        <tr>
-                                            <th>Município</th>
-                                            <th>Votos <?= premium_escape_html($campaignBaselineLabel) ?></th>
-                                            <th>Projeção<br>2026</th>
-                                            <th>Ação</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach (array_slice((array) ($forecast['cities'] ?? []), 0, 6) as $cityRow): ?>
-                                            <tr>
-                                                <td><?= premium_escape_html((string) ($cityRow['municipio'] ?? '')) ?></td>
-                                                <td><?= premium_fmt_int((int) ($cityRow['baseline_votes'] ?? 0)) ?></td>
-                                                <td><?= premium_fmt_int((int) ($cityRow['projected_base'] ?? 0)) ?></td>
-                                                <td>
-                                                    <button
-                                                        type="button"
-                                                        class="btn ghost btn-small scope-open-btn"
-                                                        data-scope-type="city"
-                                                        data-scope-name="<?= premium_escape_html((string) ($cityRow['municipio'] ?? '')) ?>"
-                                                    >Líderes</button>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
