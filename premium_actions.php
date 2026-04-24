@@ -871,6 +871,9 @@ switch ($action) {
         $municipality = trim((string) ($_POST['municipality'] ?? ''));
         $leaderName = trim((string) ($_POST['leader_name'] ?? ''));
         $leaderCargo = trim((string) ($_POST['leader_cargo'] ?? ''));
+        if ($leaderCargo === '') {
+            $leaderCargo = 'Liderança';
+        }
         $leaderParty = trim((string) ($_POST['leader_party'] ?? ''));
         $regionName = trim((string) ($_POST['region_name'] ?? ''));
         $notes = trim((string) ($_POST['notes'] ?? ''));
@@ -885,8 +888,8 @@ switch ($action) {
         $investmentScore = (float) ($_POST['investment_score'] ?? 50);
         $sizeClass = trim((string) ($_POST['size_class'] ?? 'medium'));
 
-        if ($municipality === '' || $leaderName === '' || $leaderCargo === '') {
-            premium_flash('error', 'Informe município, nome da liderança e cargo.');
+        if ($municipality === '' || $leaderName === '') {
+            premium_flash('error', 'Informe município e nome da liderança.');
             $redirectToCampaign($selectedCampaignId);
         }
 

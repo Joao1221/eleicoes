@@ -352,6 +352,8 @@ CREATE TABLE `premium_users` (
   `status` enum('active','inactive') NOT NULL DEFAULT 'active',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `last_login_at` datetime DEFAULT NULL,
+  `trial_started_at` datetime DEFAULT NULL,
+  `trial_ends_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_email` (`email`),
   KEY `idx_status` (`status`)

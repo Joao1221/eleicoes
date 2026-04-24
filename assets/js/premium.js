@@ -40,6 +40,24 @@
         settings: {},
         totals: {},
     }, premiumPageData.forecast || {});
+    const onboardingData = Object.assign({
+        hasCampaign: false,
+        steps: [],
+    }, premiumPageData.onboarding || {});
+    const onboardingSteps = Array.isArray(onboardingData.steps) ? onboardingData.steps : [];
+    const onboardingRoot = document.querySelector('[data-onboarding-root]');
+    const onboardingToggleButtons = Array.from(document.querySelectorAll('[data-onboarding-toggle]'));
+    const onboardingStepCounter = onboardingRoot?.querySelector('[data-onboarding-step-counter]') || null;
+    const onboardingStepStatus = onboardingRoot?.querySelector('[data-onboarding-step-status]') || null;
+    const onboardingProgressFill = onboardingRoot?.querySelector('[data-onboarding-progress-fill]') || null;
+    const onboardingStepNumber = onboardingRoot?.querySelector('[data-onboarding-step-number]') || null;
+    const onboardingStepTitle = onboardingRoot?.querySelector('[data-onboarding-step-title]') || null;
+    const onboardingStepCopy = onboardingRoot?.querySelector('[data-onboarding-step-copy]') || null;
+    const onboardingStepAction = onboardingRoot?.querySelector('[data-onboarding-step-action]') || null;
+    const onboardingStorageKey = 'premium-onboarding-state-v2';
+    const studyModal = document.getElementById('studyModal');
+    const studyModalTitle = document.getElementById('studyModalTitle');
+    const studyModalSubtitle = document.getElementById('studyModalSubtitle');
     const leaderModal = document.getElementById('leaderModal');
     const leaderModalTitle = document.getElementById('leaderModalTitle');
     const leaderModalSubtitle = document.getElementById('leaderModalSubtitle');
@@ -1936,12 +1954,41 @@
         }
     }
 
+    function openStudyModal() {
+        if (!studyModal) {
+            return;
+        }
+
+        closeLeaderModal(false);
+        closeScopeModal(false);
+        closeCityComparisonModal(false);
+        closeAgendaModal(false);
+        closeAgendaListModal(false);
+
+        studyModal.hidden = false;
+        studyModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+    }
+
+    function closeStudyModal(updateBody = true) {
+        if (!studyModal) {
+            return;
+        }
+
+        studyModal.hidden = true;
+        studyModal.setAttribute('aria-hidden', 'true');
+        if (updateBody) {
+            document.body.classList.remove('modal-open');
+        }
+    }
+
     function closeAllModals() {
         closeLeaderModal(false);
         closeScopeModal(false);
         closeCityComparisonModal(false);
         closeAgendaModal(false);
         closeAgendaListModal(false);
+        closeStudyModal(false);
         document.body.classList.remove('modal-open');
     }
 
@@ -2130,6 +2177,243 @@
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
+
+    function focusHashTarget() {
+        const hashId = decodeURIComponent(String(window.location.hash || '').replace(/^#/, ''));
+        if (!hashId) {
+            return;
+        }
+
+        const target = document.getElementById(hashId);
+        if (!target) {
+            return;
+        }
+
+        if (target.hidden) {
+            const triggerButton = document.querySelector(`[data-toggle-target="${hashId}"]`);
+            toggleCollapsiblePanel(hashId, triggerButton);
+            return;
+        }
+
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function resolveOnboardingStepForContext() {
+        if (!onboardingSteps.length) {
+            return null;
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const tab = String(params.get('tab') || 'home').toLowerCase();
+        const hashId = decodeURIComponent(String(window.location.hash || '').replace(/^#/, ''));
+        const hashStepMap = {
+            campaignCreatePanel: 0,
+            baselineBody: 0,
+            settingsBody: 1,
+            leaderSearchBody: 2,
+            leaderAddBody: 2,
+            agendaPanel: 3,
+            reportsPanel: 4,
+        };
+        const tabStepMap = {
+            home: 0,
+            opcoes: 0,
+            liderancas: 2,
+            agenda: 3,
+            relatorios: 4,
+        };
+
+        if (hashId && Object.prototype.hasOwnProperty.call(hashStepMap, hashId)) {
+            return hashStepMap[hashId];
+        }
+
+        if (Object.prototype.hasOwnProperty.call(tabStepMap, tab)) {
+            return tabStepMap[tab];
+        }
+
+        return null;
+    }
+
+    window.addEventListener('hashchange', () => {
+        focusHashTarget();
+        syncOnboardingGuide();
+    });
+
+    function loadOnboardingState() {
+        const fallback = {
+            step: 0,
+            hidden: false,
+            completed: false,
+            campaignStartRequested: false,
+        };
+
+        try {
+            const raw = window.localStorage.getItem(onboardingStorageKey);
+            if (!raw) {
+                return fallback;
+            }
+
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') {
+                return fallback;
+            }
+
+            return {
+                step: Number.isFinite(Number(parsed.step)) ? Number(parsed.step) : fallback.step,
+                hidden: Boolean(parsed.hidden),
+                completed: Boolean(parsed.completed),
+                campaignStartRequested: Boolean(parsed.campaignStartRequested),
+            };
+        } catch (error) {
+            return fallback;
+        }
+    }
+
+    function saveOnboardingState(nextState) {
+        try {
+            window.localStorage.setItem(onboardingStorageKey, JSON.stringify(nextState));
+        } catch (error) {
+            // Ignore storage failures and keep the guide functional for this session.
+        }
+    }
+
+    let onboardingState = loadOnboardingState();
+
+    function updateOnboardingToggleButtons() {
+        const label = onboardingState.hidden ? 'Abrir guia' : 'Ocultar guia';
+        onboardingToggleButtons.forEach((button) => {
+            button.textContent = label;
+            button.setAttribute('aria-pressed', onboardingState.hidden ? 'false' : 'true');
+        });
+    }
+
+    function renderOnboardingStep(stepIndex) {
+        if (!onboardingRoot || !onboardingSteps.length) {
+            return;
+        }
+
+        const safeIndex = Math.max(0, Math.min(stepIndex, onboardingSteps.length - 1));
+        const step = onboardingSteps[safeIndex] || onboardingSteps[0];
+        if (!step) {
+            return;
+        }
+
+        if (onboardingStepCounter) {
+            onboardingStepCounter.textContent = `${safeIndex + 1}/${onboardingSteps.length}`;
+        }
+
+        if (onboardingStepStatus) {
+            onboardingStepStatus.textContent = step.statusLabel || step.title || 'Comece por aqui';
+        }
+
+        if (onboardingProgressFill) {
+            onboardingProgressFill.style.width = `${Math.min(100, ((safeIndex + 1) / onboardingSteps.length) * 100)}%`;
+        }
+
+        if (onboardingStepNumber) {
+            onboardingStepNumber.textContent = step.number || String(safeIndex + 1);
+        }
+
+        if (onboardingStepTitle) {
+            onboardingStepTitle.textContent = step.title || 'Guia rápido';
+        }
+
+        if (onboardingStepCopy) {
+            onboardingStepCopy.innerHTML = step.descriptionHtml || '';
+        }
+
+        if (onboardingStepAction) {
+            onboardingStepAction.textContent = step.buttonLabel || 'Abrir';
+            onboardingStepAction.setAttribute('href', step.href || '#');
+            onboardingStepAction.dataset.onboardingIndex = String(safeIndex);
+        }
+    }
+
+    function syncOnboardingGuide() {
+        if (!onboardingRoot || !onboardingSteps.length) {
+            return;
+        }
+
+        const contextualStep = resolveOnboardingStepForContext();
+
+        if (contextualStep !== null) {
+            onboardingState.step = Math.max(0, Math.min(contextualStep, onboardingSteps.length - 1));
+            onboardingState.completed = false;
+        }
+
+        if (!onboardingData.hasCampaign) {
+            onboardingState.step = 0;
+            onboardingState.completed = false;
+        } else if (onboardingState.campaignStartRequested && onboardingState.step === 0) {
+            onboardingState.step = 1;
+            onboardingState.campaignStartRequested = false;
+        }
+
+        if (onboardingState.step >= onboardingSteps.length) {
+            onboardingState.step = onboardingSteps.length - 1;
+            onboardingState.completed = true;
+            onboardingState.hidden = true;
+        }
+
+        if (onboardingState.completed) {
+            onboardingState.hidden = true;
+        }
+
+        onboardingRoot.hidden = Boolean(onboardingState.hidden);
+        if (!onboardingState.hidden) {
+            renderOnboardingStep(onboardingState.step);
+        }
+        updateOnboardingToggleButtons();
+        saveOnboardingState(onboardingState);
+    }
+
+    function hideOnboardingGuide(completed = false) {
+        onboardingState.hidden = true;
+        onboardingState.completed = Boolean(completed);
+        saveOnboardingState(onboardingState);
+        if (onboardingRoot) {
+            onboardingRoot.hidden = true;
+        }
+        updateOnboardingToggleButtons();
+    }
+
+    function showOnboardingGuide() {
+        onboardingState.hidden = false;
+        onboardingState.completed = false;
+        onboardingState.step = 0;
+        if (onboardingRoot) {
+            onboardingRoot.hidden = false;
+        }
+        renderOnboardingStep(onboardingState.step);
+        updateOnboardingToggleButtons();
+        saveOnboardingState(onboardingState);
+    }
+
+    function advanceOnboardingGuide() {
+        if (!onboardingSteps.length) {
+            return;
+        }
+
+        if (!onboardingData.hasCampaign && onboardingState.step === 0) {
+            onboardingState.campaignStartRequested = true;
+            saveOnboardingState(onboardingState);
+            return;
+        }
+
+        if (onboardingState.step >= onboardingSteps.length - 1) {
+            hideOnboardingGuide(true);
+            return;
+        }
+
+        onboardingState.step += 1;
+        onboardingState.completed = false;
+        onboardingState.hidden = false;
+        renderOnboardingStep(onboardingState.step);
+        updateOnboardingToggleButtons();
+        saveOnboardingState(onboardingState);
+    }
+
+    syncOnboardingGuide();
 
     async function searchLeaders() {
         if (!resultsBody) {
@@ -2426,8 +2710,31 @@
     }
 
     applyActiveLeadersFilters();
+    focusHashTarget();
 
     document.addEventListener('click', (event) => {
+        const onboardingAction = event.target.closest('[data-onboarding-step-action]');
+        if (onboardingAction) {
+            advanceOnboardingGuide();
+            return;
+        }
+
+        const onboardingToggle = event.target.closest('[data-onboarding-toggle]');
+        if (onboardingToggle) {
+            if (onboardingState.hidden) {
+                showOnboardingGuide();
+            } else {
+                hideOnboardingGuide(Boolean(onboardingState.completed));
+            }
+            return;
+        }
+
+        const studyButton = event.target.closest('[data-study-open]');
+        if (studyButton) {
+            openStudyModal();
+            return;
+        }
+
         const toggleButton = event.target.closest('[data-toggle-target]');
         if (toggleButton) {
             toggleCollapsiblePanel(toggleButton.dataset.toggleTarget || '', toggleButton);
@@ -2495,7 +2802,8 @@
                 (scopeModal && !scopeModal.hidden) ||
                 (cityComparisonModal && !cityComparisonModal.hidden) ||
                 (agendaModal && !agendaModal.hidden) ||
-                (agendaListModal && !agendaListModal.hidden)
+                (agendaListModal && !agendaListModal.hidden) ||
+                (studyModal && !studyModal.hidden)
             )
         ) {
             closeAllModals();

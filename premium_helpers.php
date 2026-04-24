@@ -81,6 +81,156 @@ function premium_ensure_campaign_photo_column(mysqli $conn): void
     ");
 }
 
+function premium_ensure_user_trial_columns(mysqli $conn): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $checked = true;
+
+    $trialStartedColumn = querySingle($conn, "
+        SHOW COLUMNS FROM premium_users LIKE 'trial_started_at'
+    ");
+
+    if (!$trialStartedColumn) {
+        $conn->query("
+            ALTER TABLE premium_users
+            ADD COLUMN trial_started_at DATETIME DEFAULT NULL AFTER last_login_at
+        ");
+    }
+
+    $trialEndsColumn = querySingle($conn, "
+        SHOW COLUMNS FROM premium_users LIKE 'trial_ends_at'
+    ");
+
+    if (!$trialEndsColumn) {
+        $conn->query("
+            ALTER TABLE premium_users
+            ADD COLUMN trial_ends_at DATETIME DEFAULT NULL AFTER trial_started_at
+        ");
+    }
+}
+
+function premium_trial_end_timestamp(?array $user): ?int
+{
+    $value = trim((string) ($user['trial_ends_at'] ?? ''));
+    if ($value === '') {
+        return null;
+    }
+
+    $timestamp = strtotime($value);
+    return $timestamp === false ? null : $timestamp;
+}
+
+function premium_trial_days_remaining(?array $user): ?int
+{
+    $trialEnd = premium_trial_end_timestamp($user);
+    if ($trialEnd === null) {
+        return null;
+    }
+
+    $remainingSeconds = $trialEnd - time();
+    if ($remainingSeconds <= 0) {
+        return 0;
+    }
+
+    return (int) ceil($remainingSeconds / 86400);
+}
+
+function premium_trial_is_expired(?array $user): bool
+{
+    $trialEnd = premium_trial_end_timestamp($user);
+    return $trialEnd !== null && $trialEnd <= time();
+}
+
+function premium_mark_trial_expired(mysqli $conn, int $userId): void
+{
+    $conn->query("
+        UPDATE premium_users
+        SET status = 'inactive'
+        WHERE id = " . (int) $userId . "
+        LIMIT 1
+    ");
+}
+
+function premium_create_trial_user(mysqli $conn, string $name, string $email, string $password, int $trialDays = 7): bool
+{
+    $name = trim($name);
+    $email = strtolower(trim($email));
+    $password = (string) $password;
+
+    if ($name === '' || $email === '' || $password === '') {
+        premium_flash('error', 'Preencha nome, e-mail e senha para iniciar o teste.');
+        return false;
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        premium_flash('error', 'Informe um e-mail válido para começar o teste.');
+        return false;
+    }
+
+    if (strlen($password) < 8) {
+        premium_flash('error', 'A senha precisa ter pelo menos 8 caracteres.');
+        return false;
+    }
+
+    $existing = querySingle($conn, "
+        SELECT id, status, trial_ends_at
+        FROM premium_users
+        WHERE email = " . premium_sql_quote($conn, $email) . "
+        LIMIT 1
+    ");
+
+    if (!empty($existing)) {
+        $trialEndsAt = trim((string) ($existing['trial_ends_at'] ?? ''));
+        if (($existing['status'] ?? '') === 'active' && $trialEndsAt !== '') {
+            premium_flash('error', 'Este e-mail já possui um acesso ativo. Entre no sistema ou use outro e-mail para testar.');
+        } elseif (($existing['status'] ?? '') === 'active') {
+            premium_flash('error', 'Este e-mail já possui acesso ativo. Entre no sistema ou use outro e-mail.');
+        } else {
+            premium_flash('error', 'Este e-mail já está cadastrado. Use outro e-mail para iniciar o teste.');
+        }
+        return false;
+    }
+
+    $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+    if ($passwordHash === false) {
+        premium_flash('error', 'Não foi possível criar a senha do teste.');
+        return false;
+    }
+
+    $trialDays = max(1, $trialDays);
+    $trialStartedAt = date('Y-m-d H:i:s');
+    $trialEndsAt = date('Y-m-d H:i:s', time() + ($trialDays * 86400));
+
+    $conn->query("
+        INSERT INTO premium_users (
+            name,
+            email,
+            password_hash,
+            status,
+            trial_started_at,
+            trial_ends_at
+        ) VALUES (
+            " . premium_sql_quote($conn, $name) . ",
+            " . premium_sql_quote($conn, $email) . ",
+            " . premium_sql_quote($conn, $passwordHash) . ",
+            'active',
+            " . premium_sql_quote($conn, $trialStartedAt) . ",
+            " . premium_sql_quote($conn, $trialEndsAt) . "
+        )
+    ");
+
+    if ($conn->errno) {
+        premium_flash('error', 'Não foi possível liberar o teste gratuito.');
+        return false;
+    }
+
+    return premium_login($conn, $email, $password);
+}
+
 function premium_normalize_text(string $value): string
 {
     $value = trim($value);
@@ -469,19 +619,36 @@ function premium_current_user(mysqli $conn): ?array
     }
 
     $user = querySingle($conn, "
-        SELECT id, name, email, status, created_at, last_login_at
+        SELECT id, name, email, status, created_at, last_login_at, trial_started_at, trial_ends_at
         FROM premium_users
-        WHERE id = {$userId} AND status = 'active'
+        WHERE id = {$userId}
         LIMIT 1
     ");
 
-    return $user ?: null;
+    if (!$user) {
+        unset($_SESSION['premium_user_id'], $_SESSION['premium_user_name'], $_SESSION['premium_login_at']);
+        return null;
+    }
+
+    if (($user['status'] ?? '') !== 'active') {
+        unset($_SESSION['premium_user_id'], $_SESSION['premium_user_name'], $_SESSION['premium_login_at']);
+        return null;
+    }
+
+    if (premium_trial_is_expired($user)) {
+        premium_mark_trial_expired($conn, (int) $user['id']);
+        unset($_SESSION['premium_user_id'], $_SESSION['premium_user_name'], $_SESSION['premium_login_at']);
+        premium_flash('error', 'Seu teste de 7 dias expirou. Solicite acesso para continuar.');
+        return null;
+    }
+
+    return $user;
 }
 
 function premium_get_users(mysqli $conn): array
 {
     $users = queryAll($conn, "
-        SELECT id, name, email, status, created_at, last_login_at
+        SELECT id, name, email, status, created_at, last_login_at, trial_started_at, trial_ends_at
         FROM premium_users
         ORDER BY
             CASE WHEN status = 'active' THEN 0 ELSE 1 END,
@@ -496,6 +663,8 @@ function premium_get_users(mysqli $conn): array
         $user['status'] = (string) ($user['status'] ?? 'inactive');
         $user['created_at'] = (string) ($user['created_at'] ?? '');
         $user['last_login_at'] = (string) ($user['last_login_at'] ?? '');
+        $user['trial_started_at'] = (string) ($user['trial_started_at'] ?? '');
+        $user['trial_ends_at'] = (string) ($user['trial_ends_at'] ?? '');
     }
     unset($user);
 
@@ -556,21 +725,39 @@ function premium_login(mysqli $conn, string $email, string $password): bool
 {
     $email = strtolower(trim($email));
     if ($email === '' || $password === '') {
+        premium_flash('error', 'Credenciais inválidas ou conta inativa.');
         return false;
     }
 
     $user = querySingle($conn, "
-        SELECT id, name, email, password_hash, status
+        SELECT id, name, email, password_hash, status, trial_started_at, trial_ends_at
         FROM premium_users
         WHERE email = " . premium_sql_quote($conn, $email) . "
         LIMIT 1
     ");
 
-    if (!$user || ($user['status'] ?? '') !== 'active') {
+    if (!$user) {
+        premium_flash('error', 'Credenciais inválidas ou conta inativa.');
+        return false;
+    }
+
+    if (($user['status'] ?? '') !== 'active') {
+        if (premium_trial_is_expired($user)) {
+            premium_flash('error', 'Seu teste de 7 dias expirou. Solicite acesso para continuar.');
+        } else {
+            premium_flash('error', 'Credenciais inválidas ou conta inativa.');
+        }
+        return false;
+    }
+
+    if (premium_trial_is_expired($user)) {
+        premium_mark_trial_expired($conn, (int) $user['id']);
+        premium_flash('error', 'Seu teste de 7 dias expirou. Solicite acesso para continuar.');
         return false;
     }
 
     if (!password_verify($password, (string) $user['password_hash'])) {
+        premium_flash('error', 'Credenciais inválidas ou conta inativa.');
         return false;
     }
 
@@ -1415,3 +1602,6 @@ function premium_build_forecast(array $baseline, array $leaders, array $settings
         'leaders' => $leaderBreakdown,
     ];
 }
+
+premium_ensure_campaign_photo_column($conn);
+premium_ensure_user_trial_columns($conn);

@@ -1,11 +1,11 @@
 # Clean URLs for public pages.
-# The home already resolves at "/" via DirectoryIndex.
+# The home resolves at "/" via DirectoryIndex, prioritizing index.php.
 
 <IfModule mod_negotiation.c>
     Options -MultiViews
 </IfModule>
 
-DirectoryIndex index.php
+DirectoryIndex index.php premium.php
 
 <IfModule mod_rewrite.c>
     RewriteEngine On

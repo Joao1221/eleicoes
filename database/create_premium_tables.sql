@@ -14,6 +14,8 @@ CREATE TABLE premium_users (
     status ENUM('active','inactive') NOT NULL DEFAULT 'active',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at DATETIME DEFAULT NULL,
+    trial_started_at DATETIME DEFAULT NULL,
+    trial_ends_at DATETIME DEFAULT NULL,
     UNIQUE KEY uniq_email (email),
     KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

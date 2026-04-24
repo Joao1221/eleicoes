@@ -75,6 +75,55 @@ function premium_render_region_select(string $name, string $id, string $selected
         . '</select>';
 }
 
+function premium_read_markdown_excerpt(string $relativePath, string $startHeading, string $endHeading, int $maxLines = 120): string
+{
+    $path = __DIR__ . DIRECTORY_SEPARATOR . ltrim($relativePath, '/\\');
+    if (!is_file($path)) {
+        return '';
+    }
+
+    $contents = file_get_contents($path);
+    if ($contents === false) {
+        return '';
+    }
+
+    $normalizedContents = str_replace(["\r\n", "\r"], "\n", (string) $contents);
+    $lines = explode("\n", $normalizedContents);
+    if (!$lines) {
+        return '';
+    }
+
+    $capturing = false;
+    $buffer = [];
+
+    foreach ($lines as $line) {
+        $line = (string) $line;
+        $normalizedLine = trim($line);
+
+        if (!$capturing) {
+            if ($normalizedLine === $startHeading) {
+                $capturing = true;
+            }
+            continue;
+        }
+
+        if (preg_match($endHeading, $normalizedLine) === 1) {
+            break;
+        }
+
+        $buffer[] = $line;
+        if (count($buffer) >= $maxLines) {
+            break;
+        }
+    }
+
+    if (!$buffer) {
+        $buffer = array_slice($lines, 0, $maxLines);
+    }
+
+    return trim(implode("\n", $buffer));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'login') {
     if (!premium_validate_csrf($_POST['csrf'] ?? null)) {
         premium_flash('error', 'Sua sessão expirou. Recarregue a página e tente novamente.');
@@ -87,8 +136,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
 
     if (premium_login($conn, $email, $password)) {
         premium_flash('success', 'Acesso premium liberado.');
-    } else {
-        premium_flash('error', 'Credenciais inválidas ou conta inativa.');
     }
 
     header('Location: premium');
@@ -96,6 +143,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
 }
 
 $user = premium_current_user($conn);
+$trialDaysRemaining = $user ? premium_trial_days_remaining($user) : null;
+$accessBadgeLabel = null;
+
+if ($user) {
+    if ($trialDaysRemaining !== null) {
+        $accessBadgeLabel = $trialDaysRemaining > 0
+            ? 'Teste grátis • ' . $trialDaysRemaining . ' dias restantes'
+            : 'Teste grátis • expira hoje';
+    } else {
+        $accessBadgeLabel = 'Acesso ativo';
+    }
+}
 
 if ($user && isset($_GET['campaign_id'])) {
     $requestedCampaignId = (int) $_GET['campaign_id'];
@@ -153,6 +212,16 @@ $isAdmin = premium_is_admin_user($user);
 $premiumCampaigns = [];
 $campaignBaselineYear = 2022;
 $campaignBaselineLabel = premium_baseline_label($campaignBaselineYear);
+$onboardingStudyExcerpt = premium_read_markdown_excerpt(
+    'docs/explicacao_previsao_transferencia_premium.md',
+    '## 1. Ideia central',
+    '/^##\\s+4\\./u',
+    140
+);
+
+if ($onboardingStudyExcerpt === '') {
+    $onboardingStudyExcerpt = "O sistema parte de uma taxa inicial de transferência e depois ajusta essa taxa com fatores políticos.\n\nOs valores padrão mostram a lógica do modelo e servem como ponto de partida para a campanha.";
+}
 
 if ($user) {
     $campaigns = premium_get_campaigns($conn, (int) $user['id']);
@@ -411,7 +480,7 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
     }
     $html[] = '<div class="leaders-summary">';
     $html[] = '  <div class="summary-metric">';
-    $html[] = '    <div class="summary-metric__label">Baseline ' . premium_escape_html($baselineLabel) . '</div>';
+    $html[] = '    <div class="summary-metric__label">Dados da campanha ' . premium_escape_html($baselineLabel) . '</div>';
     $html[] = '    <div class="summary-metric__value">' . premium_fmt_int($baselineVotes) . '</div>';
     $html[] = '    <div class="summary-metric__sub">Total histórico do candidato nesta campanha</div>';
     $html[] = '  </div>';
@@ -785,6 +854,274 @@ function premium_render_city_comparison_modal(array $forecast, int $baselineYear
     $html[] = '          <tr id="cityComparisonEmptyRow" hidden><td colspan="10" class="muted">Nenhuma cidade corresponde a esse filtro.</td></tr>';
     $html[] = '        </tbody>';
     $html[] = '      </table>';
+    $html[] = '    </div>';
+    $html[] = '  </div>';
+    $html[] = '</div>';
+
+    return implode('', $html);
+}
+
+function premium_build_onboarding_steps(?array $campaign, string $activeTab): array
+{
+    $hasCampaign = $campaign !== null;
+    $opcoesHref = premium_tab_href('opcoes', $campaign);
+    $liderancasHref = premium_tab_href('liderancas', $campaign);
+    $agendaHref = premium_tab_href('agenda', $campaign);
+    $relatoriosHref = premium_tab_href('relatorios', $campaign);
+
+    return [
+        [
+            'number' => '1',
+            'title' => $hasCampaign ? 'Dados da campanha' : 'Criar a campanha',
+            'descriptionHtml' => $hasCampaign
+                ? 'Atualize <strong>nome, candidato, cargo, número, município-base, região-base, foto e notas</strong>.'
+                : 'Crie a campanha primeiro para liberar o restante do guia e organizar os dados no próximo passo.',
+            'buttonLabel' => $hasCampaign ? 'Abrir dados' : 'Criar campanha',
+            'href' => $opcoesHref . ($hasCampaign ? '#baselineBody' : '#campaignCreatePanel'),
+            'statusLabel' => $hasCampaign ? 'Comece pelos dados da campanha' : 'Cadastre a primeira campanha',
+            'locked' => false,
+        ],
+        [
+            'number' => '2',
+            'title' => 'Peso dos cenários',
+            'descriptionHtml' => 'O sistema <strong>já está calibrado com os valores padrão</strong>. Se mexer, comece apenas por <strong>Transferência padrão %</strong> e altere o restante só com certeza.',
+            'buttonLabel' => 'Abrir pesos',
+            'href' => $opcoesHref . '#settingsBody',
+            'statusLabel' => 'Revise o modelo antes de mudar',
+            'locked' => !$hasCampaign,
+        ],
+        [
+            'number' => '3',
+            'title' => 'Adicionar lideranças à campanha',
+            'descriptionHtml' => 'Escolha <strong>prefeito</strong> ou <strong>vereador</strong>, selecione o município, clique em <strong>Buscar lideranças</strong>, marque quem apoia o candidato e confirme em <strong>Adicionar lideranças</strong>. Se a liderança <strong>não foi candidata em 2024</strong>, use o card <strong>Adicionar liderança fora de 2024</strong> logo abaixo e preencha <strong>município, nome e votos esperados</strong>.',
+            'buttonLabel' => 'Buscar lideranças',
+            'href' => $liderancasHref . '#leaderSearchBody',
+            'statusLabel' => 'Lideranças de 2024',
+            'locked' => !$hasCampaign,
+        ],
+        [
+            'number' => '4',
+            'title' => 'Agenda de campanha',
+            'descriptionHtml' => 'Registre <strong>visitas, reuniões, eventos e tarefas</strong> para manter a campanha e os assessores organizados em um só lugar.',
+            'buttonLabel' => 'Abrir agenda',
+            'href' => $agendaHref . '#agendaPanel',
+            'statusLabel' => 'Tarefas e deslocamentos',
+            'locked' => !$hasCampaign,
+        ],
+        [
+            'number' => '5',
+            'title' => 'Relatórios',
+            'descriptionHtml' => 'Veja as <strong>oito lideranças com maior votação</strong>, as regiões e cidades com maior projeção e abra o relatório territorial completo em <strong>Líderes</strong>.',
+            'buttonLabel' => 'Ver relatórios',
+            'href' => $relatoriosHref . '#reportsPanel',
+            'statusLabel' => 'Projeções e comparativos',
+            'locked' => !$hasCampaign,
+        ],
+    ];
+}
+
+function premium_render_onboarding_panel(?array $campaign, string $activeTab, string $studyExcerpt): string
+{
+    $steps = premium_build_onboarding_steps($campaign, $activeTab);
+    $initialStep = $steps[0] ?? [
+        'number' => '1',
+        'title' => 'Guia rápido',
+        'descriptionHtml' => 'Clique no botão para avançar.',
+        'buttonLabel' => 'Abrir',
+        'href' => '#',
+        'statusLabel' => 'Comece por aqui',
+    ];
+    $stepCount = count($steps);
+
+    ob_start();
+    ?>
+    <div class="premium-sidebar__guide">
+        <div class="premium-sidebar__guide-actions">
+            <button type="button" class="btn ghost btn-small" data-onboarding-toggle aria-pressed="false">Ocultar guia</button>
+        </div>
+        <section class="panel onboarding-panel" data-onboarding-root data-onboarding-step-count="<?= (int) $stepCount ?>" data-onboarding-has-campaign="<?= $campaign ? '1' : '0' ?>">
+            <div class="section-title onboarding-panel__head">
+                <div>
+                    <div class="eyebrow">Comece por aqui</div>
+                    <h2>Guia rápido</h2>
+                </div>
+            </div>
+            <p class="panel-note onboarding-panel__note">
+                Um passo por vez. Quando você clicar no botão do card, o próximo passo aparece automaticamente.
+            </p>
+            <div class="onboarding-panel__progress" aria-label="Progresso do guia">
+                <div class="onboarding-panel__progress-track"><span data-onboarding-progress-fill></span></div>
+                <div class="onboarding-panel__progress-meta">
+                    <strong data-onboarding-step-counter><?= (int) min(1, $stepCount) ?>/<?= (int) $stepCount ?></strong>
+                    <span data-onboarding-step-status><?= premium_escape_html((string) ($initialStep['statusLabel'] ?? 'Comece por aqui')) ?></span>
+                </div>
+            </div>
+            <article class="onboarding-panel__step">
+                <span class="onboarding-panel__step-badge" data-onboarding-step-number><?= premium_escape_html((string) ($initialStep['number'] ?? '1')) ?></span>
+                <div class="onboarding-panel__step-body">
+                    <h3 data-onboarding-step-title><?= premium_escape_html((string) ($initialStep['title'] ?? 'Guia rápido')) ?></h3>
+                    <p class="onboarding-panel__step-copy" data-onboarding-step-copy><?= (string) ($initialStep['descriptionHtml'] ?? '') ?></p>
+                </div>
+                <div class="onboarding-panel__step-actions">
+                    <a class="btn primary btn-small" data-onboarding-step-action href="<?= premium_escape_html((string) ($initialStep['href'] ?? '#')) ?>"><?= premium_escape_html((string) ($initialStep['buttonLabel'] ?? 'Abrir')) ?></a>
+                </div>
+            </article>
+            <div class="onboarding-panel__footer">
+                <span class="muted onboarding-panel__footer-note">O guia se oculta ao final ou quando você quiser.</span>
+            </div>
+        </section>
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
+
+    $hasCampaign = $campaign !== null;
+    $tabLabels = [
+        'home' => 'Home',
+        'liderancas' => 'Lideranças',
+        'agenda' => 'Agenda',
+        'relatorios' => 'Relatórios',
+        'opcoes' => 'Opções avançadas',
+    ];
+    $currentTabLabel = $tabLabels[$activeTab] ?? 'Campanha';
+    $opcoesHref = premium_tab_href('opcoes', $campaign);
+    $liderancasHref = premium_tab_href('liderancas', $campaign);
+    $agendaHref = premium_tab_href('agenda', $campaign);
+    $relatoriosHref = premium_tab_href('relatorios', $campaign);
+
+    $steps = [
+        [
+            'number' => '1',
+            'title' => 'Cadastrar os Dados da campanha',
+            'description_html' => $hasCampaign
+                ? 'Atualize <strong>nome, candidato, cargo, número, município-base, região-base, foto e notas</strong>.'
+                : 'Cadastre <strong>nome, candidato, cargo, número, município-base, região-base, foto e notas</strong>. Esse é o ponto de partida do sistema.',
+            'button_label' => $hasCampaign ? 'Abrir dados' : 'Criar campanha',
+            'href' => $hasCampaign ? $opcoesHref . '#baselineBody' : $opcoesHref . '#campaignCreatePanel',
+            'locked' => false,
+        ],
+        [
+            'number' => '2',
+            'title' => 'Peso dos cenários',
+            'description_html' => 'O sistema <strong>já está calibrado com os valores padrão</strong>. Se for alterar algo, comece por <strong>Transferência padrão %</strong> e só mexa no restante se tiver certeza do impacto.',
+            'button_label' => $hasCampaign ? 'Abrir pesos' : 'Disponível após criar a campanha',
+            'href' => $hasCampaign ? $opcoesHref . '#settingsBody' : '',
+            'locked' => !$hasCampaign,
+            'tone' => 'warning',
+        ],
+        [
+            'number' => '3',
+            'title' => 'Adicionar lideranças à campanha',
+            'description_html' => 'Para quem foi candidato em 2024: escolha <strong>prefeito</strong> ou <strong>vereador</strong>, filtre o município, clique em <strong>Buscar lideranças</strong>, selecione quem apoia você e confirme em <strong>Adicionar lideranças</strong>.',
+            'button_label' => $hasCampaign ? 'Buscar lideranças' : 'Disponível após criar a campanha',
+            'href' => $hasCampaign ? $liderancasHref . '#leaderSearchBody' : '',
+            'locked' => !$hasCampaign,
+        ],
+        [
+            'number' => '3.1',
+            'title' => 'Lideranças fora de 2024',
+            'description_html' => 'Para lideranças que <strong>não foram candidatas em 2024</strong>, use o card próprio e preencha <strong>município, nome e transferência %</strong> antes de salvar.',
+            'button_label' => $hasCampaign ? 'Abrir formulário' : 'Disponível após criar a campanha',
+            'href' => $hasCampaign ? $liderancasHref . '#leaderAddBody' : '',
+            'locked' => !$hasCampaign,
+        ],
+        [
+            'number' => '4',
+            'title' => 'Agenda de campanha',
+            'description_html' => 'Adicione <strong>visitas, lideranças, eventos e tarefas</strong>. Tudo fica organizado em um só lugar, com prazo e município relacionados à campanha.',
+            'button_label' => $hasCampaign ? 'Abrir agenda' : 'Disponível após criar a campanha',
+            'href' => $hasCampaign ? $agendaHref . '#agendaPanel' : '',
+            'locked' => !$hasCampaign,
+        ],
+        [
+            'number' => '5',
+            'title' => 'Relatórios',
+            'description_html' => 'A tela mostra as <strong>oito lideranças com maior votação</strong>, as regiões e cidades com maior projeção de votos e, ao clicar em <strong>Líderes</strong>, o detalhamento do recorte.',
+            'button_label' => $hasCampaign ? 'Ver relatórios' : 'Disponível após criar a campanha',
+            'href' => $hasCampaign ? $relatoriosHref . '#reportsPanel' : '',
+            'locked' => !$hasCampaign,
+        ],
+    ];
+
+    ob_start();
+    ?>
+    <section class="panel onboarding-panel">
+        <div class="section-title">
+            <div>
+                <div class="eyebrow">Comece por aqui</div>
+                <h2>Guia rápido do teste de 7 dias</h2>
+            </div>
+            <div class="pill-row onboarding-panel__meta" style="margin-top: 0;">
+                <span class="pill">Etapa atual: <?= premium_escape_html($currentTabLabel) ?></span>
+                <span class="pill">Ordem recomendada: 1 → 5</span>
+            </div>
+        </div>
+        <p class="panel-note">
+            Siga esta ordem para não se perder. O sistema funciona melhor quando os dados entram primeiro na campanha, depois nos cenários, lideranças, agenda e relatórios.
+        </p>
+        <div class="onboarding-layout">
+            <div class="onboarding-steps">
+                <?php foreach ($steps as $step): ?>
+                    <article class="onboarding-step<?= !empty($step['locked']) ? ' onboarding-step--locked' : '' ?><?= ($step['tone'] ?? '') === 'warning' ? ' onboarding-step--warning' : '' ?>">
+                        <div class="onboarding-step__head">
+                            <span class="onboarding-step__badge"><?= premium_escape_html((string) ($step['number'] ?? '')) ?></span>
+                            <div class="onboarding-step__copy-block">
+                                <h3><?= premium_escape_html((string) ($step['title'] ?? '')) ?></h3>
+                                <p class="onboarding-step__copy"><?= (string) ($step['description_html'] ?? '') ?></p>
+                            </div>
+                        </div>
+                        <div class="onboarding-step__actions">
+                            <?php if (!empty($step['href']) && empty($step['locked'])): ?>
+                                <a class="btn ghost btn-small" href="<?= premium_escape_html((string) $step['href']) ?>"><?= premium_escape_html((string) ($step['button_label'] ?? 'Abrir')) ?></a>
+                            <?php else: ?>
+                                <span class="btn ghost btn-small is-disabled"><?= premium_escape_html((string) ($step['button_label'] ?? 'Disponível em breve')) ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+            <details class="onboarding-study">
+                <summary>Ler o trecho da base técnica dos pesos e cenários</summary>
+                <p class="onboarding-study__hint">
+                    Arquivo de apoio: <code>docs/explicacao_previsao_transferencia_premium.md</code>
+                </p>
+                <p class="onboarding-study__hint">
+                    O card <strong>Peso dos cenários</strong> foi calibrado com base nesse material. O sistema já vem com valores padrão; altere apenas o que fizer sentido para a campanha.
+                </p>
+                <?php if (trim($studyExcerpt) !== ''): ?>
+                    <pre class="onboarding-study__excerpt"><?= premium_escape_html($studyExcerpt) ?></pre>
+                <?php else: ?>
+                    <p class="onboarding-study__fallback">Não foi possível carregar o trecho agora, mas o sistema continua calibrado com os valores padrão definidos nos estudos.</p>
+                <?php endif; ?>
+            </details>
+        </div>
+    </section>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function premium_render_study_modal(string $studyExcerpt): string
+{
+    $html = [];
+    $html[] = '<div class="leader-modal study-modal" id="studyModal" hidden aria-hidden="true">';
+    $html[] = '  <div class="leader-modal__backdrop" data-modal-close></div>';
+    $html[] = '  <div class="leader-modal__panel study-modal__panel" role="dialog" aria-modal="true" aria-labelledby="studyModalTitle">';
+    $html[] = '    <div class="leader-modal__header">';
+    $html[] = '      <div>';
+    $html[] = '        <div class="eyebrow">Base técnica</div>';
+    $html[] = '        <h3 id="studyModalTitle">Pesos e cenários</h3>';
+    $html[] = '        <p class="muted" id="studyModalSubtitle">Trecho da documentação que explica como o modelo foi calibrado.</p>';
+    $html[] = '      </div>';
+    $html[] = '      <button type="button" class="btn ghost" data-modal-close>Fechar</button>';
+    $html[] = '    </div>';
+    $html[] = '    <div class="study-modal__body">';
+    $html[] = '      <p class="panel-note">O card <strong>Peso dos cenários</strong> já vem com valores padrão. Leia a base antes de alterar qualquer parâmetro.</p>';
+    if (trim($studyExcerpt) !== '') {
+        $html[] = '      <pre class="study-modal__excerpt">' . premium_escape_html($studyExcerpt) . '</pre>';
+    } else {
+        $html[] = '      <p class="muted">Não foi possível carregar o trecho agora, mas o sistema continua calibrado com os valores padrão definidos nos estudos.</p>';
+    }
     $html[] = '    </div>';
     $html[] = '  </div>';
     $html[] = '</div>';
@@ -1186,7 +1523,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
         <div>
             <div class="eyebrow">Apoia Candidato Premium</div>
             <h1>Escritório de campanha</h1>
-            <p class="muted">Baseline configurável, lideranças de 2024, agenda, pesos configuráveis e previsões em um só lugar.</p>
+            <p class="muted">Dados da campanha configuráveis, lideranças de 2024, agenda e previsões em um só lugar.</p>
         </div>
         <div class="topbar-right">
             <div class="topbar-actions">
@@ -1210,6 +1547,9 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
         <?php if ($user): ?>
             <div class="topbar-actions">
                 <div class="pill">Olá, <?= premium_escape_html((string) ($user['name'] ?? '')) ?></div>
+                <?php if ($accessBadgeLabel): ?>
+                    <div class="pill"><?= premium_escape_html($accessBadgeLabel) ?></div>
+                <?php endif; ?>
                 <a class="btn ghost" href="premium_logout.php">Sair</a>
             </div>
         <?php endif; ?>
@@ -1292,6 +1632,9 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                     <a class="premium-sidebar__link<?= $activeTab === 'relatorios' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('relatorios', $campaign)) ?>">Relatórios</a>
                     <a class="premium-sidebar__link<?= $activeTab === 'opcoes' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('opcoes', $campaign)) ?>">Opções avançadas</a>
                 </nav>
+                <?php if ($user && !$isAdmin): ?>
+                    <?= premium_render_onboarding_panel($campaign, $activeTab, $onboardingStudyExcerpt) ?>
+                <?php endif; ?>
             </aside>
             <div class="premium-main">
         <?php if ($campaign && $activeTab === 'home'): ?>
@@ -1468,7 +1811,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                     </div>
                 </div>
                 <p class="panel-note">
-                    Exclua campanhas próprias ou de qualquer conta premium. A exclusão remove baseline, lideranças, agenda, pesos e histórico de projeção.
+                    Exclua campanhas próprias ou de qualquer conta premium. A exclusão remove dados da campanha, lideranças, agenda, pesos e histórico de projeção.
                 </p>
                 <div class="table-wrap" style="margin-top: 14px;">
                     <table class="admin-campaign-table">
@@ -1513,7 +1856,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                                             <div class="user-actions">
                                                 <details class="admin-danger-menu">
                                                     <summary>Avancado</summary>
-                                                    <form method="post" action="premium_actions.php" onsubmit="return confirm('Excluir esta campanha permanentemente? Isso apagara baseline, liderancas, agenda e pesos.');">
+                                                    <form method="post" action="premium_actions.php" onsubmit="return confirm('Excluir esta campanha permanentemente? Isso apagará os dados da campanha, lideranças, agenda e pesos.');">
                                                         <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                                                         <input type="hidden" name="action" value="delete_campaign">
                                                         <input type="hidden" name="campaign_id" value="<?= $adminCampaignId ?>">
@@ -1538,7 +1881,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
             </section>
         <?php endif; ?>
         <?php if (!$campaign && $activeTab === 'opcoes'): ?>
-            <section class="panel">
+            <section class="panel" id="campaignCreatePanel">
                 <div class="section-title">
                     <div>
                         <div class="eyebrow">Primeiro passo</div>
@@ -1561,7 +1904,6 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                         </label>
                         <label>Nº campanha 2026
                             <input type="text" name="candidate_number" inputmode="numeric" placeholder="Opcional">
-                            <span class="field-help">Se houver número no ano-base escolhido, ele será sugerido automaticamente depois de criar a campanha.</span>
                         </label>
                         <label>Ano-base
                             <input type="number" name="baseline_year" value="2022" min="2018" step="4">
@@ -1570,7 +1912,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                             <input type="text" name="current_municipio" placeholder="Cidade principal, se houver">
                         </label>
                     </div>
-                    <label style="margin-top:12px;">Região-base
+                    <label style="margin-top:6px;">Região-base
                         <input type="text" name="current_region" placeholder="Região principal, se houver">
                     </label>
                     <div class="baseline-notes-photo">
@@ -1590,7 +1932,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
         <?php elseif ($campaign): ?>
             <?php if ($activeTab === 'home'): ?>
             <section class="stats-grid campaign-stats-grid">
-                <?= premium_render_stat('Baseline ' . $campaignBaselineLabel, premium_fmt_int((int) ($baseline['total_votes'] ?? 0)), 'Votação histórica do candidato'); ?>
+                <?= premium_render_stat('Dados da campanha ' . $campaignBaselineLabel, premium_fmt_int((int) ($baseline['total_votes'] ?? 0)), 'Votação histórica do candidato'); ?>
                 <?= premium_render_stat('Projeção base', premium_fmt_int((int) ($forecast['totals']['projected_base'] ?? 0)), 'Cenário com os pesos atuais'); ?>
                 <?= premium_render_stat('Delta vs ' . $campaignBaselineLabel, premium_fmt_int((int) ($forecast['totals']['delta_base'] ?? 0)), 'Diferença absoluta sobre a base'); ?>
                 <?= premium_render_stat('Lideranças ativas', premium_fmt_int(count($leaders)), 'Lideranças adicionadas ao escritório'); ?>
@@ -1660,7 +2002,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                                 <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                                 <input type="hidden" name="action" value="show_baseline_panel">
                                 <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
-                                <button class="btn ghost" type="submit">Reabrir baseline</button>
+                                <button class="btn ghost" type="submit">Reabrir dados da campanha</button>
                             </form>
                         <?php endif; ?>
                         <?php if ($settingsPanelHidden): ?>
@@ -1678,11 +2020,11 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
             <?php if ($activeTab === 'opcoes'): ?>
                 <?php $dashboardPanelsClass = 'grid-2 dashboard-panels-split'; ?>
                 <section class="<?= premium_escape_html($dashboardPanelsClass) ?>">
-                <div class="panel panel-tint panel-tint--baseline">
+                <div class="panel panel-tint panel-tint--baseline" id="baselinePanel">
                     <div class="section-title">
                         <div>
-                            <div class="eyebrow">Baseline</div>
-                            <h2>Comparativo <?= premium_escape_html($campaignBaselineLabel) ?></h2>
+                            <div class="eyebrow">Dados da campanha</div>
+                            <h2>Dados da campanha</h2>
                         </div>
                         <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="baselineBody" aria-controls="baselineBody" aria-expanded="false">Abrir</button>
                     </div>
@@ -1718,7 +2060,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                                 <input type="text" name="current_municipio" value="<?= premium_escape_html((string) ($campaign['current_municipio'] ?? '')) ?>" placeholder="Cidade principal, se houver">
                             </label>
                         </div>
-                        <label>Região-base
+                        <label style="margin-top:6px;">Região-base
                             <input type="text" name="current_region" value="<?= premium_escape_html((string) ($campaign['current_region'] ?? '')) ?>" placeholder="Região principal, se houver">
                         </label>
                         <div class="baseline-notes-photo">
@@ -1734,45 +2076,17 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                             <button class="btn primary" type="submit">Salvar campanha</button>
                         </div>
                     </form>
-                    <?php if (!empty($baseline['found'])): ?>
-                        <div style="margin-top:16px;">
-                            <div class="pill-row">
-                                <span class="pill">Municípios: <?= premium_fmt_int((int) ($baseline['municipality_count'] ?? 0)) ?></span>
-                                <span class="pill">Total: <?= premium_fmt_int((int) ($baseline['total_votes'] ?? 0)) ?></span>
-                            </div>
-                            <div class="table-wrap baseline-preview-table-wrap" style="margin-top:12px;">
-                                <table class="baseline-preview-table">
-                                    <caption>Cidades com maior votação em <?= premium_escape_html($campaignBaselineLabel) ?></caption>
-                                    <thead>
-                                        <tr>
-                                            <th>Município</th>
-                                            <th>Votos <?= premium_escape_html($campaignBaselineLabel) ?></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                    <?php foreach (array_slice((array) $baseline['municipalities'], 0, 8) as $row): ?>
-                                        <tr>
-                                            <td><?= premium_escape_html((string) ($row['municipio'] ?? '')) ?></td>
-                                            <td><?= premium_fmt_int((int) ($row['total_votos'] ?? 0)) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    <?php else: ?>
-                        <div class="empty-state" style="margin-top:16px;">
-                            Nenhum baseline encontrado ainda. Salve o nome do candidato, o cargo e o ano-base para carregar os votos históricos.
-                        </div>
-                    <?php endif; ?>
                     </div>
                 </div>
 
-                <div class="panel panel-tint panel-tint--model">
+                <div class="panel panel-tint panel-tint--model" id="settingsPanel">
                     <div class="section-title">
                         <div>
                             <div class="eyebrow">Modelo</div>
                             <h2>Peso dos cenários</h2>
+                            <p class="panel-inline-link">
+                                <button type="button" class="panel-inline-link__btn" data-study-open>Ler base técnica</button>
+                            </p>
                         </div>
                         <button class="btn ghost btn-small panel-tint__toggle" type="button" data-toggle-target="settingsBody" aria-controls="settingsBody" aria-expanded="false">Abrir</button>
                     </div>
@@ -1788,7 +2102,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                                 <input type="number" name="baseline_retention" value="<?= premium_escape_html((string) ($settings['baseline_retention'] ?? 0.30)) ?>" step="0.01" min="0" max="1">
                                 <span class="field-help">Usado apenas quando o município ou a região não tem lideranças cadastradas; nesse caso, a base histórica vira referência de projeção.</span>
                             </label>
-                            <label>Transferência padrão %
+                            <label>Transferência %
                                 <input type="number" name="transfer_rate_default" value="<?= premium_escape_html((string) ($settings['transfer_rate_default'] ?? 30)) ?>" step="0.01" min="0" max="100">
                                 <span class="field-help">Percentual médio da votação de uma liderança que pode migrar para o candidato apoiado.</span>
                             </label>
@@ -1887,7 +2201,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                             <h2>Excluir campanha</h2>
                         </div>
                     </div>
-                    <p class="panel-note">A exclusão é permanente e remove baseline, lideranças, agenda, pesos e histórico de projeção.</p>
+                    <p class="panel-note">A exclusão é permanente e remove dados da campanha, lideranças, agenda, pesos e histórico de projeção.</p>
                     <form method="post" action="premium_actions.php" class="campaign-delete-form" onsubmit="return confirm('Excluir esta campanha permanentemente? Esta ação não pode ser desfeita.');">
                         <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                         <input type="hidden" name="action" value="delete_campaign">
@@ -1997,57 +2311,17 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                                 <input type="hidden" name="source_nr_votavel" id="sourceNrVotavel">
                                 <input type="hidden" name="source_turno" id="sourceTurno" value="1">
                                 <div class="form-grid compact">
-                                    <label>Região
-                                        <?= premium_render_region_select('region_name', 'leaderRegion', '', true) ?>
-                                    </label>
                                     <label>Município
                                         <select name="municipality" id="leaderMunicipality" required onchange="syncLeaderRegionFromMunicipality(this)">
                                             <option value="">Selecione</option>
                                             <?= premium_render_municipality_options() ?>
                                         </select>
                                     </label>
-                                    <label>Nome da urna
+                                    <label>Nome
                                         <input type="text" name="leader_name" id="leaderName" required>
                                     </label>
-                                    <label>Cargo
-                                        <input type="text" name="leader_cargo" id="leaderCargo" placeholder="Prefeito ou Vereador" required>
-                                    </label>
-                                    <label>Partido
-                                        <input type="text" name="leader_party" id="leaderParty">
-                                    </label>
-                                    <label>Votos em 2024
+                                    <label>Votos esperados
                                         <input type="number" name="leader_votes_2024" id="leaderVotes" value="0" min="0" step="1">
-                                    </label>
-                                    <label>Margem %
-                                        <input type="number" name="margin_percent" id="leaderMargin" value="0" min="0" step="0.01">
-                                        <span class="field-help">Diferença entre o primeiro e o segundo colocado no município. Quanto maior a margem, maior a folga política da liderança.</span>
-                                    </label>
-                                    <label>Transferência %
-                                        <input type="number" name="transfer_rate" id="leaderTransfer" value="<?= premium_escape_html((string) (($settings['transfer_rate_default'] ?? premium_default_settings()['transfer_rate_default']))) ?>" min="0" max="100" step="0.01">
-                                        <span class="field-help">Percentual da votação desta liderança que pode migrar para o candidato. É o principal motor da projeção.</span>
-                                    </label>
-                                    <label>Visibilidade
-                                        <input type="number" name="visibility_score" value="50" min="0" max="100" step="0.01">
-                                        <span class="field-help">Mede presença pública, reconhecimento e força de comunicação da liderança no território.</span>
-                                    </label>
-                                    <label>Investimento
-                                        <input type="number" name="investment_score" value="50" min="0" max="100" step="0.01">
-                                        <span class="field-help">Avalia a associação da liderança com entregas, obras e ações visíveis que podem converter capital político em voto.</span>
-                                    </label>
-                                    <label>Tamanho
-                                        <select name="size_class" id="leaderSizeClass">
-                                            <option value="small">Pequeno</option>
-                                            <option value="medium" selected>Médio</option>
-                                            <option value="large">Grande</option>
-                                        </select>
-                                        <span class="field-help">Classificação do município usada para ajustar o peso da liderança. Municípios menores tendem a transferir melhor voto.</span>
-                                    </label>
-                                    <label class="checkbox">
-                                        <input type="checkbox" name="aligned_with_executive" value="1">
-                                        Alinhado ao executivo
-                                    </label>
-                                    <label>Notas
-                                        <textarea name="notes" rows="2"></textarea>
                                     </label>
                                 </div>
                                 <div class="action-row">
@@ -2085,11 +2359,12 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
             <?= premium_render_city_comparison_modal($forecast, $campaignBaselineYear) ?>
             <?= premium_render_agenda_list_modal($agenda) ?>
             <?= premium_render_agenda_detail_modal($campaign, $csrf) ?>
+            <?= premium_render_study_modal($onboardingStudyExcerpt) ?>
 
             <?php if ($activeTab === 'relatorios' || $activeTab === 'home' || $activeTab === 'agenda'): ?>
             <section class="grid-2 forecast-agenda-split">
                 <?php if ($activeTab === 'relatorios'): ?>
-                <div class="panel">
+                <div class="panel" id="reportsPanel">
                     <div class="section-title">
                         <div>
                             <div class="eyebrow">Previsão</div>
@@ -2205,7 +2480,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                 <?php endif; ?>
 
                 <?php if ($activeTab === 'home' || $activeTab === 'agenda'): ?>
-                <div class="panel">
+                <div class="panel" id="agendaPanel">
                     <div class="section-title">
                         <div>
                             <div class="eyebrow">Agenda</div>
@@ -2300,6 +2575,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
 <script id="premium-page-data" type="application/json"><?=
     json_encode([
         'leaderBatchDefaultTransfer' => (float) ($settings['transfer_rate_default'] ?? premium_default_settings()['transfer_rate_default']),
+        'campaign_id' => (int) ($campaign['id'] ?? 0),
         'campaign' => [
             'campaign_name' => (string) ($campaign['campaign_name'] ?? ''),
             'candidate_name' => (string) ($campaign['candidate_name'] ?? ''),
@@ -2308,6 +2584,10 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
             'current_municipio' => (string) ($campaign['current_municipio'] ?? ''),
             'current_region' => (string) ($campaign['current_region'] ?? ''),
             'baseline_year' => (int) ($campaign['baseline_year'] ?? 2022),
+        ],
+        'onboarding' => [
+            'hasCampaign' => (bool) $campaign,
+            'steps' => premium_build_onboarding_steps($campaign, $activeTab),
         ],
         'leaders' => $leaders,
         'agenda' => $agenda,
