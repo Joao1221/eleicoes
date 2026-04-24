@@ -3526,30 +3526,67 @@
 
         .leaders-tab-btn {
             appearance: none;
-            border: 1px solid var(--line);
-            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(59, 130, 246, 0.58);
+            background: rgba(37, 99, 235, 0.09);
             color: var(--text);
             border-radius: 12px;
             padding: 10px 14px;
             font-weight: 700;
             cursor: pointer;
-            transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            transform: translateY(0);
+            box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+            transition: border-color 0.25s ease, background 0.25s ease, color 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
         }
 
-        .leaders-tab-btn:hover {
+        html[data-theme="light"] .leaders-tab-btn {
+            border-color: rgba(37, 99, 235, 0.44);
+            background: rgba(219, 234, 254, 0.70);
+        }
+
+        .leaders-tab-btn::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, rgba(255, 255, 255, 0) 20%, rgba(255, 255, 255, 0.14) 50%, rgba(255, 255, 255, 0) 80%);
+            transform: translateX(-120%);
+            transition: transform 0.45s ease;
+            pointer-events: none;
+        }
+
+        .leaders-tab-btn:not(.is-active):not([aria-selected="true"]):hover {
+            border-color: rgba(16, 185, 129, 0.78);
+            background: rgba(16, 185, 129, 0.14);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 22px rgba(5, 150, 105, 0.24);
+        }
+
+        .leaders-tab-btn:hover::after {
+            transform: translateX(120%);
+        }
+
+        .leaders-tab-btn:focus-visible {
+            outline: 0;
             border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(110, 243, 197, 0.30), 0 10px 22px rgba(2, 6, 23, 0.18);
         }
 
-        .leaders-tab-btn.is-active {
-            background: rgba(110, 243, 197, 0.16);
-            border-color: rgba(110, 243, 197, 0.34);
-            color: var(--accent);
+        .leaders-tab-btn.is-active,
+        .leaders-tab-btn[aria-selected="true"] {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.30), rgba(249, 115, 22, 0.24) 50%, rgba(239, 68, 68, 0.22));
+            border-color: rgba(251, 146, 60, 0.58);
+            color: #fff7ed;
+            transform: translateY(-1px);
+            box-shadow: 0 12px 26px rgba(234, 88, 12, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
         }
 
-        html[data-theme="light"] .leaders-tab-btn.is-active {
-            background: rgba(15, 118, 110, 0.10);
-            border-color: rgba(15, 118, 110, 0.28);
-            color: #0f766e;
+        html[data-theme="light"] .leaders-tab-btn.is-active,
+        html[data-theme="light"] .leaders-tab-btn[aria-selected="true"] {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.26), rgba(249, 115, 22, 0.21) 50%, rgba(244, 63, 94, 0.16));
+            border-color: rgba(249, 115, 22, 0.46);
+            color: #7c2d12;
+            box-shadow: 0 10px 22px rgba(249, 115, 22, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.28);
         }
 
         .leaders-tab-panel[hidden] {

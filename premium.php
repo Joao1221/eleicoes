@@ -1644,6 +1644,9 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                     <a class="premium-sidebar__link<?= $activeTab === 'agenda' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('agenda', $campaign)) ?>">Agenda de campanha</a>
                     <a class="premium-sidebar__link<?= $activeTab === 'relatorios' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('relatorios', $campaign)) ?>">Relatórios</a>
                     <a class="premium-sidebar__link<?= $activeTab === 'opcoes' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('opcoes', $campaign)) ?>">Opções avançadas</a>
+                    <?php if ($trialDaysRemaining === null): ?>
+                    <a class="premium-sidebar__link" href="premium_dicas_campanha.php<?= $campaign ? '?campaign_id=' . (int)$campaign['id'] : '' ?>">Estratégias de campanha</a>
+                    <?php endif; ?>
                 </nav>
                 <?php if ($user && !$isAdmin): ?>
                     <?= premium_render_onboarding_panel($campaign, $activeTab, $onboardingStudyExcerpt) ?>
