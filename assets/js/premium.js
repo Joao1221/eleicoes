@@ -2296,6 +2296,42 @@
             return;
         }
 
+        if (['optionsCampaignBody', 'baselineBody'].includes(hashId)) {
+            setOptionsMode('campaign');
+            const campaignPanel = document.getElementById(hashId === 'baselineBody' ? 'baselineBody' : 'optionsCampaignBody');
+            if (campaignPanel) {
+                campaignPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+        }
+
+        if (['optionsSettingsBody', 'settingsBody'].includes(hashId)) {
+            setOptionsMode('settings');
+            const settingsPanel = document.getElementById(hashId === 'settingsBody' ? 'optionsSettingsBody' : hashId);
+            if (settingsPanel) {
+                settingsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+        }
+
+        if (hashId === 'optionsSecurityBody') {
+            setOptionsMode('security');
+            const securityPanel = document.getElementById('optionsSecurityBody');
+            if (securityPanel) {
+                securityPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+        }
+
+        if (hashId === 'optionsDeleteBody') {
+            setOptionsMode('delete');
+            const deletePanel = document.getElementById('optionsDeleteBody');
+            if (deletePanel) {
+                deletePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+        }
+
         const target = document.getElementById(hashId);
         if (!target) {
             return;
@@ -2321,7 +2357,9 @@
         const hashStepMap = {
             campaignCreatePanel: 0,
             baselineBody: 0,
+            optionsCampaignBody: 0,
             settingsBody: 1,
+            optionsSettingsBody: 1,
             leaderSearchBody: 2,
             leaderModeAdd: 2,
             leaderModeConsult: 2,
@@ -2883,7 +2921,12 @@
     document.addEventListener('click', (event) => {
         const onboardingAction = event.target.closest('[data-onboarding-step-action]');
         if (onboardingAction) {
+            const targetHref = String(onboardingAction.getAttribute('href') || '');
             advanceOnboardingGuide();
+            event.preventDefault();
+            if (targetHref !== '' && targetHref !== '#') {
+                window.location.href = targetHref;
+            }
             return;
         }
 

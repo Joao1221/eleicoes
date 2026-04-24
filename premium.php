@@ -889,7 +889,7 @@ function premium_build_onboarding_steps(?array $campaign, string $activeTab): ar
             'title' => 'Peso dos cenários',
             'descriptionHtml' => 'O sistema <strong>já está calibrado com os valores padrão</strong>. Se mexer, comece apenas por <strong>Transferência padrão %</strong> e altere o restante só com certeza.',
             'buttonLabel' => 'Abrir pesos',
-            'href' => $opcoesHref . '#settingsBody',
+            'href' => $opcoesHref . '#optionsSettingsBody',
             'statusLabel' => 'Revise o modelo antes de mudar',
             'locked' => !$hasCampaign,
         ],
@@ -1008,7 +1008,7 @@ function premium_render_onboarding_panel(?array $campaign, string $activeTab, st
             'title' => 'Peso dos cenários',
             'description_html' => 'O sistema <strong>já está calibrado com os valores padrão</strong>. Se for alterar algo, comece por <strong>Transferência padrão %</strong> e só mexa no restante se tiver certeza do impacto.',
             'button_label' => $hasCampaign ? 'Abrir pesos' : 'Disponível após criar a campanha',
-            'href' => $hasCampaign ? $opcoesHref . '#settingsBody' : '',
+            'href' => $hasCampaign ? $opcoesHref . '#optionsSettingsBody' : '',
             'locked' => !$hasCampaign,
             'tone' => 'warning',
         ],
@@ -2108,10 +2108,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
 
                     <div id="optionsSettingsBody" class="leaders-tab-panel" data-options-mode-panel="settings"
                         role="tabpanel" aria-labelledby="optionsModeSettings" hidden>
-                        <p class="panel-note">Cada peso ajusta uma parte da projeção. A base de <?= premium_escape_html($campaignBaselineLabel) ?> fica como comparativo e só entra no fallback onde não houver liderança cadastrada.</p>
-                        <p class="panel-inline-link">
-                            <button type="button" class="panel-inline-link__btn" data-study-open>Ler base técnica</button>
-                        </p>
+                        <p class="panel-note">Cada peso ajusta uma parte da projeção. A base de <?= premium_escape_html($campaignBaselineLabel) ?> fica como comparativo e só entra no fallback onde não houver liderança cadastrada. <button type="button" class="panel-inline-link__btn" data-study-open>Ler base técnica</button></p>
                         <form method="post" action="premium_actions.php" class="settings-form">
                             <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                             <input type="hidden" name="action" value="save_settings">
