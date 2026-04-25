@@ -143,18 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
 }
 
 $user = premium_current_user($conn);
-$trialDaysRemaining = $user ? premium_trial_days_remaining($user) : null;
-$accessBadgeLabel = null;
-
-if ($user) {
-    if ($trialDaysRemaining !== null) {
-        $accessBadgeLabel = $trialDaysRemaining > 0
-            ? 'Teste grátis • ' . $trialDaysRemaining . ' dias restantes'
-            : 'Teste grátis • expira hoje';
-    } else {
-        $accessBadgeLabel = 'Acesso ativo';
-    }
-}
+$accessBadgeLabel = $user ? 'Acesso premium' : null;
 
 if ($user && isset($_GET['campaign_id'])) {
     $requestedCampaignId = (int) $_GET['campaign_id'];
@@ -165,6 +154,9 @@ if ($user && isset($_GET['campaign_id'])) {
 
 $flash = premium_pull_flash();
 $csrf = premium_csrf_token();
+$premiumWhatsappPhone = '5579999248114';
+$premiumWhatsappMessage = 'Olá! Vim pelo Apoia Candidato Premium e quero agendar uma apresentação para entender como o sistema pode ajudar minha campanha com projeções, lideranças, agenda e relatórios.';
+$premiumWhatsappUrl = 'https://wa.me/' . $premiumWhatsappPhone . '?text=' . rawurlencode($premiumWhatsappMessage);
 
 $campaigns = [];
 $campaign = null;
@@ -481,17 +473,17 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
     $html[] = '<div class="leaders-summary">';
     $html[] = '  <div class="summary-metric">';
     $html[] = '    <div class="summary-metric__label">Dados da campanha ' . premium_escape_html($baselineLabel) . '</div>';
-    $html[] = '    <div class="summary-metric__value">' . premium_fmt_int($baselineVotes) . '</div>';
-    $html[] = '    <div class="summary-metric__sub">Total histórico do candidato nesta campanha</div>';
+    $html[] = '    <div class="summary-metric__value" id="activeLeadersBaselineValue" data-default-value="' . $baselineVotes . '">' . premium_fmt_int($baselineVotes) . '</div>';
+    $html[] = '    <div class="summary-metric__sub" id="activeLeadersBaselineSub">Total histórico do candidato nesta campanha</div>';
     $html[] = '  </div>';
     $html[] = '  <div class="summary-metric">';
     $html[] = '    <div class="summary-metric__label">Previsão 2026</div>';
-    $html[] = '    <div class="summary-metric__value">' . premium_fmt_int($forecast2026) . '</div>';
-    $html[] = '    <div class="summary-metric__sub">Cenário base calculado com os pesos atuais</div>';
+    $html[] = '    <div class="summary-metric__value" id="activeLeadersForecastValue" data-default-value="' . $forecast2026 . '">' . premium_fmt_int($forecast2026) . '</div>';
+    $html[] = '    <div class="summary-metric__sub" id="activeLeadersForecastSub">Cenário base calculado com os pesos atuais</div>';
     $html[] = '  </div>';
     $html[] = '</div>';
     $html[] = '<div class="empty-state" id="activeLeadersFilterEmpty" hidden>Nenhuma liderança corresponde aos filtros selecionados.</div>';
-    $html[] = '<div id="activeLeadersRowsViewport">';
+    $html[] = '<div id="activeLeadersRowsViewport" class="leaders-rows-viewport">';
     $html[] = '<br>';
     $html[] = '<table class="leaders-table">';
     $html[] = '<caption>Lideranças e projeção de votação em 2026</caption>';
@@ -538,7 +530,7 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
             $html[] = '<span class="leaders-table-leader-meta">' . premium_escape_html($leaderParty) . '</span>';
         }
         $html[] = '</span></td>';
-        $html[] = '<td>' . premium_fmt_int($votes2024) . '</td>';
+        $html[] = '<td>' . (!empty($leader['is_manual_projection']) ? '-' : premium_fmt_int($votes2024)) . '</td>';
         $html[] = '<td>' . premium_fmt_percent($transferRate) . '</td>';
         $html[] = '<td>' . premium_fmt_int($baseEffect) . '</td>';
         $html[] = '<td>' . premium_fmt_int($projectedVotes) . '</td>';
@@ -1062,7 +1054,7 @@ function premium_render_onboarding_panel(?array $campaign, string $activeTab, st
         <div class="section-title">
             <div>
                 <div class="eyebrow">Comece por aqui</div>
-                <h2>Guia rápido do teste de 7 dias</h2>
+                <h2>Guia rápido do Premium</h2>
             </div>
             <div class="pill-row onboarding-panel__meta" style="margin-top: 0;">
                 <span class="pill">Etapa atual: <?= premium_escape_html($currentTabLabel) ?></span>
@@ -1515,6 +1507,21 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
     return 'premium?' . implode('&', $params);
 }
 
+$premiumSupportWhatsappUrl = '';
+if ($user) {
+    $premiumSupportUserName = trim((string) ($user['name'] ?? ''));
+    $premiumSupportUserEmail = trim((string) ($user['email'] ?? ''));
+    $premiumSupportCampaignLabel = premium_selected_campaign_label($campaign);
+    $premiumSupportWhatsappMessage = implode("\n", [
+        'Olá! Preciso de ajuda no Apoia Candidato Premium.',
+        'Usuário: ' . ($premiumSupportUserName !== '' ? $premiumSupportUserName : 'Não informado'),
+        'E-mail: ' . ($premiumSupportUserEmail !== '' ? $premiumSupportUserEmail : 'Não informado'),
+        'Campanha: ' . $premiumSupportCampaignLabel,
+        'Pode me atender?',
+    ]);
+    $premiumSupportWhatsappUrl = 'https://wa.me/' . $premiumWhatsappPhone . '?text=' . rawurlencode($premiumSupportWhatsappMessage);
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -1565,6 +1572,14 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                 <?php endif; ?>
                 <a class="btn ghost" href="premium_logout.php">Sair</a>
             </div>
+            <?php if ($premiumSupportWhatsappUrl !== ''): ?>
+                <div class="vip-support">
+                    <span>Atendimento VIP para clientes premium</span>
+                    <a class="btn vip-support__btn" href="<?= premium_escape_html($premiumSupportWhatsappUrl) ?>" target="_blank" rel="noopener">
+                        Pedir ajuda no WhatsApp
+                    </a>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
         </div>
     </header>
@@ -1590,10 +1605,19 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                     <span class="pill">Lideranças 2024</span>
                     <span class="pill">Relatórios premium</span>
                 </div>
+                <div class="whatsapp-presentation">
+                    <div>
+                        <strong>Quer ver isso funcionando na sua campanha?</strong>
+                        <p class="muted">Agende uma apresentação rápida pelo WhatsApp e veja como transformar votos anteriores, apoios locais e agenda em um mapa claro de prioridades para 2026.</p>
+                    </div>
+                    <a class="btn whatsapp-cta" href="<?= premium_escape_html($premiumWhatsappUrl) ?>" target="_blank" rel="noopener">
+                        Solicitar apresentação
+                    </a>
+                </div>
             </div>
             <div class="panel auth-card">
                 <h3>Acesso premium</h3>
-                <p class="muted">Use as credenciais premium para entrar no escritório da campanha.</p>
+                <p class="muted">Use as credenciais premium para entrar no escritório da campanha. Se ainda não tem acesso, solicite uma apresentação pelo WhatsApp.</p>
                 <form method="post" action="premium" style="margin-top:16px;">
                     <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
                     <input type="hidden" name="action" value="login">
@@ -1644,9 +1668,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                     <a class="premium-sidebar__link<?= $activeTab === 'agenda' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('agenda', $campaign)) ?>">Agenda de campanha</a>
                     <a class="premium-sidebar__link<?= $activeTab === 'relatorios' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('relatorios', $campaign)) ?>">Relatórios</a>
                     <a class="premium-sidebar__link<?= $activeTab === 'opcoes' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('opcoes', $campaign)) ?>">Opções avançadas</a>
-                    <?php if ($trialDaysRemaining === null): ?>
                     <a class="premium-sidebar__link" href="premium_dicas_campanha.php<?= $campaign ? '?campaign_id=' . (int)$campaign['id'] : '' ?>">Estratégias de campanha</a>
-                    <?php endif; ?>
                 </nav>
                 <?php if ($user && !$isAdmin): ?>
                     <?= premium_render_onboarding_panel($campaign, $activeTab, $onboardingStudyExcerpt) ?>
@@ -2329,6 +2351,8 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                             <input type="hidden" name="source_sq_candidato" id="sourceSq">
                             <input type="hidden" name="source_nr_votavel" id="sourceNrVotavel">
                             <input type="hidden" name="source_turno" id="sourceTurno" value="1">
+                            <input type="hidden" name="transfer_rate" value="100">
+                            <input type="hidden" name="is_manual_projection" value="1">
                             <div class="form-grid compact">
                                 <label>Município
                                     <select name="municipality" id="leaderMunicipality" required onchange="syncLeaderRegionFromMunicipality(this)">
@@ -2337,10 +2361,11 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                                     </select>
                                 </label>
                                 <label>Nome
-                                    <input type="text" name="leader_name" id="leaderName" required>
+                                    <input type="text" name="leader_name" id="leaderName" required placeholder="Nome da liderança">
                                 </label>
                                 <label>Votos esperados
-                                    <input type="number" name="leader_votes_2024" id="leaderVotes" value="0" min="0" step="1">
+                                    <input type="number" name="leader_votes_2024" id="leaderVotes" value="0" min="0" step="1" placeholder="Total de votos esperados">
+                                    <span class="field-help">Passa a ser considerado como Projeção 2026. Como não há base de votação em 2024, a transferência será 100% e a base transferível será igual aos votos esperados.</span>
                                 </label>
                             </div>
                             <div class="action-row">
@@ -2401,7 +2426,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
 
                     <div id="reportsRegionsBody" class="leaders-tab-panel" data-report-mode-panel="regions"
                         role="tabpanel" aria-labelledby="reportModeRegions">
-                        <div class="table-wrap">
+                        <div class="table-wrap reports-ranking-scroll">
                             <table style="min-width: 100%;">
                                 <thead>
                                     <tr>
@@ -2412,7 +2437,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach (array_slice((array) ($forecast['regions'] ?? []), 0, 6) as $regionRow): ?>
+                                    <?php foreach ((array) ($forecast['regions'] ?? []) as $regionRow): ?>
                                         <tr>
                                             <td><?= premium_escape_html((string) ($regionRow['regiao'] ?? '')) ?></td>
                                             <td><?= premium_fmt_int((int) ($regionRow['baseline_votes'] ?? 0)) ?></td>
@@ -2434,7 +2459,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
 
                     <div id="reportsCitiesBody" class="leaders-tab-panel" data-report-mode-panel="cities"
                         role="tabpanel" aria-labelledby="reportModeCities" hidden>
-                        <div class="table-wrap">
+                        <div class="table-wrap reports-ranking-scroll">
                             <table style="min-width: 100%;">
                                 <thead>
                                     <tr>
@@ -2445,7 +2470,7 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach (array_slice((array) ($forecast['cities'] ?? []), 0, 6) as $cityRow): ?>
+                                    <?php foreach ((array) ($forecast['cities'] ?? []) as $cityRow): ?>
                                         <tr>
                                             <td><?= premium_escape_html((string) ($cityRow['municipio'] ?? '')) ?></td>
                                             <td><?= premium_fmt_int((int) ($cityRow['baseline_votes'] ?? 0)) ?></td>
@@ -2465,6 +2490,40 @@ function premium_tab_href(string $tab, ?array $campaign = null): string
                         </div>
                     </div>
                 </div>
+
+                <?php if ($advisor): ?>
+                <?php
+                    $advisorReportBaseUrl = 'premium_conselheiro.php?campaign_id=' . (int) $campaign['id'];
+                    $advisorReportPrintUrl = $advisorReportBaseUrl . '&print=advisor-ranking';
+                    $advisorReportFilters = [
+                        'all' => 'Todos',
+                        'consolidar-base' => 'Consolidar base',
+                        'defender-base' => 'Defender base',
+                        'base-em-risco' => 'Base em risco',
+                        'buraco-eleitoral' => 'Buraco eleitoral',
+                    ];
+                ?>
+                <div class="panel advisor-report-panel">
+                    <div class="section-title">
+                        <div>
+                            <div class="eyebrow">Conselheiro</div>
+                            <h2>Relatórios do Conselheiro</h2>
+                        </div>
+                    </div>
+                    <p class="panel-note">Imprima a leitura estratégica do ranking municipal já filtrada por recomendação.</p>
+                    <div class="advisor-report-actions">
+                        <?php foreach ($advisorReportFilters as $filterKey => $filterLabel): ?>
+                            <?php $href = $filterKey === 'all' ? $advisorReportPrintUrl : $advisorReportPrintUrl . '&filter=' . rawurlencode($filterKey); ?>
+                            <a class="btn <?= $filterKey === 'all' ? 'comparison-cta' : 'ghost' ?> btn-small" href="<?= premium_escape_html($href) ?>" target="_blank" rel="noopener">
+                                <?= premium_escape_html($filterLabel) ?>
+                            </a>
+                        <?php endforeach; ?>
+                        <a class="btn ghost btn-small" href="<?= premium_escape_html($advisorReportBaseUrl . '#advisorRankingPanel') ?>">
+                            Múltiplas recomendações
+                        </a>
+                    </div>
+                </div>
+                <?php endif; ?>
                 <?php endif; ?>
 
                 <?php if ($activeTab === 'home' || $activeTab === 'agenda'): ?>

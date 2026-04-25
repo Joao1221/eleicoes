@@ -5,39 +5,13 @@ declare(strict_types=1);
 require_once __DIR__ . '/premium_helpers.php';
 
 $pageTitle = 'Apoia Candidato | Inteligência eleitoral para campanhas';
-$pageDescription = 'Transforme dados de 2022, lideranças de 2024 e força territorial em estratégia de campanha. Teste grátis por 7 dias.';
-
-$trialFormValues = [
-    'name' => '',
-    'email' => '',
-];
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'start_trial') {
-    $trialFormValues = [
-        'name' => trim((string) ($_POST['name'] ?? '')),
-        'email' => trim((string) ($_POST['email'] ?? '')),
-    ];
-
-    $password = (string) ($_POST['password'] ?? '');
-    $passwordConfirm = (string) ($_POST['password_confirm'] ?? '');
-
-    if (!premium_validate_csrf($_POST['csrf'] ?? null)) {
-        premium_flash('error', 'Sua sessão expirou. Recarregue a página e tente novamente.');
-    } elseif ($trialFormValues['name'] === '' || $trialFormValues['email'] === '' || $password === '' || $passwordConfirm === '') {
-        premium_flash('error', 'Preencha nome, e-mail e senha para liberar o teste.');
-    } elseif ($password !== $passwordConfirm) {
-        premium_flash('error', 'A confirmação da senha não confere.');
-    } elseif (premium_create_trial_user($conn, $trialFormValues['name'], $trialFormValues['email'], $password, 7)) {
-        premium_flash('success', 'Teste gratuito de 7 dias liberado. Você já pode explorar o sistema.');
-        header('Location: premium');
-        exit;
-    }
-}
+$pageDescription = 'Transforme dados de 2022, lideranças de 2024 e força territorial em estratégia de campanha. Solicite uma apresentação do Apoia Candidato.';
 
 $user = premium_current_user($conn);
-$trialDaysRemaining = $user ? premium_trial_days_remaining($user) : null;
 $flash = premium_pull_flash();
-$csrf = premium_csrf_token();
+$premiumWhatsappPhone = '5579999248114';
+$premiumWhatsappMessage = 'Olá! Vim pelo Apoia Candidato Premium e quero agendar uma apresentação para entender como o sistema pode ajudar minha campanha com projeções, lideranças, agenda e relatórios.';
+$premiumWhatsappUrl = 'https://wa.me/' . $premiumWhatsappPhone . '?text=' . rawurlencode($premiumWhatsappMessage);
 
 $featureCards = [
     [
@@ -93,12 +67,12 @@ $audienceCards = [
 
 $faqItems = [
     [
-        'question' => 'O teste precisa de cartão?',
-        'answer' => 'Não. Você cria sua conta e recebe 7 dias de acesso ao sistema sem cartão.',
+        'question' => 'Como solicito uma apresentação?',
+        'answer' => 'Clique no botão de WhatsApp, envie a mensagem pronta e combine o melhor horário para ver o sistema aplicado à rotina da sua campanha.',
     ],
     [
-        'question' => 'O que acontece depois dos 7 dias?',
-        'answer' => 'O acesso expira automaticamente e a conta fica bloqueada até a liberação de um plano premium.',
+        'question' => 'O que vou ver na apresentação?',
+        'answer' => 'Você verá como o Apoia Candidato organiza dados eleitorais, lideranças, projeções, agenda e relatórios para orientar prioridades de campanha.',
     ],
     [
         'question' => 'O sistema promete vitória?',
@@ -136,15 +110,11 @@ $heroPreviewItems = [
     ],
 ];
 
-$accessTitle = 'Comece seu teste grátis';
-$accessSubtitle = 'Crie a conta e explore o sistema por 7 dias, sem cartão e sem compromisso.';
+$accessTitle = 'Solicite uma apresentação';
+$accessSubtitle = 'Fale pelo WhatsApp e veja, em poucos minutos, como o Apoia Candidato pode transformar dados eleitorais em decisões práticas para sua campanha.';
 if ($user) {
     $accessTitle = 'Seu acesso está ativo';
-    $accessSubtitle = $trialDaysRemaining !== null
-        ? ($trialDaysRemaining > 0
-            ? 'Seu teste expira em ' . $trialDaysRemaining . ' dias.'
-            : 'Seu teste expira hoje.')
-        : 'Sua conta já está liberada para uso.';
+    $accessSubtitle = 'Sua conta já está liberada para uso.';
 }
 ?><!doctype html>
 <html lang="pt-BR">
@@ -154,6 +124,7 @@ if ($user) {
     <meta name="description" content="<?= premium_escape_html($pageDescription) ?>">
     <meta name="color-scheme" content="dark light">
     <title><?= premium_escape_html($pageTitle) ?></title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -330,6 +301,16 @@ if ($user) {
             box-shadow: 0 18px 34px rgba(77, 163, 255, 0.24);
         }
 
+        .btn-whatsapp {
+            background: #25d366;
+            color: #052e18;
+            box-shadow: 0 18px 34px rgba(37, 211, 102, 0.22);
+        }
+
+        .btn-whatsapp:hover {
+            background: #22c55e;
+        }
+
         .btn-secondary {
             background: rgba(255, 255, 255, 0.06);
             color: var(--text);
@@ -340,6 +321,16 @@ if ($user) {
             background: transparent;
             color: var(--text);
             border: 1px solid var(--line);
+        }
+
+        .btn-access-outline {
+            border: 2px solid var(--accent-2);
+            box-shadow: 0 0 0 4px rgba(124, 240, 214, 0.10), 0 14px 28px rgba(124, 240, 214, 0.14);
+        }
+
+        .btn-access-outline:hover {
+            border-color: #ffffff;
+            box-shadow: 0 0 0 5px rgba(124, 240, 214, 0.16), 0 18px 34px rgba(124, 240, 214, 0.22);
         }
 
         .hero {
@@ -849,6 +840,25 @@ if ($user) {
                 flex: 1 1 100%;
             }
 
+            .header-actions {
+                flex-wrap: nowrap;
+                gap: 8px;
+            }
+
+            .header-actions .btn-ghost {
+                flex: 1 1 0;
+                min-width: 0;
+                padding-inline: 12px;
+                white-space: nowrap;
+            }
+
+            .header-actions .btn {
+                flex: 2.25 1 0;
+                min-width: 0;
+                padding-inline: 12px;
+                white-space: nowrap;
+            }
+
             .hero-title {
                 max-width: 100%;
             }
@@ -868,12 +878,12 @@ if ($user) {
             <nav class="header-nav" aria-label="Seções da página">
                 <a href="#solucao">O sistema</a>
                 <a href="#para-quem">Para quem</a>
-                <a href="#trial">Teste grátis</a>
+                <a href="#apresentacao">Apresentação</a>
                 <a href="#faq">Perguntas</a>
             </nav>
             <div class="header-actions">
-                <a class="btn-ghost" href="premium">Entrar</a>
-                <a class="btn" href="#trial">Teste grátis 7 dias</a>
+                <a class="btn-ghost btn-access-outline" href="premium">Entrar</a>
+                <a class="btn btn-whatsapp" href="<?= premium_escape_html($premiumWhatsappUrl) ?>" target="_blank" rel="noopener">Agendar apresentação</a>
             </div>
         </header>
 
@@ -898,8 +908,8 @@ if ($user) {
                     </p>
 
                     <div class="hero-actions">
-                        <a class="btn" href="#trial">Liberar teste de 7 dias</a>
-                        <a class="btn-secondary" href="premium">Já tenho acesso</a>
+                        <a class="btn btn-whatsapp" href="<?= premium_escape_html($premiumWhatsappUrl) ?>" target="_blank" rel="noopener">Solicitar apresentação</a>
+                        <a class="btn-secondary btn-access-outline" href="premium">Já tenho acesso</a>
                     </div>
 
                     <ul class="hero-points" aria-label="Destaques do sistema">
@@ -944,37 +954,11 @@ if ($user) {
                             <div class="eyebrow"><?= premium_escape_html($accessTitle) ?></div>
                             <h3><?= premium_escape_html($accessTitle) ?></h3>
                             <p><?= premium_escape_html($accessSubtitle) ?></p>
-
-                            <form method="post" action="index.php" autocomplete="on">
-                                <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                                <input type="hidden" name="action" value="start_trial">
-                                <div class="form-grid" style="margin-top:18px;">
-                                    <label class="field">
-                                        <span>Nome</span>
-                                        <input type="text" name="name" value="<?= premium_escape_html($trialFormValues['name']) ?>" placeholder="Seu nome completo" required>
-                                    </label>
-                                    <label class="field">
-                                        <span>E-mail</span>
-                                        <input type="email" name="email" value="<?= premium_escape_html($trialFormValues['email']) ?>" placeholder="voce@campanha.com" required>
-                                    </label>
-                                    <label class="field">
-                                        <span>Senha</span>
-                                        <input type="password" name="password" minlength="8" placeholder="Mínimo 8 caracteres" required>
-                                    </label>
-                                    <label class="field">
-                                        <span>Confirmar senha</span>
-                                        <input type="password" name="password_confirm" minlength="8" placeholder="Repita a senha" required>
-                                    </label>
-                                </div>
-
-                                <div class="form-actions" style="margin-top:18px;">
-                                    <button class="btn" type="submit">Liberar meu teste</button>
-                                </div>
-                            </form>
-
-                            <p class="help-text">
-                                O teste começa assim que sua conta é criada e expira automaticamente em 7 dias. Depois desse período, o acesso é suspenso até a liberação de uma licença.
-                            </p>
+                            <div class="form-actions" style="margin-top:18px;">
+                                <a class="btn btn-whatsapp" href="<?= premium_escape_html($premiumWhatsappUrl) ?>" target="_blank" rel="noopener">Chamar no WhatsApp</a>
+                                <a class="btn-secondary btn-access-outline" href="premium">Já tenho acesso</a>
+                            </div>
+                            <p class="help-text">Mensagem pronta para o contato: agendar uma apresentação e conhecer melhor o sistema.</p>
                         </div>
                     <?php endif; ?>
                 </aside>
@@ -1020,13 +1004,13 @@ if ($user) {
 
                 <article class="quote-card">
                     <div class="eyebrow">Como funciona</div>
-                    <h3>Teste em três passos</h3>
+                    <h3>Apresentação em três passos</h3>
                     <ol class="steps">
-                        <li>Cadastre nome, e-mail e senha para liberar a conta de teste.</li>
-                        <li>Acesse o sistema por 7 dias e veja dados, lideranças, cenários e o Conselheiro.</li>
-                        <li>Use o diagnóstico para defender base, ampliar território e tomar decisão com mais método.</li>
+                        <li>Chame pelo WhatsApp e conte rapidamente o perfil da campanha.</li>
+                        <li>Veja como dados, lideranças, cenários, agenda e Conselheiro funcionam dentro do sistema.</li>
+                        <li>Entenda como usar o diagnóstico para defender base, ampliar território e tomar decisão com mais método.</li>
                     </ol>
-                    <p>Sem cartão. Sem compromisso. O foco é provar valor rapidamente.</p>
+                    <p>A conversa é direta: mostrar valor, tirar dúvidas e indicar o melhor caminho para sua equipe.</p>
                 </article>
             </section>
 
@@ -1050,12 +1034,12 @@ if ($user) {
                 </div>
             </section>
 
-            <section class="section trial-section">
+            <section class="section trial-section" id="apresentacao">
                 <article class="trial-copy">
-                    <div class="eyebrow">Teste de 7 dias</div>
-                    <h2>Teste gratuito, sem cartão, com acesso ao sistema completo.</h2>
+                    <div class="eyebrow">Apresentação do sistema</div>
+                    <h2>Veja como sua campanha pode decidir com dados antes de gastar agenda e energia.</h2>
                     <p class="hero-lead" style="margin-bottom: 0;">
-                        Crie sua conta agora e veja o Apoia Candidato em funcionamento. Se a leitura territorial fizer sentido para sua campanha, você já terá o mapa certo para seguir.
+                        Solicite uma apresentação pelo WhatsApp e conheça o Apoia Candidato em funcionamento. A ideia é mostrar, de forma objetiva, como a leitura territorial pode orientar prioridades reais da campanha.
                     </p>
                     <ul class="trial-list">
                         <li>Dados de candidatos a prefeito e vereador.</li>
@@ -1071,36 +1055,12 @@ if ($user) {
                     <p><?= premium_escape_html($accessSubtitle) ?></p>
 
                     <?php if (!$user): ?>
-                        <form method="post" action="index.php" autocomplete="on">
-                            <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
-                            <input type="hidden" name="action" value="start_trial">
-                            <div class="form-grid" style="margin-top:18px;">
-                                <label class="field">
-                                    <span>Nome</span>
-                                    <input type="text" name="name" value="<?= premium_escape_html($trialFormValues['name']) ?>" placeholder="Seu nome completo" required>
-                                </label>
-                                <label class="field">
-                                    <span>E-mail</span>
-                                    <input type="email" name="email" value="<?= premium_escape_html($trialFormValues['email']) ?>" placeholder="voce@campanha.com" required>
-                                </label>
-                                <label class="field">
-                                    <span>Senha</span>
-                                    <input type="password" name="password" minlength="8" placeholder="Mínimo 8 caracteres" required>
-                                </label>
-                                <label class="field">
-                                    <span>Confirmar senha</span>
-                                    <input type="password" name="password_confirm" minlength="8" placeholder="Repita a senha" required>
-                                </label>
-                            </div>
-
-                            <div class="form-actions" style="margin-top:18px;">
-                                <button class="btn" type="submit">Liberar meu teste</button>
-                                <a class="btn-secondary" href="premium">Já tenho acesso</a>
-                            </div>
-                        </form>
-
+                        <div class="form-actions" style="margin-top:18px;">
+                            <a class="btn btn-whatsapp" href="<?= premium_escape_html($premiumWhatsappUrl) ?>" target="_blank" rel="noopener">Solicitar pelo WhatsApp</a>
+                            <a class="btn-secondary btn-access-outline" href="premium">Já tenho acesso</a>
+                        </div>
                         <p class="help-text">
-                            O período de teste começa no cadastro e expira automaticamente em 7 dias. Depois disso, o acesso fica suspenso até a liberação de uma licença premium.
+                            Atendimento pelo WhatsApp: A mensagem já vai pronta para agendar a apresentação.
                         </p>
                     <?php else: ?>
                         <div class="access-card" style="margin-top:18px;">
@@ -1109,7 +1069,7 @@ if ($user) {
                                 <?= premium_escape_html((string) ($user['name'] ?? 'Sua conta')) ?> já está liberada.
                             </p>
                             <p style="margin-top:10px;">
-                                <?= premium_escape_html($trialDaysRemaining !== null ? ($trialDaysRemaining > 0 ? 'Seu teste expira em ' . $trialDaysRemaining . ' dias.' : 'Seu teste expira hoje.') : 'Seu acesso está ativo.') ?>
+                                Seu acesso está ativo.
                             </p>
                             <div class="cta-row" style="margin-top:18px;">
                                 <a class="btn" href="premium">Abrir o sistema</a>
@@ -1123,7 +1083,7 @@ if ($user) {
             <section class="section" id="faq">
                 <div class="section-head">
                     <div class="eyebrow">Perguntas frequentes</div>
-                    <h2>As dúvidas mais comuns antes do teste</h2>
+                    <h2>As dúvidas mais comuns antes da apresentação</h2>
                 </div>
 
                 <div class="faq-grid">

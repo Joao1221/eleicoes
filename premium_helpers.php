@@ -58,6 +58,39 @@ function premium_fmt_candidate_number_plain(?int $value): string
     return $number > 0 ? (string) $number : '';
 }
 
+function premium_vip_support_whatsapp_url(?array $user, ?array $campaign, string $phone = '5579999248114'): string
+{
+    if (!$user) {
+        return '';
+    }
+
+    $userName = trim((string) ($user['name'] ?? ''));
+    $userEmail = trim((string) ($user['email'] ?? ''));
+    $campaignParts = [];
+
+    if ($campaign) {
+        $campaignParts = [
+            (string) ($campaign['campaign_name'] ?? 'Campanha'),
+            (string) ($campaign['candidate_name'] ?? ''),
+        ];
+    }
+
+    $campaignLabel = trim(implode(' • ', array_filter($campaignParts, static fn(string $item): bool => trim($item) !== '')));
+    if ($campaignLabel === '') {
+        $campaignLabel = 'Nenhuma campanha ativa';
+    }
+
+    $message = implode("\n", [
+        'Olá! Preciso de ajuda no Apoia Candidato Premium.',
+        'Usuário: ' . ($userName !== '' ? $userName : 'Não informado'),
+        'E-mail: ' . ($userEmail !== '' ? $userEmail : 'Não informado'),
+        'Campanha: ' . $campaignLabel,
+        'Pode me atender?',
+    ]);
+
+    return 'https://wa.me/' . preg_replace('/\D+/', '', $phone) . '?text=' . rawurlencode($message);
+}
+
 function premium_ensure_campaign_photo_column(mysqli $conn): void
 {
     static $checked = false;
@@ -360,25 +393,28 @@ function premium_region_definitions(): array
     return [
         'Alto Sertão Sergipano' => [
             'Canindé de São Francisco',
+            'Gararu',
             'Monte Alegre de Sergipe',
             'Nossa Senhora da Glória',
             'Nossa Senhora de Lourdes',
             'Poço Redondo',
             'Porto da Folha',
         ],
-        'Médio Sertão Sergipano' => [
-            'Aquidabã',
+        'Agreste Central' => [
+            'Areia Branca',
+            'Campo do Brito',
             'Carira',
-            'Cumbe',
-            'Feira Nova',
             'Frei Paulo',
-            'Gararu',
-            'Gracho Cardoso',
-            'Itabi',
+            'Itabaiana',
+            'Macambira',
+            'Malhador',
+            'Moita Bonita',
             'Nossa Senhora Aparecida',
-            'Nossa Senhora das Dores',
-            'São Miguel do Aleixo',
+            'Pedra Mole',
+            'Pinhão',
             'Ribeirópolis',
+            'São Domingos',
+            'São Miguel do Aleixo',
         ],
         'Baixo São Francisco' => [
             'Amparo de São Francisco',
@@ -396,36 +432,24 @@ function premium_region_definitions(): array
             'São Francisco',
             'Telha',
         ],
-        'Agreste Central Sergipano' => [
-            'Areia Branca',
-            'Campo do Brito',
-            'Itabaiana',
-            'Macambira',
-            'Malhador',
-            'Moita Bonita',
-            'Pedra Mole',
-            'Pinhão',
-            'São Domingos',
-        ],
         'Centro Sul Sergipano' => [
-            'Boquim',
             'Lagarto',
-            'Pedrinhas',
             'Poço Verde',
             'Riachão do Dantas',
-            'Salgado',
             'Simão Dias',
             'Tobias Barreto',
         ],
-        'Sul Sergipano' => [
-            'Arauá',
-            'Cristinápolis',
-            'Estância',
-            'Indiaroba',
-            'Itabaianinha',
-            'Santa Luzia do Itanhy',
-            'Tomar do Geru',
-            'Umbaúba',
+        'Grande Aracaju' => [
+            'Aracaju',
+            'Barra dos Coqueiros',
+            'Itaporanga d\'Ajuda',
+            'Laranjeiras',
+            'Maruim',
+            'Nossa Senhora do Socorro',
+            'Riachuelo',
+            'Santa Rosa de Lima',
+            'Santo Amaro das Brotas',
+            'São Cristóvão',
         ],
         'Leste Sergipano' => [
             'Capela',
@@ -435,19 +459,28 @@ function premium_region_definitions(): array
             'Japaratuba',
             'Pirambu',
             'Rosário do Catete',
-            'Santa Rosa de Lima',
             'Siriri',
         ],
-        'Grande Aracaju (Região Metropolitana)' => [
-            'Aracaju',
-            'Barra dos Coqueiros',
-            'Itaporanga d\'Ajuda',
-            'Laranjeiras',
-            'Maruim',
-            'Nossa Senhora do Socorro',
-            'Riachuelo',
-            'Santo Amaro das Brotas',
-            'São Cristóvão',
+        'Médio Sertão Sergipano' => [
+            'Aquidabã',
+            'Cumbe',
+            'Feira Nova',
+            'Graccho Cardoso',
+            'Itabi',
+            'Nossa Senhora das Dores',
+        ],
+        'Sul Sergipano' => [
+            'Arauá',
+            'Boquim',
+            'Cristinápolis',
+            'Estância',
+            'Indiaroba',
+            'Itabaianinha',
+            'Pedrinhas',
+            'Salgado',
+            'Santa Luzia do Itanhy',
+            'Tomar do Geru',
+            'Umbaúba',
         ],
     ];
 }
@@ -466,8 +499,8 @@ function premium_region_lookup(): array
         }
     }
 
-    $lookup[premium_normalize_text('Amparo de São Francisco')] = 'Baixo São Francisco';
-    $lookup[premium_normalize_text('Graccho Cardoso')] = 'Médio Sertão Sergipano';
+    $lookup[premium_normalize_text('Araua')] = 'Sul Sergipano';
+    $lookup[premium_normalize_text('Gracho Cardoso')] = 'Médio Sertão Sergipano';
 
     return $lookup;
 }
@@ -1012,6 +1045,7 @@ function premium_get_campaign_leaders(mysqli $conn, int $campaignId): array
         $leader['leader_type'] = premium_leader_type_bucket((string) ($leader['leader_cargo'] ?? ''));
         $leader['leader_type_label'] = premium_leader_type_label((string) $leader['leader_type']);
         $leader['leader_display_name'] = premium_leader_display_name($conn, $leader);
+        $leader['is_manual_projection'] = (int) ($leader['is_manual_projection'] ?? 0);
     }
     unset($leader);
 
@@ -1387,9 +1421,28 @@ function premium_search_2024_candidates(mysqli $conn, string $cargo, string $mun
 
 function premium_apply_transfer_multiplier(array $leader, array $settings): array
 {
+    $isManualProjection = !empty($leader['is_manual_projection']);
+
     $transferRate = (float) ($leader['transfer_rate'] ?? ($settings['transfer_rate_default'] ?? premium_default_settings()['transfer_rate_default']));
     if ($transferRate > 1) {
         $transferRate /= 100;
+    }
+
+    $baseEffect = (int) round(((int) ($leader['leader_votes_2024'] ?? 0)) * $transferRate);
+
+    if ($isManualProjection) {
+        return [
+            'transfer_rate' => round($transferRate * 100, 2),
+            'alignment_multiplier' => 1.0,
+            'visibility_multiplier' => 1.0,
+            'investment_multiplier' => 1.0,
+            'margin_multiplier' => 1.0,
+            'size_multiplier' => 1.0,
+            'base_effect' => $baseEffect,
+            'projected_votes' => $baseEffect,
+            'multiplier' => 1.0,
+            'is_manual_projection' => true,
+        ];
     }
 
     $alignmentMultiplier = !empty($leader['aligned_with_executive'])
@@ -1418,7 +1471,6 @@ function premium_apply_transfer_multiplier(array $leader, array $settings): arra
     $sizeMultiplier = 1.0 + premium_size_bonus($sizeClass, $settings);
 
     $multiplier = $alignmentMultiplier * $visibilityMultiplier * $investmentMultiplier * $marginMultiplier * $sizeMultiplier;
-    $baseEffect = (int) round(((int) ($leader['leader_votes_2024'] ?? 0)) * $transferRate);
     $projectedVotes = (int) round($baseEffect * $multiplier);
 
     return [
@@ -1605,3 +1657,27 @@ function premium_build_forecast(array $baseline, array $leaders, array $settings
 
 premium_ensure_campaign_photo_column($conn);
 premium_ensure_user_trial_columns($conn);
+premium_ensure_manual_projection_column($conn);
+
+function premium_ensure_manual_projection_column(mysqli $conn): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $checked = true;
+
+    $column = querySingle($conn, "
+        SHOW COLUMNS FROM premium_campaign_leaders LIKE 'is_manual_projection'
+    ");
+
+    if ($column) {
+        return;
+    }
+
+    $conn->query("
+        ALTER TABLE premium_campaign_leaders
+        ADD COLUMN is_manual_projection TINYINT(1) NOT NULL DEFAULT 0 AFTER notes
+    ");
+}

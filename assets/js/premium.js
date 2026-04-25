@@ -21,6 +21,7 @@
     const leaderBatchSubmitBtn = document.getElementById('leaderBatchSubmitBtn');
     const leaderBatchSelectAllBtn = document.getElementById('leaderBatchSelectAllBtn');
     const leaderBatchClearBtn = document.getElementById('leaderBatchClearBtn');
+    const leaderBatchToolbar = document.querySelector('.leader-batch-toolbar');
     const leaderBatchDefaultTransfer = Number(premiumPageData.leaderBatchDefaultTransfer ?? 40);
     const premiumCampaign = Object.assign({
         campaign_name: '',
@@ -99,6 +100,10 @@
     const activeLeadersFilterEmpty = document.getElementById('activeLeadersFilterEmpty');
     const activeLeadersRowsViewport = document.getElementById('activeLeadersRowsViewport');
     const activeLeadersSelectAll = document.getElementById('activeLeadersSelectAll');
+    const activeLeadersBaselineValue = document.getElementById('activeLeadersBaselineValue');
+    const activeLeadersBaselineSub = document.getElementById('activeLeadersBaselineSub');
+    const activeLeadersForecastValue = document.getElementById('activeLeadersForecastValue');
+    const activeLeadersForecastSub = document.getElementById('activeLeadersForecastSub');
     const leaderBulkTransferForm = document.getElementById('leaderBulkTransferForm');
     const leaderBulkTransferPayload = document.getElementById('leaderBulkTransferPayload');
     const leaderBulkTransferScope = document.getElementById('leaderBulkTransferScope');
@@ -112,6 +117,13 @@
     const leaderBulkSelectVisibleBtn = document.getElementById('leaderBulkSelectVisibleBtn');
     const leaderBulkClearBtn = document.getElementById('leaderBulkClearBtn');
     const leaderBulkSelectedCount = document.getElementById('leaderBulkSelectedCount');
+    const advisorRankingPanel = document.querySelector('[data-advisor-ranking]');
+    const advisorFilterButtons = Array.from(document.querySelectorAll('[data-advisor-filter]'));
+    const advisorFilterAllButton = document.querySelector('[data-advisor-filter-all]');
+    const advisorRankingRows = Array.from(document.querySelectorAll('[data-advisor-city-row]'));
+    const advisorRankingVisibleCount = document.getElementById('advisorRankingVisibleCount');
+    const advisorRankingTotalCount = document.getElementById('advisorRankingTotalCount');
+    const advisorRankingEmptyRow = document.getElementById('advisorRankingEmptyRow');
     let agendaFilter = 'pending';
     let scopeModalColspan = 8;
     let scopeModalState = {
@@ -122,7 +134,6 @@
 
     const themeToggleButtons = Array.from(document.querySelectorAll('[data-theme-toggle]'));
     const premiumThemeStorageKey = 'premium-theme';
-    const premiumThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     let premiumThemePreference = null;
     let leaderSearchDebounceId = null;
     let leaderSearchAbortController = null;
@@ -131,8 +142,8 @@
         return String(value) === 'light' ? 'light' : 'dark';
     }
 
-    function getSystemPremiumTheme() {
-        return premiumThemeMediaQuery.matches ? 'dark' : 'light';
+    function getDefaultPremiumTheme() {
+        return 'dark';
     }
 
     function getInitialPremiumTheme() {
@@ -141,7 +152,7 @@
             return datasetTheme;
         }
 
-        return getSystemPremiumTheme();
+        return getDefaultPremiumTheme();
     }
 
     function applyPremiumTheme(theme, persist = true) {
@@ -158,7 +169,7 @@
                 // Ignore storage failures and keep the current theme in memory.
             }
         } else if (premiumThemePreference === null) {
-            document.documentElement.dataset.themeSource = 'system';
+            document.documentElement.dataset.themeSource = 'default';
         }
 
         themeToggleButtons.forEach((button) => {
@@ -224,22 +235,6 @@
     applyPremiumTheme(initialPremiumTheme, false);
     heroRotators.forEach(initHeroRotator);
 
-    if (premiumThemePreference === null) {
-        const syncPremiumThemeWithSystem = (event) => {
-            if (premiumThemePreference !== null) {
-                return;
-            }
-
-            applyPremiumTheme(event.matches ? 'dark' : 'light', false);
-        };
-
-        if (typeof premiumThemeMediaQuery.addEventListener === 'function') {
-            premiumThemeMediaQuery.addEventListener('change', syncPremiumThemeWithSystem);
-        } else if (typeof premiumThemeMediaQuery.addListener === 'function') {
-            premiumThemeMediaQuery.addListener(syncPremiumThemeWithSystem);
-        }
-    }
-
     themeToggleButtons.forEach((button) => {
         button.addEventListener('click', () => {
             premiumThemePreference = normalizePremiumTheme(button.dataset.themeToggle || 'dark');
@@ -263,6 +258,40 @@
             .toLowerCase()
             .trim()
             .replace(/\s+/g, ' ');
+    }
+
+    function updateActiveLeadersSummary() {
+        if (!activeLeadersBaselineValue || !activeLeadersForecastValue) {
+            return;
+        }
+
+        const selectedCity = String(activeLeadersCityFilter?.value || '').trim();
+        if (selectedCity === '') {
+            activeLeadersBaselineValue.textContent = formatNumber(activeLeadersBaselineValue.dataset.defaultValue || 0);
+            activeLeadersForecastValue.textContent = formatNumber(activeLeadersForecastValue.dataset.defaultValue || 0);
+
+            if (activeLeadersBaselineSub) {
+                activeLeadersBaselineSub.textContent = 'Total histórico do candidato nesta campanha';
+            }
+            if (activeLeadersForecastSub) {
+                activeLeadersForecastSub.textContent = 'Cenário base calculado com os pesos atuais';
+            }
+            return;
+        }
+
+        const cityData = findForecastCity(selectedCity);
+        const baselineVotes = Number(cityData?.baseline_votes || 0);
+        const projectedVotes = Number(cityData?.projected_base ?? cityData?.system_projection ?? 0);
+
+        activeLeadersBaselineValue.textContent = formatNumber(baselineVotes);
+        activeLeadersForecastValue.textContent = formatNumber(projectedVotes);
+
+        if (activeLeadersBaselineSub) {
+            activeLeadersBaselineSub.textContent = `Total histórico do candidato em ${selectedCity}`;
+        }
+        if (activeLeadersForecastSub) {
+            activeLeadersForecastSub.textContent = `Cenário base de ${selectedCity} com os pesos atuais`;
+        }
     }
 
     function applyActiveLeadersFilters() {
@@ -301,6 +330,7 @@
         }
 
         activeLeadersRowsViewport.hidden = rows.length > 0 && visibleCount === 0;
+        updateActiveLeadersSummary();
         updateActiveLeaderBulkSelectionState();
     }
 
@@ -783,10 +813,10 @@
 
     function getCityComparisonFilterLabel(filter) {
         if (filter === 'leaders') {
-            return 'Com lideranÃ§as';
+            return 'Com lideranças';
         }
         if (filter === 'fallback') {
-            return 'Sem lideranÃ§as';
+            return 'Sem lideranças';
         }
 
         return 'Todas as cidades';
@@ -812,11 +842,11 @@
             premiumCampaign.campaign_name || 'Campanha Premium',
             premiumCampaign.candidate_name || '',
             premiumCampaign.candidate_cargo || '',
-        ].filter(Boolean).join(' â€¢ ');
+        ].filter(Boolean).join(' • ');
         const coverageLabel = [
             premiumCampaign.current_region || '',
             premiumCampaign.current_municipio || '',
-        ].filter(Boolean).join(' â€¢ ') || 'Sergipe';
+        ].filter(Boolean).join(' • ') || 'Sergipe';
         const filterLabel = getCityComparisonFilterLabel(filter);
 
         const baselineTotal = rows.reduce((sum, city) => sum + Number(city.baseline_votes || 0), 0);
@@ -829,7 +859,7 @@
 
         const rowsHtml = rows.length ? rows.map((city, index) => {
             const municipality = city.municipio || '';
-            const region = city.regiao || 'Sem regiÃ£o';
+            const region = city.regiao || 'Sem região';
             const baselineVotes = Number(city.baseline_votes || 0);
             const leaderCount = Number(city.leader_count || 0);
             const leaderVotes = Number(city.leader_projection || city.leader_effect || 0);
@@ -837,7 +867,7 @@
             const systemProjection = Number(city.system_projection || city.projected_base || 0);
             const delta = systemProjection - baselineVotes;
             const hasLeaders = leaderCount > 0;
-            const statusLabel = hasLeaders ? 'Com lideranÃ§as' : `Fallback ${baselineYearLabel}`;
+            const statusLabel = hasLeaders ? 'Com lideranças' : `Fallback ${baselineYearLabel}`;
             const statusClass = hasLeaders ? 'report-status report-status--leaders' : 'report-status report-status--fallback';
             const rank = String(index + 1).padStart(2, '0');
 
@@ -865,7 +895,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RelatÃ³rio Comparativo | ${escapeHtml(campaignLabel)}</title>
+    <title>Relatório Comparativo | ${escapeHtml(campaignLabel)}</title>
     <style>
         :root {
             --bg: #f6f8fb;
@@ -1375,7 +1405,7 @@
             <div class="report-hero__top">
                 <div>
                     <div class="report-brand">Apoia Candidato Premium</div>
-                    <h1>Comparativo municipal ${baselineYearLabel} x projeÃ§Ã£o 2026</h1>
+                    <h1>Comparativo municipal ${baselineYearLabel} x projeção 2026</h1>
                     <p>${escapeHtml(campaignLabel)}</p>
                     <div class="report-meta">
                         <span class="report-pill">Cobertura: ${escapeHtml(coverageLabel)}</span>
@@ -1390,10 +1420,10 @@
             </div>
             <div class="report-notes" style="margin-top: 16px;">
                 <div class="report-note">
-                    <strong>Votos de lideranÃ§a</strong> representam a parcela da projeÃ§Ã£o atribuÃ­da Ã s lideranÃ§as cadastradas em cada municÃ­pio.
+                    <strong>Votos de liderança</strong> representam a parcela da projeção atribuída às lideranças cadastradas em cada município.
                 </div>
                 <div class="report-note">
-                    <strong>Votos independentes</strong> representam a parcela da projeÃ§Ã£o que nÃ£o depende de lideranÃ§a cadastrada; nas cidades sem lideranÃ§a, o sistema usa o fallback de ${baselineYearLabel}.
+                    <strong>Votos independentes</strong> representam a parcela da projeção que não depende de liderança cadastrada; nas cidades sem liderança, o sistema usa o fallback de ${baselineYearLabel}.
                 </div>
             </div>
         </section>
@@ -1402,53 +1432,53 @@
             <div class="report-card">
                 <div class="report-card__label">Comparativo ${baselineYearLabel}</div>
                 <div class="report-card__value">${formatNumber(baselineTotal)}</div>
-                <div class="report-card__sub">Base histÃ³rica do recorte exibido</div>
+                <div class="report-card__sub">Base histórica do recorte exibido</div>
             </div>
             <div class="report-card">
-                <div class="report-card__label">ProjeÃ§Ã£o 2026</div>
+                <div class="report-card__label">Projeção 2026</div>
                 <div class="report-card__value">${formatNumber(systemTotal)}</div>
                 <div class="report-card__sub">Total projetado pelo modelo</div>
             </div>
             <div class="report-card">
                 <div class="report-card__label">Delta total</div>
                 <div class="report-card__value">${deltaTotal >= 0 ? '+' : ''}${formatNumber(deltaTotal)}</div>
-                <div class="report-card__sub">DiferenÃ§a entre projeÃ§Ã£o e ${baselineYearLabel}</div>
+                <div class="report-card__sub">Diferença entre projeção e ${baselineYearLabel}</div>
             </div>
             <div class="report-card">
-                <div class="report-card__label">Com lideranÃ§as</div>
+                <div class="report-card__label">Com lideranças</div>
                 <div class="report-card__value">${formatNumber(withLeaders)}</div>
-                <div class="report-card__sub">MunicÃ­pios com apoio cadastrado</div>
+                <div class="report-card__sub">Municípios com apoio cadastrado</div>
             </div>
             <div class="report-card">
-                <div class="report-card__label">Sem lideranÃ§as</div>
+                <div class="report-card__label">Sem lideranças</div>
                 <div class="report-card__value">${formatNumber(withoutLeaders)}</div>
-                <div class="report-card__sub">MunicÃ­pios que usam fallback</div>
+                <div class="report-card__sub">Municípios que usam fallback</div>
             </div>
             <div class="report-card">
-                <div class="report-card__label">Votos de lideranÃ§a</div>
+                <div class="report-card__label">Votos de liderança</div>
                 <div class="report-card__value">${formatNumber(leaderVotesTotal)}</div>
-                <div class="report-card__sub">Parcela atribuÃ­da Ã s lideranÃ§as</div>
+                <div class="report-card__sub">Parcela atribuída às lideranças</div>
             </div>
         </section>
 
         <div class="report-legend">
-            <span class="report-legend__item"><span class="report-dot report-dot--leaders"></span>MunicÃ­pios com lideranÃ§as</span>
-            <span class="report-legend__item"><span class="report-dot report-dot--fallback"></span>MunicÃ­pios sem lideranÃ§as</span>
-            <span class="report-legend__item">Votos independentes = projeÃ§Ã£o fora das lideranÃ§as</span>
+            <span class="report-legend__item"><span class="report-dot report-dot--leaders"></span>Municípios com lideranças</span>
+            <span class="report-legend__item"><span class="report-dot report-dot--fallback"></span>Municípios sem lideranças</span>
+            <span class="report-legend__item">Votos independentes = projeção fora das lideranças</span>
         </div>
 
         <section class="report-table-wrap">
             <table class="report-table">
                 <thead>
                     <tr>
-                        <th>MunicÃ­pio</th>
-                        <th>RegiÃ£o</th>
+                        <th>Município</th>
+                        <th>Região</th>
                         <th>${baselineYearLabel}</th>
-                        <th>Votos LideranÃ§a</th>
+                        <th>Votos Liderança</th>
                         <th>Votos independentes</th>
-                        <th>ProjeÃ§Ã£o 2026</th>
+                        <th>Projeção 2026</th>
                         <th>Delta</th>
-                        <th>SituaÃ§Ã£o</th>
+                        <th>Situação</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1458,7 +1488,7 @@
         </section>
 
         <div class="report-footer">
-            RelatÃ³rio elaborado a partir do mÃ³dulo premium. Os votos de ${baselineYearLabel} entram como comparativo e como fallback apenas nos municÃ­pios sem lideranÃ§as cadastradas.
+            Relatório elaborado a partir do módulo premium. Os votos de ${baselineYearLabel} entram como comparativo e como fallback apenas nos municípios sem lideranças cadastradas.
         </div>
     </div>
 </body>
@@ -1472,7 +1502,7 @@
 
         const reportWindow = window.open('', '_blank', 'width=1280,height=900');
         if (!reportWindow) {
-            alert('NÃ£o foi possÃ­vel abrir o relatÃ³rio de impressÃ£o. Verifique se o navegador bloqueou a janela.');
+            alert('Não foi possível abrir o relatório de impressão. Verifique se o navegador bloqueou a janela.');
             return;
         }
 
@@ -1480,6 +1510,517 @@
         reportWindow.document.write(buildCityComparisonReportHtml(cityComparisonFilter));
         reportWindow.document.close();
         reportWindow.focus();
+    }
+
+    function getAdvisorActiveFilterKeys() {
+        return advisorFilterButtons
+            .filter((button) => button.classList.contains('is-active'))
+            .map((button) => button.dataset.advisorFilter || '')
+            .filter(Boolean);
+    }
+
+    function getAdvisorRowsForFilters(filterKeys = getAdvisorActiveFilterKeys()) {
+        const activeKeys = new Set(filterKeys);
+
+        if (!activeKeys.size) {
+            return advisorRankingRows;
+        }
+
+        return advisorRankingRows.filter((row) => activeKeys.has(row.dataset.advisorFilterKey || ''));
+    }
+
+    function setAdvisorFilterKeys(filterKeys = []) {
+        const requestedKeys = new Set(
+            filterKeys
+                .map((key) => String(key || '').trim())
+                .filter(Boolean)
+        );
+
+        advisorFilterButtons.forEach((button) => {
+            const key = button.dataset.advisorFilter || '';
+            button.classList.toggle('is-active', requestedKeys.has(key));
+        });
+    }
+
+    function applyAdvisorRankingFilters() {
+        if (!advisorRankingPanel || !advisorRankingRows.length) {
+            return;
+        }
+
+        const activeKeys = getAdvisorActiveFilterKeys();
+        const visibleRows = getAdvisorRowsForFilters(activeKeys);
+        const visibleSet = new Set(visibleRows);
+
+        advisorRankingRows.forEach((row) => {
+            row.hidden = !visibleSet.has(row);
+        });
+
+        if (advisorFilterAllButton) {
+            const isAllActive = activeKeys.length === 0;
+            advisorFilterAllButton.classList.toggle('is-active', isAllActive);
+            advisorFilterAllButton.setAttribute('aria-pressed', isAllActive ? 'true' : 'false');
+        }
+
+        advisorFilterButtons.forEach((button) => {
+            button.setAttribute('aria-pressed', button.classList.contains('is-active') ? 'true' : 'false');
+        });
+
+        if (advisorRankingVisibleCount) {
+            advisorRankingVisibleCount.textContent = formatNumber(visibleRows.length);
+        }
+
+        if (advisorRankingTotalCount) {
+            advisorRankingTotalCount.textContent = formatNumber(advisorRankingRows.length);
+        }
+
+        if (advisorRankingEmptyRow) {
+            advisorRankingEmptyRow.hidden = visibleRows.length > 0;
+        }
+    }
+
+    function getAdvisorFilterLabel(filterKeys = getAdvisorActiveFilterKeys()) {
+        if (!filterKeys.length) {
+            return 'Todas as recomendações';
+        }
+
+        return advisorFilterButtons
+            .filter((button) => filterKeys.includes(button.dataset.advisorFilter || ''))
+            .map((button) => (button.textContent || '').replace(/\s*\(\d+(?:[\.\s]\d+)*\)\s*$/, '').trim())
+            .filter(Boolean)
+            .join(' + ') || 'Filtro personalizado';
+    }
+
+    function getAdvisorRowData(row) {
+        return {
+            rank: Number(row.dataset.advisorRank || 0),
+            city: row.dataset.advisorCity || '',
+            region: row.dataset.advisorRegion || '',
+            score: Number(row.dataset.advisorScore || 0),
+            rentability: Number(row.dataset.advisorRentability || 0),
+            baseline: Number(row.dataset.advisorBaseline || 0),
+            projection: Number(row.dataset.advisorProjection || 0),
+            leaders: Number(row.dataset.advisorLeaders || 0),
+            recommendation: row.dataset.advisorRecommendation || 'Monitorar',
+            text: row.dataset.advisorText || '',
+        };
+    }
+
+    function buildAdvisorRankingReportHtml() {
+        const rows = getAdvisorRowsForFilters().map(getAdvisorRowData);
+        const generatedAt = new Intl.DateTimeFormat('pt-BR', {
+            dateStyle: 'long',
+            timeStyle: 'short',
+        }).format(new Date());
+        const campaignLabel = advisorRankingPanel?.dataset.campaignTitle || premiumCampaign.campaign_name || 'Campanha Premium';
+        const baselineLabel = advisorRankingPanel?.dataset.baselineYear || baselineYearLabel;
+        const filterLabel = getAdvisorFilterLabel();
+        const baselineTotal = rows.reduce((sum, row) => sum + row.baseline, 0);
+        const projectionTotal = rows.reduce((sum, row) => sum + row.projection, 0);
+        const leaderTotal = rows.reduce((sum, row) => sum + row.leaders, 0);
+        const averageScore = rows.length ? rows.reduce((sum, row) => sum + row.score, 0) / rows.length : 0;
+        const averageRentability = rows.length ? rows.reduce((sum, row) => sum + row.rentability, 0) / rows.length : 0;
+        const recommendationTotal = rows.reduce((totals, row) => {
+            totals[row.recommendation] = (totals[row.recommendation] || 0) + 1;
+            return totals;
+        }, {});
+        const recommendationSummary = Object.entries(recommendationTotal)
+            .map(([label, count]) => `${label}: ${formatNumber(count)}`)
+            .join(' | ') || 'Sem cidades no filtro';
+
+        const rowsHtml = rows.length ? rows.map((row) => `
+            <tr>
+                <td>${escapeHtml(row.city)}</td>
+                <td>${escapeHtml(row.region)}</td>
+                <td>${formatPercent(row.score)}</td>
+                <td>${formatPercent(row.rentability)}</td>
+                <td>${formatNumber(row.baseline)}</td>
+                <td>${formatNumber(row.projection)}</td>
+                <td>${formatNumber(row.leaders)}</td>
+                <td><strong>${escapeHtml(row.recommendation)}</strong><span>${escapeHtml(row.text)}</span></td>
+            </tr>
+        `).join('') : `
+            <tr>
+                <td colspan="8" class="report-empty">Nenhuma cidade corresponde aos filtros selecionados.</td>
+            </tr>
+        `;
+
+        return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório do Conselheiro | ${escapeHtml(campaignLabel)}</title>
+    <style>
+        :root {
+            --bg: #f6f8fb;
+            --paper: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --line: rgba(15, 23, 42, 0.10);
+            --accent: #0f766e;
+            --accent-2: #0284c7;
+            --shadow: 0 24px 80px rgba(15, 23, 42, 0.10);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Inter, Arial, sans-serif;
+        }
+        .report-shell {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 28px 24px 36px;
+        }
+        .report-hero {
+            background: linear-gradient(135deg, #ffffff, #eef7f5);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            padding: 24px 26px;
+            box-shadow: var(--shadow);
+            margin-bottom: 18px;
+        }
+        .report-hero__top {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        .report-brand {
+            display: inline-flex;
+            padding: 9px 14px;
+            border-radius: 999px;
+            background: rgba(15, 118, 110, 0.10);
+            color: var(--accent);
+            font-size: .78rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+        h1 {
+            margin: 12px 0 8px;
+            font-size: clamp(1.8rem, 3vw, 2.8rem);
+            line-height: 1.02;
+        }
+        p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+        .report-meta, .report-actions, .report-legend {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .report-meta { margin-top: 16px; }
+        .report-pill, .report-legend__item {
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: rgba(255,255,255,0.72);
+            font-size: .8rem;
+            font-weight: 800;
+        }
+        .report-action {
+            appearance: none;
+            border: 1px solid transparent;
+            border-radius: 14px;
+            padding: 12px 18px;
+            font: inherit;
+            font-weight: 900;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+        .report-action--primary {
+            background: linear-gradient(135deg, #0f766e, #0284c7);
+            color: #f8fffb;
+        }
+        .report-action--ghost {
+            background: rgba(15, 23, 42, 0.04);
+            color: var(--text);
+            border-color: rgba(15, 23, 42, 0.12);
+        }
+        .report-summary {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 12px;
+            margin: 18px 0;
+        }
+        .report-card {
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 16px;
+            box-shadow: 0 12px 34px rgba(15, 23, 42, 0.05);
+        }
+        .report-card__label {
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-size: .68rem;
+            font-weight: 800;
+        }
+        .report-card__value {
+            margin-top: 12px;
+            font-size: 1.42rem;
+            font-weight: 900;
+        }
+        .report-card__sub {
+            margin-top: 5px;
+            color: var(--muted);
+            font-size: .76rem;
+            line-height: 1.35;
+        }
+        .report-legend {
+            margin-bottom: 14px;
+        }
+        .report-table-wrap {
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: .72rem;
+        }
+        .report-table th,
+        .report-table td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+            vertical-align: top;
+            overflow-wrap: anywhere;
+            line-height: 1.2;
+        }
+        .report-table thead th {
+            background: linear-gradient(180deg, #f8fafc, #eef2f7);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-size: .64rem;
+            color: var(--muted);
+        }
+        .report-table tbody tr:nth-child(even) {
+            background: rgba(15, 23, 42, 0.025);
+        }
+        .report-table th:nth-child(1),
+        .report-table td:nth-child(1) { width: 14%; }
+        .report-table th:nth-child(2),
+        .report-table td:nth-child(2) { width: 10%; }
+        .report-table th:nth-child(3),
+        .report-table td:nth-child(3),
+        .report-table th:nth-child(4),
+        .report-table td:nth-child(4) { width: 7%; }
+        .report-table th:nth-child(5),
+        .report-table td:nth-child(5),
+        .report-table th:nth-child(6),
+        .report-table td:nth-child(6) { width: 7%; }
+        .report-table th:nth-child(7),
+        .report-table td:nth-child(7) { width: 5%; }
+        .report-table th:nth-child(8),
+        .report-table td:nth-child(8) { width: 43%; }
+        .report-table td:nth-child(8) span {
+            display: block;
+            margin-top: 4px;
+            color: var(--muted);
+        }
+        .report-rank {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            height: 28px;
+            margin-right: 7px;
+            border-radius: 999px;
+            background: #0f172a;
+            color: #fff;
+            font-size: .68rem;
+            font-weight: 900;
+        }
+        .report-empty {
+            padding: 22px;
+            color: var(--muted);
+            text-align: center;
+        }
+        .report-footer {
+            margin-top: 14px;
+            color: var(--muted);
+            font-size: .78rem;
+            line-height: 1.5;
+        }
+        @page {
+            size: A4 landscape;
+            margin: 8mm;
+        }
+        @media print {
+            body { background: #fff; font-size: 11px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .report-shell { max-width: none; padding: 0; }
+            .report-actions { display: none !important; }
+            .report-hero { padding: 14px 16px; border-radius: 18px; margin-bottom: 10px; }
+            h1 { font-size: 1.45rem; margin: 8px 0 6px; }
+            .report-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 10px 0; }
+            .report-card { padding: 8px; border-radius: 12px; box-shadow: none; }
+            .report-card__label { font-size: .54rem; }
+            .report-card__value { margin-top: 4px; font-size: .92rem; }
+            .report-card__sub { font-size: .56rem; }
+            .report-pill, .report-legend__item { padding: 5px 8px; font-size: .64rem; }
+            .report-table-wrap, .report-hero { box-shadow: none; }
+            .report-table { font-size: .62rem; }
+            .report-table th, .report-table td { padding: 5px 6px; }
+            .report-table thead { display: table-header-group; }
+            .report-table tr { page-break-inside: avoid; }
+            .report-rank { min-width: 20px; height: 20px; margin-right: 4px; font-size: .54rem; }
+        }
+    </style>
+    <script>
+        window.addEventListener('load', function () {
+            setTimeout(function () {
+                try { window.print(); } catch (error) {}
+            }, 350);
+        });
+    <\/script>
+</head>
+<body>
+    <div class="report-shell">
+        <section class="report-hero">
+            <div class="report-hero__top">
+                <div>
+                    <div class="report-brand">Apoia Candidato Premium</div>
+                    <h1>Relatório do Conselheiro de Campanha</h1>
+                    <p>${escapeHtml(campaignLabel)}</p>
+                    <div class="report-meta">
+                        <span class="report-pill">Filtro: ${escapeHtml(filterLabel)}</span>
+                        <span class="report-pill">Base histórica: ${escapeHtml(baselineLabel)}</span>
+                        <span class="report-pill">Gerado em: ${escapeHtml(generatedAt)}</span>
+                    </div>
+                </div>
+                <div class="report-actions">
+                    <button class="report-action report-action--primary" type="button" onclick="window.print()">Imprimir</button>
+                    <button class="report-action report-action--ghost" type="button" onclick="window.close()">Fechar</button>
+                </div>
+            </div>
+        </section>
+        <section class="report-summary">
+            <div class="report-card">
+                <div class="report-card__label">Cidades</div>
+                <div class="report-card__value">${formatNumber(rows.length)}</div>
+                <div class="report-card__sub">Municípios no recorte filtrado</div>
+            </div>
+            <div class="report-card">
+                <div class="report-card__label">Score médio</div>
+                <div class="report-card__value">${formatPercent(averageScore)}</div>
+                <div class="report-card__sub">Prioridade estratégica média</div>
+            </div>
+            <div class="report-card">
+                <div class="report-card__label">Rentabilidade média</div>
+                <div class="report-card__value">${formatPercent(averageRentability)}</div>
+                <div class="report-card__sub">Retorno estimado por esforço</div>
+            </div>
+            <div class="report-card">
+                <div class="report-card__label">Votos ${escapeHtml(baselineLabel)}</div>
+                <div class="report-card__value">${formatNumber(baselineTotal)}</div>
+                <div class="report-card__sub">Base histórica do recorte</div>
+            </div>
+            <div class="report-card">
+                <div class="report-card__label">Projeção</div>
+                <div class="report-card__value">${formatNumber(projectionTotal)}</div>
+                <div class="report-card__sub">Projeção atual somada</div>
+            </div>
+        </section>
+        <div class="report-legend">
+            <span class="report-legend__item">${escapeHtml(recommendationSummary)}</span>
+            <span class="report-legend__item">Lideranças somadas no recorte: ${formatNumber(leaderTotal)}</span>
+        </div>
+        <section class="report-table-wrap">
+            <table class="report-table">
+                <colgroup>
+                    <col style="width: 14%;">
+                    <col style="width: 10%;">
+                    <col style="width: 7%;">
+                    <col style="width: 7%;">
+                    <col style="width: 7%;">
+                    <col style="width: 7%;">
+                    <col style="width: 5%;">
+                    <col style="width: 43%;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Cidade</th>
+                        <th>Região</th>
+                        <th>Score</th>
+                        <th>Rentabilidade</th>
+                        <th>${escapeHtml(baselineLabel)}</th>
+                        <th>Projeção</th>
+                        <th>Lideranças</th>
+                        <th>Recomendação</th>
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+        </section>
+        <div class="report-footer">
+            Relatório elaborado a partir do Conselheiro de Campanha. Use os filtros da tela para imprimir apenas as recomendações selecionadas, como Defender base, Base em risco ou qualquer combinação estratégica.
+        </div>
+    </div>
+</body>
+</html>`;
+    }
+
+    function openAdvisorRankingReport() {
+        if (!advisorRankingPanel) {
+            return;
+        }
+
+        const reportWindow = window.open('', '_blank', 'width=1280,height=900');
+        if (!reportWindow) {
+            alert('Não foi possível abrir o relatório de impressão. Verifique se o navegador bloqueou a janela.');
+            return;
+        }
+
+        reportWindow.document.open();
+        reportWindow.document.write(buildAdvisorRankingReportHtml());
+        reportWindow.document.close();
+        reportWindow.focus();
+    }
+
+    function renderAdvisorRankingReportInCurrentWindow() {
+        if (!advisorRankingPanel) {
+            return;
+        }
+
+        document.open();
+        document.write(buildAdvisorRankingReportHtml());
+        document.close();
+    }
+
+    function handleAdvisorRankingUrlRequest() {
+        if (!advisorRankingPanel) {
+            return;
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const filterParam = String(params.get('filter') || '').trim();
+        const filterKeys = filterParam
+            .split(',')
+            .map((key) => key.trim())
+            .filter(Boolean);
+
+        if (filterKeys.length) {
+            setAdvisorFilterKeys(filterKeys);
+        }
+
+        applyAdvisorRankingFilters();
+
+        if (params.get('print') === 'advisor-ranking') {
+            window.setTimeout(renderAdvisorRankingReportInCurrentWindow, 120);
+        }
     }
 
     function stripActionColumnFromTableHtml(tableSectionHtml, cellTagName) {
@@ -1501,7 +2042,7 @@
                 .replace(/[\u0300-\u036f]/g, '')
                 .trim();
 
-            if (normalizedLabel === 'acao' || label === 'aÃ§Ã£o' || hasActionButton) {
+            if (normalizedLabel === 'acao' || label === 'ação' || hasActionButton) {
                 lastCell.remove();
             }
         });
@@ -1515,7 +2056,7 @@
             premiumCampaign.candidate_name || '',
             premiumCampaign.candidate_cargo || '',
         ].filter(Boolean);
-        const campaignLabel = campaignParts.join(' â€¢ ');
+        const campaignLabel = campaignParts.join(' • ');
         const generatedAt = new Date().toLocaleString('pt-BR');
         const scopeLabel = scopeModalTitle?.textContent || 'Recorte territorial';
         const subtitle = scopeModalSubtitle?.textContent || '';
@@ -1529,7 +2070,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${escapeHtml(scopeLabel)} | ImpressÃ£o</title>
+    <title>${escapeHtml(scopeLabel)} | Impressão</title>
     <style>
         :root { color-scheme: light; --bg:#f5f7fb; --panel:#fff; --line:rgba(15,23,42,.12); --text:#0f172a; --muted:#475569; --brand:#0ea5e9; --brand-soft:rgba(14,165,233,.10); }
         * { box-sizing: border-box; }
@@ -1590,8 +2131,8 @@
                     <h1>${escapeHtml(scopeLabel)}</h1>
                     <p>${escapeHtml(campaignLabel)}</p>
                     <div class="report-meta">
-                        <span class="report-pill">Tipo: ${escapeHtml(scopeModalState.type === 'region' ? 'RegiÃ£o' : 'Cidade')}</span>
-                        <span class="report-pill">Recorte: ${escapeHtml(scopeModalState.name || 'TerritÃ³rio')}</span>
+                        <span class="report-pill">Tipo: ${escapeHtml(scopeModalState.type === 'region' ? 'Região' : 'Cidade')}</span>
+                        <span class="report-pill">Recorte: ${escapeHtml(scopeModalState.name || 'Território')}</span>
                         <span class="report-pill">Gerado em: ${escapeHtml(generatedAt)}</span>
                     </div>
                 </div>
@@ -1622,7 +2163,7 @@
 
         const reportWindow = window.open('', '_blank', 'width=1280,height=900');
         if (!reportWindow) {
-            alert('NÃ£o foi possÃ­vel abrir o relatÃ³rio de impressÃ£o. Verifique se o navegador bloqueou a janela.');
+            alert('Não foi possível abrir o relatório de impressão. Verifique se o navegador bloqueou a janela.');
             return;
         }
 
@@ -1698,6 +2239,27 @@
         updateLeaderBatchSelectionState();
     }
 
+    function addLeaderSearchResultToBatch(button) {
+        const row = button.closest('tr');
+        const checkbox = row?.querySelector('.leader-batch-checkbox');
+
+        if (!checkbox) {
+            fillLeaderFormFromResult(button.dataset);
+            return;
+        }
+
+        checkbox.checked = true;
+        updateLeaderBatchSelectionState();
+
+        if (leaderBatchToolbar) {
+            leaderBatchToolbar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        if (leaderBatchSubmitBtn) {
+            leaderBatchSubmitBtn.focus({ preventScroll: true });
+        }
+    }
+
     function buildLeaderBatchPayload() {
         const cargo = getLeaderSearchCargo();
 
@@ -1727,6 +2289,13 @@
         return new Intl.NumberFormat('pt-BR').format(Number(value || 0));
     }
 
+    function formatPercent(value, decimals = 1) {
+        return new Intl.NumberFormat('pt-BR', {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+        }).format(Number(value || 0)) + '%';
+    }
+
     function formatSizeLabel(value) {
         if (value === 'small') {
             return 'Pequeno';
@@ -1735,7 +2304,7 @@
             return 'Grande';
         }
 
-        return 'MÃ©dio';
+        return 'Médio';
     }
 
     function formatAgendaDate(value) {
@@ -1757,7 +2326,7 @@
             return 'xm andamento';
         }
         if (status === 'done') {
-            return 'ConcluÃ­da';
+            return 'Concluída';
         }
         if (status === 'archived') {
             return 'Arquivada';
@@ -1777,12 +2346,12 @@
             return 'Urgente';
         }
 
-        return 'MÃ©dia';
+        return 'Média';
     }
 
     function agendaFilterLabel(filter) {
         if (filter === 'done') {
-            return 'ConcluÃ­das';
+            return 'Concluídas';
         }
         if (filter === 'archived') {
             return 'Arquivadas';
@@ -1824,14 +2393,14 @@
 
         if (!rows.length) {
             const emptyMessage = filter === 'done'
-                ? 'Ainda nÃ£o hÃ¡ tarefas concluÃ­das.'
+                ? 'Ainda não há tarefas concluídas.'
                 : filter === 'archived'
-                    ? 'Ainda nÃ£o hÃ¡ tarefas arquivadas.'
-                    : 'NÃ£o hÃ¡ tarefas pendentes no momento.';
+                    ? 'Ainda não há tarefas arquivadas.'
+                    : 'Não há tarefas pendentes no momento.';
 
-            agendaPreviewArea.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)} Use outro botÃ£o para trocar a visÃ£o da agenda.</div>`;
+            agendaPreviewArea.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)} Use outro botão para trocar a visão da agenda.</div>`;
             if (agendaPreviewNote) {
-                agendaPreviewNote.textContent = 'Nenhuma tarefa para esta visÃ£o.';
+                agendaPreviewNote.textContent = 'Nenhuma tarefa para esta visão.';
             }
             return;
         }
@@ -1843,7 +2412,7 @@
             const statusClass = String(item.status || 'open');
             const city = escapeHtml(item.municipality || '-');
             const title = escapeHtml(item.title || 'Tarefa');
-            const leader = item.leader_name ? ` â€¢ ${escapeHtml(item.leader_name)}` : '';
+            const leader = item.leader_name ? ` • ${escapeHtml(item.leader_name)}` : '';
             html.push('<article class="agenda-mini-card agenda-mini-card--' + escapeHtml(statusClass) + '">');
             html.push('  <div class="agenda-mini-card__main">');
             html.push('    <button type="button" class="agenda-mini-title agenda-open-btn" data-agenda-id="' + escapeHtml(item.id || '') + '">' + title + '</button>');
@@ -1908,18 +2477,18 @@
 
         if (agendaModalSubtitle) {
             const bits = [
-                item.municipality || 'MunicÃ­pio',
-                item.leader_name || 'Sem lideranÃ§a',
+                item.municipality || 'Município',
+                item.leader_name || 'Sem liderança',
                 agendaStatusLabel(item.status || 'open'),
             ].filter(Boolean);
-            agendaModalSubtitle.textContent = bits.join(' â€¢ ');
+            agendaModalSubtitle.textContent = bits.join(' • ');
         }
 
         if (agendaModalSummary) {
             agendaModalSummary.innerHTML = [
                 `<span class="table-pill">${escapeHtml(formatAgendaDate(item.due_date || ''))}</span>`,
-                `<span class="table-pill">${escapeHtml(item.municipality || 'Sem municÃ­pio')}</span>`,
-                `<span class="table-pill">${escapeHtml(item.leader_name || 'Sem lideranÃ§a')}</span>`,
+                `<span class="table-pill">${escapeHtml(item.municipality || 'Sem município')}</span>`,
+                `<span class="table-pill">${escapeHtml(item.leader_name || 'Sem liderança')}</span>`,
                 `<span class="table-pill">${escapeHtml(agendaStatusLabel(item.status || 'open'))}</span>`,
                 `<span class="table-pill">${escapeHtml(agendaPriorityLabel(item.priority || 'medium'))}</span>`,
             ].join('');
@@ -2081,13 +2650,8 @@
         }
 
         const leaderAddBody = document.getElementById('leaderAddBody');
-        const leaderAddToggle = document.querySelector('[data-toggle-target="leaderAddBody"]');
-        if (leaderAddBody && leaderAddBody.hidden) {
-            toggleCollapsiblePanel('leaderAddBody', leaderAddToggle);
-        }
-
         const leaderForm = document.getElementById('leaderForm');
-        if (leaderForm && (!leaderAddBody || !leaderAddBody.hidden)) {
+        if (leaderForm && leaderAddBody && !leaderAddBody.hidden) {
             window.scrollTo({ top: leaderForm.offsetTop - 24, behavior: 'smooth' });
         }
     }
@@ -2098,11 +2662,11 @@
         }
 
         leaderModalSummary.innerHTML = [
-            `<span class="table-pill">${escapeHtml(leader.region_name || 'Sem regiÃ£o')}</span>`,
-            `<span class="table-pill">${escapeHtml(leader.municipality || 'Sem municÃ­pio')}</span>`,
+            `<span class="table-pill">${escapeHtml(leader.region_name || 'Sem região')}</span>`,
+            `<span class="table-pill">${escapeHtml(leader.municipality || 'Sem município')}</span>`,
             `<span class="table-pill">${formatNumber(leader.leader_votes_2024 || 0)} votos</span>`,
             `<span class="table-pill">${formatNumber(leader.margin_percent || 0)}% margem</span>`,
-            `<span class="table-pill">${formatNumber(leader.transfer_rate || 0)}% transferÃªncia</span>`,
+            `<span class="table-pill">${formatNumber(leader.transfer_rate || 0)}% transferência</span>`,
             `<span class="table-pill">${escapeHtml(formatSizeLabel(leader.size_class || 'medium'))}</span>`,
         ].join('');
     }
@@ -2130,11 +2694,11 @@
         };
 
         if (leaderModalTitle) {
-            leaderModalTitle.textContent = leader.leader_display_name || leader.leader_name || 'LideranÃ§a';
+            leaderModalTitle.textContent = leader.leader_display_name || leader.leader_name || 'Liderança';
         }
 
         if (leaderModalSubtitle) {
-            leaderModalSubtitle.textContent = `${leader.municipality || 'MunicÃ­pio'} â€¢ ${leader.leader_cargo || 'Cargo'}${leader.leader_party ? ` â€¢ ${leader.leader_party}` : ''}`;
+            leaderModalSubtitle.textContent = `${leader.municipality || 'Município'} • ${leader.leader_cargo || 'Cargo'}${leader.leader_party ? ` • ${leader.leader_party}` : ''}`;
         }
 
         set('modalLeaderId', leader.id ?? '');
@@ -2516,7 +3080,7 @@
         }
 
         if (onboardingStepTitle) {
-            onboardingStepTitle.textContent = step.title || 'Guia rÃ¡pido';
+            onboardingStepTitle.textContent = step.title || 'Guia rápido';
         }
 
         if (onboardingStepCopy) {
@@ -2794,7 +3358,7 @@
                 return;
             }
 
-            fillLeaderFormFromResult(button.dataset);
+            addLeaderSearchResultToBatch(button);
         });
 
         resultsBody.addEventListener('change', (event) => {
@@ -2835,7 +3399,7 @@
             const payload = buildLeaderBatchPayload();
             if (!payload.length) {
                 event.preventDefault();
-                alert('Selecione pelo menos uma lideranÃ§a antes de adicionar ao escritÃ³rio.');
+                alert('Selecione pelo menos uma liderança antes de adicionar ao escritório.');
                 return;
             }
 
@@ -2843,8 +3407,8 @@
                 leaderBatchPayload.value = JSON.stringify(payload);
             }
 
-            const countLabel = payload.length === 1 ? '1 lideranÃ§a' : `${payload.length} lideranÃ§as`;
-            const confirmed = window.confirm(`Adicionar ${countLabel} usando os pesos padrÃ£o da campanha?`);
+            const countLabel = payload.length === 1 ? '1 liderança' : `${payload.length} lideranças`;
+            const confirmed = window.confirm(`Adicionar ${countLabel} usando os pesos padrão da campanha?`);
             if (!confirmed) {
                 event.preventDefault();
                 return;
@@ -2925,7 +3489,7 @@
 
             if (!Number.isFinite(transferRate) || transferRate < 0 || transferRate > 100) {
                 event.preventDefault();
-                alert('Informe uma transferÃªncia entre 0 e 100.');
+                alert('Informe uma transferência entre 0 e 100.');
                 return;
             }
 
@@ -2933,8 +3497,8 @@
             if (!payload.length) {
                 event.preventDefault();
                 alert(scope === 'all'
-                    ? 'NÃ£o hÃ¡ lideranÃ§as na campanha para atualizar.'
-                    : 'Selecione pelo menos uma lideranÃ§a antes de alterar a transferÃªncia.');
+                    ? 'Não há lideranças na campanha para atualizar.'
+                    : 'Selecione pelo menos uma liderança antes de alterar a transferência.');
                 return;
             }
 
@@ -2946,11 +3510,11 @@
             }
 
             const scopeLabel = scope === 'all'
-                ? 'todas as lideranÃ§as da campanha'
+                ? 'todas as lideranças da campanha'
                 : scope === 'visible'
-                    ? 'as lideranÃ§as visÃ­veis'
-                    : 'as lideranÃ§as selecionadas';
-            const countLabel = payload.length === 1 ? '1 lideranÃ§a' : `${payload.length} lideranÃ§as`;
+                    ? 'as lideranças visíveis'
+                    : 'as lideranças selecionadas';
+            const countLabel = payload.length === 1 ? '1 liderança' : `${payload.length} lideranças`;
             const confirmed = window.confirm(`Aplicar ${formatNumber(transferRate)}% para ${countLabel} (${scopeLabel})?`);
             if (!confirmed) {
                 event.preventDefault();
@@ -2975,7 +3539,7 @@
             const payload = buildActiveLeaderBulkDeletePayload();
             if (!payload.length) {
                 event.preventDefault();
-                alert('Selecione pelo menos uma lideranÃ§a antes de excluir.');
+                alert('Selecione pelo menos uma liderança antes de excluir.');
                 return;
             }
 
@@ -2983,8 +3547,8 @@
                 leaderBulkDeletePayload.value = JSON.stringify(payload);
             }
 
-            const countLabel = payload.length === 1 ? '1 lideranÃ§a' : `${payload.length} lideranÃ§as`;
-            const confirmed = window.confirm(`Excluir ${countLabel} da campanha? Esta aÃ§Ã£o nÃ£o pode ser desfeita.`);
+            const countLabel = payload.length === 1 ? '1 liderança' : `${payload.length} lideranças`;
+            const confirmed = window.confirm(`Excluir ${countLabel} da campanha? Esta ação não pode ser desfeita.`);
             if (!confirmed) {
                 event.preventDefault();
             }
@@ -2996,6 +3560,8 @@
     setReportMode('regions');
     applyActiveLeadersFilters();
     focusHashTarget();
+
+    handleAdvisorRankingUrlRequest();
 
     document.addEventListener('click', (event) => {
         const onboardingAction = event.target.closest('[data-onboarding-step-action]');
@@ -3077,6 +3643,28 @@
         const scopePrintButton = event.target.closest('[data-scope-print]');
         if (scopePrintButton) {
             openScopeReport();
+            return;
+        }
+
+        const advisorRankingPrintButton = event.target.closest('[data-advisor-ranking-print]');
+        if (advisorRankingPrintButton) {
+            openAdvisorRankingReport();
+            return;
+        }
+
+        const advisorFilterAllClick = event.target.closest('[data-advisor-filter-all]');
+        if (advisorFilterAllClick) {
+            advisorFilterButtons.forEach((button) => {
+                button.classList.remove('is-active');
+            });
+            applyAdvisorRankingFilters();
+            return;
+        }
+
+        const advisorFilterButton = event.target.closest('[data-advisor-filter]');
+        if (advisorFilterButton) {
+            advisorFilterButton.classList.toggle('is-active');
+            applyAdvisorRankingFilters();
             return;
         }
 

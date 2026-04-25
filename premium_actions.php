@@ -901,6 +901,8 @@ switch ($action) {
             $sizeClass = 'medium';
         }
 
+        $isManualProjection = isset($_POST['is_manual_projection']) ? 1 : 0;
+
         $conn->query("
             INSERT INTO premium_campaign_leaders (
                 campaign_id,
@@ -919,7 +921,8 @@ switch ($action) {
                 visibility_score,
                 investment_score,
                 size_class,
-                notes
+                notes,
+                is_manual_projection
             ) VALUES (
                 " . (int) $selectedCampaignId . ",
                 " . premium_sql_quote($conn, $regionName) . ",
@@ -937,7 +940,8 @@ switch ($action) {
                 " . number_format($visibilityScore, 2, '.', '') . ",
                 " . number_format($investmentScore, 2, '.', '') . ",
                 " . premium_sql_quote($conn, $sizeClass) . ",
-                " . premium_sql_quote($conn, $notes !== '' ? $notes : null) . "
+                " . premium_sql_quote($conn, $notes !== '' ? $notes : null) . ",
+                {$isManualProjection}
             )
         ");
 

@@ -292,7 +292,11 @@ function premium_build_campaign_advisor(array $campaign, array $baseline, array 
         $leader['advisor_value_score'] = round(min(100, (($projection / max(1, $maxLeaderEffect)) * 80) + min(20, $leader['conversion_percent'] / 2)), 1);
         $leaderRank[] = $leader;
     }
-    usort($leaderRank, static fn(array $a, array $b): int => ((float) ($b['advisor_value_score'] ?? 0)) <=> ((float) ($a['advisor_value_score'] ?? 0)));
+    usort($leaderRank, static function (array $a, array $b): int {
+        return ((int) ($b['projected_votes'] ?? 0) <=> (int) ($a['projected_votes'] ?? 0))
+            ?: ((int) ($b['leader_votes_2024'] ?? 0) <=> (int) ($a['leader_votes_2024'] ?? 0))
+            ?: ((float) ($b['advisor_value_score'] ?? 0) <=> (float) ($a['advisor_value_score'] ?? 0));
+    });
 
     $highPriority = array_values(array_filter($cityRows, static fn(array $city): bool => (int) ($city['leader_count'] ?? 0) > 0 && (float) ($city['advisor_score'] ?? 0) >= 72));
     $withoutLeaders = array_values(array_filter($cityRows, static fn(array $city): bool => (int) ($city['leader_count'] ?? 0) <= 0 && (int) ($city['baseline_votes'] ?? 0) > 0));

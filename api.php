@@ -265,13 +265,14 @@ $situacao = trim($_GET['situacao'] ?? '');
 $municipio = trim($_GET['municipio'] ?? '');
 
 $regioes = [
-    'Grande Aracaju' => ['Aracaju', 'Nossa Senhora do Socorro', 'São Cristóvão', 'Barra dos Coqueiros', "Itaporanga d'Ajuda", 'Laranjeiras', 'Riachuelo'],
-    'Agreste Central Sergipano' => ['Itabaiana', 'Campo do Brito', 'Carira', 'Macambira', 'Malhador', 'Moita Bonita', 'Nossa Senhora Aparecida', 'Pinhão', 'Ribeirópolis', 'São Domingos', 'Frei Paulo'],
-    'Leste Sergipano' => ['Estância', 'Boquim', 'Capela', 'Carmópolis', 'Japaratuba', 'Pirambu', 'Santa Luzia do Itanhy', 'Umbaúba', 'Indiaroba', 'Cristinápolis', 'Arauá', 'Itabaianinha', 'Tomar do Geru', 'General Maynard', 'Rosário do Catete', 'Santo Amaro das Brotas', 'Siriri'],
-    'Médio Sertão Sergipano' => ['Aquidabã', 'Cumbe', 'Feira Nova', 'Graccho Cardoso', 'Itabi', 'Nossa Senhora das Dores', 'Nossa Senhora da Glória'],
-    'Alto Sertão Sergipano' => ['Canindé de São Francisco', 'Monte Alegre de Sergipe', 'Nossa Senhora de Lourdes', 'Poço Redondo', 'Porto da Folha', 'Gararu', 'Canhoba'],
-    'Sul Sergipano' => ['Lagarto', 'Simão Dias', 'Riachão do Dantas', 'Tobias Barreto', 'Salgado'],
-    'Baixo São Francisco' => ['Propriá', 'Neópolis', 'Santana do São Francisco', 'Brejo Grande', 'Ilha das Flores', 'Japoatã', 'Muribeca', 'Pacatuba', 'Cedro de São João', 'Malhada dos Bois', 'São Francisco', 'Telha']
+    'Alto Sertão Sergipano' => ['Canindé de São Francisco', 'Gararu', 'Monte Alegre de Sergipe', 'Nossa Senhora da Glória', 'Nossa Senhora de Lourdes', 'Poço Redondo', 'Porto da Folha'],
+    'Agreste Central' => ['Areia Branca', 'Campo do Brito', 'Carira', 'Frei Paulo', 'Itabaiana', 'Macambira', 'Malhador', 'Moita Bonita', 'Nossa Senhora Aparecida', 'Pedra Mole', 'Pinhão', 'Ribeirópolis', 'São Domingos', 'São Miguel do Aleixo'],
+    'Baixo São Francisco' => ['Amparo de São Francisco', 'Brejo Grande', 'Canhoba', 'Cedro de São João', 'Ilha das Flores', 'Japoatã', 'Malhada dos Bois', 'Muribeca', 'Neópolis', 'Pacatuba', 'Propriá', 'Santana do São Francisco', 'São Francisco', 'Telha'],
+    'Centro Sul Sergipano' => ['Lagarto', 'Poço Verde', 'Riachão do Dantas', 'Simão Dias', 'Tobias Barreto'],
+    'Grande Aracaju' => ['Aracaju', 'Barra dos Coqueiros', "Itaporanga d'Ajuda", 'Laranjeiras', 'Maruim', 'Nossa Senhora do Socorro', 'Riachuelo', 'Santa Rosa de Lima', 'Santo Amaro das Brotas', 'São Cristóvão'],
+    'Leste Sergipano' => ['Capela', 'Carmópolis', 'Divina Pastora', 'General Maynard', 'Japaratuba', 'Pirambu', 'Rosário do Catete', 'Siriri'],
+    'Médio Sertão Sergipano' => ['Aquidabã', 'Cumbe', 'Feira Nova', 'Graccho Cardoso', 'Itabi', 'Nossa Senhora das Dores'],
+    'Sul Sergipano' => ['Arauá', 'Boquim', 'Cristinápolis', 'Estância', 'Indiaroba', 'Itabaianinha', 'Pedrinhas', 'Salgado', 'Santa Luzia do Itanhy', 'Tomar do Geru', 'Umbaúba']
 ];
 
 $regionLookup = [];
@@ -280,6 +281,8 @@ foreach ($regioes as $regionName => $cities) {
         $regionLookup[normalizeKey($city)] = $regionName;
     }
 }
+$regionLookup[normalizeKey('Araua')] = 'Sul Sergipano';
+$regionLookup[normalizeKey('Gracho Cardoso')] = 'Médio Sertão Sergipano';
 
 $extraConditions = [];
 if ($cargo !== '') {
