@@ -856,7 +856,7 @@ function premium_render_city_comparison_modal(array $forecast, int $baselineYear
     return implode('', $html);
 }
 
-function premium_build_onboarding_steps(?array $campaign, string $activeTab): array
+function premium_build_onboarding_steps(?array $campaign): array
 {
     $hasCampaign = $campaign !== null;
     $opcoesHref = premium_tab_href('opcoes', $campaign);
@@ -917,10 +917,10 @@ function premium_build_onboarding_steps(?array $campaign, string $activeTab): ar
 
 function premium_render_onboarding_panel(?array $campaign, string $activeTab, string $studyExcerpt): string
 {
-    $steps = premium_build_onboarding_steps($campaign, $activeTab);
+    $steps = premium_build_onboarding_steps($campaign);
     $initialStep = $steps[0] ?? [
         'number' => '1',
-        'title' => 'Guia rápido',
+        'title' => 'Tutorial de uso',
         'descriptionHtml' => 'Clique no botão para avançar.',
         'buttonLabel' => 'Abrir',
         'href' => '#',
@@ -932,13 +932,13 @@ function premium_render_onboarding_panel(?array $campaign, string $activeTab, st
     ?>
     <div class="premium-sidebar__guide">
         <div class="premium-sidebar__guide-actions">
-            <button type="button" class="btn ghost btn-small" data-onboarding-toggle aria-pressed="false">Ocultar guia</button>
+            <button type="button" class="btn ghost btn-small" data-onboarding-toggle aria-pressed="false">Ocultar tutorial</button>
         </div>
         <section class="panel onboarding-panel" data-onboarding-root data-onboarding-step-count="<?= (int) $stepCount ?>" data-onboarding-has-campaign="<?= $campaign ? '1' : '0' ?>">
             <div class="section-title onboarding-panel__head">
                 <div>
                     <div class="eyebrow">Comece por aqui</div>
-                    <h2>Guia rápido</h2>
+                    <h2>Tutorial rápido</h2>
                 </div>
             </div>
             <p class="panel-note onboarding-panel__note">
@@ -954,7 +954,7 @@ function premium_render_onboarding_panel(?array $campaign, string $activeTab, st
             <article class="onboarding-panel__step">
                 <span class="onboarding-panel__step-badge" data-onboarding-step-number><?= premium_escape_html((string) ($initialStep['number'] ?? '1')) ?></span>
                 <div class="onboarding-panel__step-body">
-                    <h3 data-onboarding-step-title><?= premium_escape_html((string) ($initialStep['title'] ?? 'Guia rápido')) ?></h3>
+                    <h3 data-onboarding-step-title><?= premium_escape_html((string) ($initialStep['title'] ?? 'Tutorial rápido')) ?></h3>
                     <p class="onboarding-panel__step-copy" data-onboarding-step-copy><?= (string) ($initialStep['descriptionHtml'] ?? '') ?></p>
                 </div>
                 <div class="onboarding-panel__step-actions">
@@ -972,7 +972,7 @@ function premium_render_onboarding_panel(?array $campaign, string $activeTab, st
                 </div>
             </article>
             <div class="onboarding-panel__footer">
-                <span class="muted onboarding-panel__footer-note">O guia se oculta ao final ou quando você quiser.</span>
+                <span class="muted onboarding-panel__footer-note">O tutorial se oculta ao final ou quando você quiser.</span>
             </div>
         </section>
     </div>
@@ -1054,7 +1054,7 @@ function premium_render_onboarding_panel(?array $campaign, string $activeTab, st
         <div class="section-title">
             <div>
                 <div class="eyebrow">Comece por aqui</div>
-                <h2>Guia rápido do Premium</h2>
+                <h2>Tutorial de uso</h2>
             </div>
             <div class="pill-row onboarding-panel__meta" style="margin-top: 0;">
                 <span class="pill">Etapa atual: <?= premium_escape_html($currentTabLabel) ?></span>
@@ -1667,8 +1667,10 @@ if ($user) {
                     <a class="premium-sidebar__link<?= $activeTab === 'liderancas' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('liderancas', $campaign)) ?>">Lideranças</a>
                     <a class="premium-sidebar__link<?= $activeTab === 'agenda' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('agenda', $campaign)) ?>">Agenda de campanha</a>
                     <a class="premium-sidebar__link<?= $activeTab === 'relatorios' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('relatorios', $campaign)) ?>">Relatórios</a>
-                    <a class="premium-sidebar__link<?= $activeTab === 'opcoes' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('opcoes', $campaign)) ?>">Opções avançadas</a>
                     <a class="premium-sidebar__link" href="premium_dicas_campanha.php<?= $campaign ? '?campaign_id=' . (int)$campaign['id'] : '' ?>">Estratégias de campanha</a>
+                    <a class="premium-sidebar__link" href="premium_perfil_eleitor.php<?= $campaign ? '?campaign_id=' . (int)$campaign['id'] : '' ?>">Perfil do eleitorado</a>
+                    <a class="premium-sidebar__link" href="premium_pesquisas.php<?= $campaign ? '?campaign_id=' . (int)$campaign['id'] : '' ?>">Pesquisas eleitorais</a>
+                    <a class="premium-sidebar__link<?= $activeTab === 'opcoes' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('opcoes', $campaign)) ?>">Opções avançadas</a>
                 </nav>
                 <?php if ($user && !$isAdmin): ?>
                     <?= premium_render_onboarding_panel($campaign, $activeTab, $onboardingStudyExcerpt) ?>
@@ -2634,7 +2636,7 @@ if ($user) {
         ],
         'onboarding' => [
             'hasCampaign' => (bool) $campaign,
-            'steps' => premium_build_onboarding_steps($campaign, $activeTab),
+            'steps' => premium_build_onboarding_steps($campaign),
         ],
         'leaders' => $leaders,
         'agenda' => $agenda,

@@ -56,6 +56,10 @@ function premium_advisor_is_hole_candidate(array $city): bool
         return false;
     }
 
+    if ($baselineVotes > 0 && $retention !== null && $retention >= 1.0) {
+        return false;
+    }
+
     if ($leaderCount >= 3 && ($retention === null || $retention >= 0.75)) {
         return false;
     }
@@ -76,6 +80,33 @@ function premium_advisor_is_defense_candidate(array $city): bool
     }
 
     return $leaderCount <= 1 || ($retention !== null && $retention < 0.75);
+}
+
+function premium_advisor_expansion_reason(array $city): string
+{
+    $baselineVotes  = (int)   ($city['baseline_votes']  ?? 0);
+    $expansionScore = (float) ($city['expansion_score'] ?? 0);
+
+    if ($baselineVotes <= 0) {
+        if ($expansionScore >= 75) {
+            return 'Sem histórico eleitoral nesta campanha, mas está em região de alta força. A janela de entrada é real — construir base do zero aqui pode render votos expressivos com articulação ativa.';
+        }
+        return 'Cidade sem votação histórica registrada nesta campanha. A região é forte, o que facilita a entrada, mas exige prospecção ativa de lideranças locais para construir território.';
+    }
+
+    if ($baselineVotes > 30000) {
+        return 'Base histórica expressiva e zero líderes cadastrados. Alta prioridade: sem articulação local, esse volume de votos está completamente exposto a adversários da região.';
+    }
+
+    if ($baselineVotes > 10000) {
+        return 'Tem histórico de votos relevante na região, mas não há nenhum líder registrado. Vulnerabilidade alta — prospectar pelo menos um articulador local é urgente.';
+    }
+
+    if ($baselineVotes > 2000) {
+        return 'Cidade com base eleitoral moderada e sem liderança cadastrada. A presença regional abre espaço para articulação, mas o território ainda está descoberto.';
+    }
+
+    return 'Base histórica pequena, sem liderança cadastrada. Vale prospectar indicações locais para não deixar o espaço aberto para adversários da região.';
 }
 
 function premium_advisor_is_expansion_candidate(array $city): bool
@@ -169,13 +200,20 @@ function premium_advisor_recommendation(array $city): array
         ];
     }
 
+    if ($baselineVotes > 0 && $retention !== null && $retention >= 1.0) {
+        return [
+            'title' => 'Monitorar',
+            'text' => 'A projeção está acima da base histórica, mas o score ainda não indica prioridade alta. Mantenha acompanhamento e faça ações seletivas para confirmar o crescimento.',
+        ];
+    }
+
     return [
         'title' => 'Monitorar',
         'text' => 'Mantenha acompanhamento e use apenas ações pontuais até existir melhor sinal de retorno.',
     ];
 }
 
-function premium_build_campaign_advisor(array $campaign, array $baseline, array $leaders, array $forecast, array $settings): array
+function premium_build_campaign_advisor(array $campaign, array $_baseline, array $_leaders, array $forecast, array $settings): array
 {
     $cities = array_values((array) ($forecast['cities'] ?? []));
     $leaderRows = array_values((array) ($forecast['leaders'] ?? []));
@@ -367,7 +405,7 @@ function premium_build_campaign_advisor(array $campaign, array $baseline, array 
             $expansion[] = [
                 'municipio' => (string) ($city['municipio'] ?? ''),
                 'regiao' => $region,
-                'reason' => 'Está na mesma região de maior força da campanha, mas ainda precisa de liderança local.',
+                'reason' => premium_advisor_expansion_reason($city),
                 'baseline_votes' => (int) ($city['baseline_votes'] ?? 0),
                 'projected_base' => (int) ($city['projected_base'] ?? 0),
             ];

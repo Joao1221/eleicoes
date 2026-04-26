@@ -581,6 +581,11 @@ function premium_flash(string $type, string $message): void
     ];
 }
 
+function premium_push_flash(string $message, string $type = 'info'): void
+{
+    premium_flash($type, $message);
+}
+
 function premium_pull_flash(): ?array
 {
     if (!isset($_SESSION['premium_flash'])) {
@@ -1680,4 +1685,110 @@ function premium_ensure_manual_projection_column(mysqli $conn): void
         ALTER TABLE premium_campaign_leaders
         ADD COLUMN is_manual_projection TINYINT(1) NOT NULL DEFAULT 0 AFTER notes
     ");
+}
+
+// ---------------------------------------------------------------------------
+// Pesquisas eleitorais
+// ---------------------------------------------------------------------------
+
+function premium_get_pesquisas(mysqli $conn, int $campaignId): array
+{
+    return queryAll($conn, "
+        SELECT * FROM premium_pesquisas
+        WHERE campaign_id = " . $campaignId . "
+        ORDER BY data_pesquisa DESC, id DESC
+    ") ?: [];
+}
+
+function premium_save_pesquisa(mysqli $conn, int $campaignId, array $data): bool
+{
+    $instituto     = $conn->real_escape_string(trim((string) ($data['instituto']     ?? '')));
+    $tipo          = in_array($data['tipo'] ?? '', ['estadual', 'municipal'], true) ? $data['tipo'] : 'estadual';
+    $cdMunicipio   = $tipo === 'municipal' && !empty($data['cd_municipio']) ? (int) $data['cd_municipio'] : 'NULL';
+    $nmMunicipio   = $tipo === 'municipal' && !empty($data['nm_municipio'])
+        ? "'" . $conn->real_escape_string(trim((string) $data['nm_municipio'])) . "'"
+        : 'NULL';
+    $dataPesquisa  = $conn->real_escape_string((string) ($data['data_pesquisa'] ?? date('Y-m-d')));
+    $pctCandidato  = number_format((float) ($data['pct_candidato'] ?? 0), 2, '.', '');
+    $observacoes   = $conn->real_escape_string(trim((string) ($data['observacoes'] ?? '')));
+
+    $conn->query("
+        INSERT INTO premium_pesquisas
+            (campaign_id, instituto, tipo, cd_municipio, nm_municipio, data_pesquisa, pct_candidato, observacoes)
+        VALUES
+            ($campaignId, '$instituto', '$tipo', $cdMunicipio, $nmMunicipio, '$dataPesquisa', $pctCandidato, '$observacoes')
+    ");
+
+    return $conn->affected_rows > 0;
+}
+
+function premium_delete_pesquisa(mysqli $conn, int $id, int $campaignId): bool
+{
+    $conn->query("DELETE FROM premium_pesquisas WHERE id = $id AND campaign_id = $campaignId LIMIT 1");
+    return $conn->affected_rows > 0;
+}
+
+/**
+ * Compara % de uma pesquisa com a projeção 2026 da campanha.
+ *
+ * @param array $pesquisa  Linha da tabela premium_pesquisas
+ * @param array $forecast  Retorno de premium_build_forecast()
+ * @param array $municipios Array de municípios de perfil_eleitor_municipio (indexado por cd_municipio)
+ */
+function premium_comparar_pesquisa(array $pesquisa, array $forecast, array $municipios): array
+{
+    $tipo         = (string) ($pesquisa['tipo'] ?? 'estadual');
+    $pctPesquisa  = (float)  ($pesquisa['pct_candidato'] ?? 0);
+
+    if ($tipo === 'estadual') {
+        $totalEleitores = (int) array_sum(array_column($municipios, 'qt_total'));
+        $votosProjecao  = (int) ($forecast['totals']['system_projection'] ?? 0);
+        $votosBaseline  = (int) ($forecast['totals']['baseline_votes'] ?? 0);
+        $scope          = 'Sergipe (estadual)';
+    } else {
+        $cdMunicipio    = (int) ($pesquisa['cd_municipio'] ?? 0);
+        $nmPesquisa     = premium_normalize_text((string) ($pesquisa['nm_municipio'] ?? ''));
+        $totalEleitores = 0;
+        $votosProjecao  = 0;
+        $votosBaseline  = 0;
+        $scope          = (string) ($pesquisa['nm_municipio'] ?? 'Município');
+
+        // Busca total de eleitores pelo cd_municipio
+        foreach ($municipios as $m) {
+            if ((int) $m['cd_municipio'] === $cdMunicipio) {
+                $totalEleitores = (int) $m['qt_total'];
+                break;
+            }
+        }
+
+        // Busca projeção e baseline pelo nome normalizado do município
+        foreach ($forecast['cities'] as $city) {
+            if (premium_normalize_text((string) ($city['municipio'] ?? '')) === $nmPesquisa) {
+                $votosProjecao = (int) ($city['system_projection'] ?? 0);
+                $votosBaseline = (int) ($city['baseline_votes'] ?? 0);
+                break;
+            }
+        }
+    }
+
+    if ($totalEleitores <= 0) {
+        return ['erro' => 'Total de eleitores não encontrado para o escopo informado.'];
+    }
+
+    $pctProjecao = round(($votosProjecao / $totalEleitores) * 100, 2);
+    $votosPesquisa = (int) round($totalEleitores * $pctPesquisa / 100);
+    $deltaPp       = round($pctPesquisa - $pctProjecao, 2);
+    $deltaVotos    = $votosPesquisa - $votosProjecao;
+
+    return [
+        'scope'           => $scope,
+        'total_eleitores' => $totalEleitores,
+        'votos_baseline'  => $votosBaseline,
+        'votos_pesquisa'  => $votosPesquisa,
+        'pct_pesquisa'    => $pctPesquisa,
+        'votos_projecao'  => $votosProjecao,
+        'pct_projecao'    => $pctProjecao,
+        'delta_pp'        => $deltaPp,
+        'delta_votos'     => $deltaVotos,
+    ];
 }

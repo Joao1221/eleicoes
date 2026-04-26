@@ -4547,6 +4547,51 @@
                 padding: 12px;
             }
 
+            .leaders-table-toolbar {
+                margin: 12px 12px 0;
+                padding: 12px;
+            }
+
+            .leaders-rows-viewport {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .leaders-table-toolbar__filters {
+                grid-template-columns: 1fr;
+            }
+
+            .leaders-table-toolbar__bulk {
+                grid-template-columns: minmax(0, 1fr);
+                margin: 12px 12px 0;
+            }
+
+            .leaders-table-toolbar__bulk-item {
+                min-width: 0;
+                max-width: 100%;
+                padding: 12px;
+            }
+
+            .leaders-table-toolbar__bulk-title,
+            .leaders-table-toolbar__bulk-sub {
+                overflow-wrap: anywhere;
+            }
+
+            .leaders-table-toolbar__bulk-actions,
+            .leader-bulk-transfer-form__actions {
+                align-items: stretch;
+            }
+
+            .leaders-table-toolbar__bulk-actions .btn,
+            .leader-bulk-transfer-form__actions .btn {
+                flex: 1 1 150px;
+                white-space: normal;
+            }
+
+            .leader-bulk-transfer-form__field {
+                max-width: none;
+            }
+
             .leader-batch-form {
                 width: 100%;
                 display: block;

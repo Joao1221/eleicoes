@@ -3045,7 +3045,7 @@
     let onboardingState = loadOnboardingState();
 
     function updateOnboardingToggleButtons() {
-        const label = onboardingState.hidden ? 'Abrir guia' : 'Ocultar guia';
+        const label = onboardingState.hidden ? 'Abrir tutorial' : 'Ocultar tutorial';
         onboardingToggleButtons.forEach((button) => {
             button.textContent = label;
             button.setAttribute('aria-pressed', onboardingState.hidden ? 'false' : 'true');
