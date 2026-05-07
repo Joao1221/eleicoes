@@ -283,6 +283,53 @@ function premium_normalize_text(string $value): string
     return trim($value);
 }
 
+function premium_resolve_2024_municipality_name(mysqli $conn, string $municipio): string
+{
+    $municipio = trim($municipio);
+    if ($municipio === '') {
+        return '';
+    }
+
+    static $cache = null;
+    if ($cache === null) {
+        $cache = [];
+        $rows = queryAll($conn, "
+            SELECT DISTINCT nm_municipio
+            FROM resumo_votacao_2024_se
+            WHERE nm_municipio IS NOT NULL
+        ");
+
+        foreach ($rows as $row) {
+            $name = trim((string) ($row['nm_municipio'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $cache[premium_normalize_text($name)] = $name;
+        }
+
+        $rows = queryAll($conn, "
+            SELECT DISTINCT nm_municipio
+            FROM candidatos_situacao_2024
+            WHERE nm_municipio IS NOT NULL
+        ");
+
+        foreach ($rows as $row) {
+            $name = trim((string) ($row['nm_municipio'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $key = premium_normalize_text($name);
+            if (!isset($cache[$key])) {
+                $cache[$key] = $name;
+            }
+        }
+    }
+
+    return $cache[premium_normalize_text($municipio)] ?? $municipio;
+}
+
 function premium_normalize_cargo(string $cargo): string
 {
     $normalized = premium_normalize_text($cargo);
@@ -980,6 +1027,7 @@ function premium_leader_display_name(mysqli $conn, array $leader): string
             FROM candidatos_situacao_2024
             WHERE sq_candidato = " . premium_sql_quote($conn, $sourceSq) . "
               AND nr_turno = {$turno}
+            ORDER BY nr_zona = 0 DESC, id DESC
             LIMIT 1
         ");
     }
@@ -991,7 +1039,26 @@ function premium_leader_display_name(mysqli $conn, array $leader): string
         ];
 
         if ($municipality !== '') {
-            $conditions[] = 'nm_municipio = ' . premium_sql_quote($conn, $municipality);
+            $dbMunicipality = premium_resolve_2024_municipality_name($conn, $municipality);
+            $codeRows = queryAll($conn, "
+                SELECT DISTINCT cd_municipio
+                FROM resumo_votacao_2024_se
+                WHERE nm_municipio = " . premium_sql_quote($conn, $dbMunicipality) . "
+                  AND cd_municipio IS NOT NULL
+            ");
+            $codes = [];
+            foreach ($codeRows as $codeRow) {
+                $code = (int) ($codeRow['cd_municipio'] ?? 0);
+                if ($code > 0) {
+                    $codes[] = $code;
+                }
+            }
+
+            if ($codes) {
+                $conditions[] = 'cd_municipio IN (' . implode(',', array_map('intval', $codes)) . ')';
+            } else {
+                $conditions[] = 'nm_municipio = ' . premium_sql_quote($conn, $dbMunicipality);
+            }
         }
 
         if ($cargo !== '') {
@@ -1002,6 +1069,7 @@ function premium_leader_display_name(mysqli $conn, array $leader): string
             SELECT nm_urna_candidato, nm_candidato
             FROM candidatos_situacao_2024
             WHERE " . implode(' AND ', $conditions) . "
+            ORDER BY nr_zona = 0 DESC, id DESC
             LIMIT 1
         ");
     }
@@ -1284,6 +1352,23 @@ function premium_search_2024_candidates(mysqli $conn, string $cargo, string $mun
         $cargoVariants = [$cargo];
     }
 
+    $dbMunicipio = $municipio !== '' ? premium_resolve_2024_municipality_name($conn, $municipio) : '';
+    $dbMunicipioCodes = [];
+    if ($dbMunicipio !== '') {
+        $codeRows = queryAll($conn, "
+            SELECT DISTINCT cd_municipio
+            FROM resumo_votacao_2024_se
+            WHERE nm_municipio = " . premium_sql_quote($conn, $dbMunicipio) . "
+              AND cd_municipio IS NOT NULL
+        ");
+        foreach ($codeRows as $codeRow) {
+            $code = (int) ($codeRow['cd_municipio'] ?? 0);
+            if ($code > 0) {
+                $dbMunicipioCodes[] = $code;
+            }
+        }
+    }
+
     $conditions = [
         '(' . implode(' OR ', array_map(
             static fn(string $variant): string => 'r.ds_cargo = ' . premium_sql_quote($conn, $variant),
@@ -1293,14 +1378,16 @@ function premium_search_2024_candidates(mysqli $conn, string $cargo, string $mun
         "r.tipo_voto = 'Candidato'",
     ];
 
-    if ($municipio !== '') {
-        $conditions[] = "r.nm_municipio = " . premium_sql_quote($conn, $municipio);
+    if ($dbMunicipio !== '') {
+        $conditions[] = "r.nm_municipio = " . premium_sql_quote($conn, $dbMunicipio);
     }
 
     $summaryRows = queryAll($conn, "
         SELECT
+            MAX(r.cd_municipio) AS cd_municipio,
             r.nm_municipio,
             r.nr_votavel,
+            MAX(NULLIF(r.sq_candidato, '')) AS sq_candidato,
             MAX(r.nm_votavel) AS nm_votavel,
             SUM(r.total_votos) AS total_votos,
             COUNT(DISTINCT r.nr_zona) AS zonas
@@ -1319,27 +1406,46 @@ function premium_search_2024_candidates(mysqli $conn, string $cargo, string $mun
         "nr_turno = " . (int) $turno,
     ];
 
-    if ($municipio !== '') {
-        $metaConditions[] = "nm_municipio = " . premium_sql_quote($conn, $municipio);
+    if ($dbMunicipioCodes) {
+        $metaConditions[] = 'cd_municipio IN (' . implode(',', array_map('intval', $dbMunicipioCodes)) . ')';
+    } elseif ($dbMunicipio !== '') {
+        $metaConditions[] = "nm_municipio = " . premium_sql_quote($conn, $dbMunicipio);
     }
 
     $metaRows = queryAll($conn, "
         SELECT
-            nm_municipio,
-            nm_urna_candidato,
-            MAX(nm_candidato) AS nm_candidato,
-            MAX(sg_partido) AS sg_partido,
-            MAX(ds_sit_tot_turno) AS situacao,
-            MAX(sq_candidato) AS sq_candidato,
-            MAX(nr_cand) AS nr_cand
+            cd_municipio,
+            COALESCE(NULLIF(MAX(CASE WHEN nr_zona = 0 THEN nm_municipio ELSE '' END), ''), MAX(nm_municipio)) AS nm_municipio,
+            nr_cand,
+            COALESCE(NULLIF(MAX(CASE WHEN nr_zona = 0 THEN nm_urna_candidato ELSE '' END), ''), MAX(nm_urna_candidato)) AS nm_urna_candidato,
+            COALESCE(NULLIF(MAX(CASE WHEN nr_zona = 0 THEN nm_candidato ELSE '' END), ''), MAX(nm_candidato)) AS nm_candidato,
+            COALESCE(NULLIF(MAX(CASE WHEN nr_zona = 0 THEN sg_partido ELSE '' END), ''), MAX(sg_partido)) AS sg_partido,
+            COALESCE(NULLIF(MAX(CASE WHEN ds_sit_tot_turno NOT IN ('#NULO', '#NE', '') THEN ds_sit_tot_turno ELSE '' END), ''), MAX(ds_sit_tot_turno)) AS situacao,
+            MAX(sq_candidato) AS sq_candidato
         FROM candidatos_situacao_2024
         WHERE " . implode(' AND ', $metaConditions) . "
-        GROUP BY nm_municipio, nm_urna_candidato
+        GROUP BY cd_municipio, nr_cand, sq_candidato
     ");
 
     $metaMap = [];
     foreach ($metaRows as $metaRow) {
         $cityKey = premium_normalize_text((string) ($metaRow['nm_municipio'] ?? ''));
+        $cityCode = trim((string) ($metaRow['cd_municipio'] ?? ''));
+        $numberKey = (string) (int) ($metaRow['nr_cand'] ?? 0);
+        $sqKey = trim((string) ($metaRow['sq_candidato'] ?? ''));
+
+        if ($sqKey !== '' && $sqKey !== '-3') {
+            $metaMap['sq|' . $sqKey] = $metaRow;
+        }
+
+        if ($cityCode !== '' && $numberKey !== '0') {
+            $metaMap['code_nr|' . $cityCode . '|' . $numberKey] = $metaRow;
+        }
+
+        if ($cityKey !== '' && $numberKey !== '0') {
+            $metaMap['city_nr|' . $cityKey . '|' . $numberKey] = $metaRow;
+        }
+
         $metaNames = array_filter([
             premium_normalize_text((string) ($metaRow['nm_urna_candidato'] ?? '')),
             premium_normalize_text((string) ($metaRow['nm_candidato'] ?? '')),
@@ -1367,8 +1473,23 @@ function premium_search_2024_candidates(mysqli $conn, string $cargo, string $mun
         $regionName = premium_region_for_city($city) ?? 'Sem região';
 
         foreach ($cityRows as $row) {
+            $cityCode = trim((string) ($row['cd_municipio'] ?? ''));
+            $candidateSq = trim((string) ($row['sq_candidato'] ?? ''));
+            $candidateNumber = (int) ($row['nr_votavel'] ?? 0);
             $candidateName = (string) ($row['nm_votavel'] ?? '');
-            $meta = $metaMap[premium_normalize_text($city) . '|' . premium_normalize_text($candidateName)] ?? [];
+            $meta = [];
+            if ($candidateSq !== '' && $candidateSq !== '-3') {
+                $meta = $metaMap['sq|' . $candidateSq] ?? [];
+            }
+            if (!$meta && $cityCode !== '' && $candidateNumber > 0) {
+                $meta = $metaMap['code_nr|' . $cityCode . '|' . $candidateNumber] ?? [];
+            }
+            if (!$meta && $candidateNumber > 0) {
+                $meta = $metaMap['city_nr|' . premium_normalize_text($city) . '|' . $candidateNumber] ?? [];
+            }
+            if (!$meta) {
+                $meta = $metaMap[premium_normalize_text($city) . '|' . premium_normalize_text($candidateName)] ?? [];
+            }
             $ballotName = trim((string) ($meta['nm_urna_candidato'] ?? ''));
             if ($ballotName === '') {
                 $ballotName = $candidateName;
@@ -1391,7 +1512,7 @@ function premium_search_2024_candidates(mysqli $conn, string $cargo, string $mun
 
             $leaderRows[] = [
                 'nm_municipio' => $city,
-                'nr_votavel' => (int) $row['nr_votavel'],
+                'nr_votavel' => $candidateNumber,
                 'nm_votavel' => $candidateName,
                 'nm_urna_candidato' => $ballotName,
                 'nm_candidato' => $legalName,
@@ -1400,7 +1521,7 @@ function premium_search_2024_candidates(mysqli $conn, string $cargo, string $mun
                 'zonas' => (int) $row['zonas'],
                 'sg_partido' => $meta['sg_partido'] ?? null,
                 'situacao' => $meta['situacao'] ?? null,
-                'sq_candidato' => !empty($meta['sq_candidato']) ? (string) $meta['sq_candidato'] : null,
+                'sq_candidato' => !empty($meta['sq_candidato']) ? (string) $meta['sq_candidato'] : ($candidateSq !== '' && $candidateSq !== '-3' ? $candidateSq : null),
                 'nr_cand' => !empty($meta['nr_cand']) ? (int) $meta['nr_cand'] : null,
                 'turno' => $turno,
                 'margin_votes' => $marginVotes,
