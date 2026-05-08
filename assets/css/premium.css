@@ -1217,6 +1217,10 @@
             grid-template-columns: repeat(3, minmax(0, 1fr));
         }
 
+        .form-grid.three-cols {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
         .baseline-form {
             display: grid;
             grid-template-columns: repeat(10, minmax(0, 1fr));
@@ -4773,5 +4777,49 @@
             .premium-sidebar__nav {
                 grid-template-columns: 1fr;
             }
+        }
+
+        .pagination-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .pagination-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            height: 34px;
+            padding: 0 10px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: var(--text);
+            background: transparent;
+            text-decoration: none;
+            transition: background 0.15s, border-color 0.15s;
+            cursor: pointer;
+        }
+
+        .pagination-btn:hover:not(.pagination-btn--disabled):not(.pagination-btn--active) {
+            background: var(--soft);
+            border-color: var(--accent);
+        }
+
+        .pagination-btn--active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #04111c;
+            font-weight: 600;
+            pointer-events: none;
+        }
+
+        .pagination-btn--disabled {
+            opacity: 0.35;
+            pointer-events: none;
+            cursor: default;
         }
 

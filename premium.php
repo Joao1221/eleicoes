@@ -6,6 +6,7 @@ require_once __DIR__ . '/premium_helpers.php';
 require_once __DIR__ . '/premium_advisor_helpers.php';
 
 premium_ensure_campaign_photo_column($conn);
+premium_ensure_campaign_access_table($conn);
 
 function premium_fmt_int(int $value): string
 {
@@ -125,7 +126,14 @@ function premium_read_markdown_excerpt(string $relativePath, string $startHeadin
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'login') {
+    $isAjax = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+
     if (!premium_validate_csrf($_POST['csrf'] ?? null)) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Sessão expirada. Recarregue a página.']);
+            exit;
+        }
         premium_flash('error', 'Sua sessão expirou. Recarregue a página e tente novamente.');
         header('Location: premium');
         exit;
@@ -135,7 +143,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
     $password = (string) ($_POST['password'] ?? '');
 
     if (premium_login($conn, $email, $password)) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true]);
+            exit;
+        }
         premium_flash('success', 'Acesso premium liberado.');
+    } else {
+        if ($isAjax) {
+            $errorMessage = 'E-mail ou senha incorretos.';
+            premium_pull_flash();
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => $errorMessage]);
+            exit;
+        }
     }
 
     header('Location: premium');
@@ -224,6 +245,7 @@ if ($user) {
         $campaignBaselineLabel = premium_baseline_label($campaignBaselineYear);
         premium_set_active_campaign((int) $campaign['id']);
         $settings = premium_load_campaign_settings($conn, (int) $campaign['id']);
+        $campaignMembers = premium_get_campaign_members($conn, (int) $campaign['id']);
         $baseline = premium_candidate_baseline($conn, (string) ($campaign['candidate_name'] ?? ''), (string) ($campaign['candidate_cargo'] ?? ''), $campaignBaselineYear);
         $leaders = premium_get_campaign_leaders($conn, (int) $campaign['id']);
         $agenda = premium_load_agenda($conn, (int) $campaign['id']);
@@ -248,6 +270,12 @@ if ($user) {
 
     if ($isAdmin) {
         $premiumCampaigns = premium_get_all_campaigns($conn);
+
+        $campaignPerPage = 5;
+        $campaignPage = max(1, (int) ($_GET['campaign_page'] ?? 1));
+        $totalCampaignPages = $premiumCampaigns ? (int) ceil(count($premiumCampaigns) / $campaignPerPage) : 1;
+        $campaignPage = min($campaignPage, $totalCampaignPages);
+        $pagedCampaigns = array_slice($premiumCampaigns, ($campaignPage - 1) * $campaignPerPage, $campaignPerPage);
     }
 }
 $premiumUsers = [];
@@ -269,6 +297,12 @@ if ($isAdmin) {
             $premiumUserSummary['inactive']++;
         }
     }
+
+    $userPerPage = 5;
+    $userPage = max(1, (int) ($_GET['user_page'] ?? 1));
+    $totalUserPages = $premiumUsers ? (int) ceil(count($premiumUsers) / $userPerPage) : 1;
+    $userPage = min($userPage, $totalUserPages);
+    $pagedUsers = array_slice($premiumUsers, ($userPage - 1) * $userPerPage, $userPerPage);
 }
 
 $allowedTabs = ['home', 'liderancas', 'agenda', 'relatorios', 'opcoes'];
@@ -1787,8 +1821,8 @@ if ($user) {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if ($premiumUsers): ?>
-                                <?php foreach ($premiumUsers as $premiumUser): ?>
+                            <?php if ($pagedUsers): ?>
+                                <?php foreach ($pagedUsers as $premiumUser): ?>
                                     <?php
                                         $premiumUserId = (int) ($premiumUser['id'] ?? 0);
                                         $premiumUserName = (string) ($premiumUser['name'] ?? '');
@@ -1837,6 +1871,34 @@ if ($user) {
                             <?php endif; ?>
                         </tbody>
                     </table>
+
+                    <?php if ($totalUserPages > 1): ?>
+                    <div class="pagination-bar">
+                        <?php
+                        $paginationBase = 'premium?tab=opcoes';
+                        $paginationCampaignId = (int) ($campaign['id'] ?? 0);
+                        if ($paginationCampaignId > 0) {
+                            $paginationBase = 'premium?campaign_id=' . $paginationCampaignId . '&tab=opcoes';
+                        }
+                        ?>
+                        <?php if ($userPage > 1): ?>
+                            <a class="pagination-btn" href="<?= $paginationBase ?>&user_page=<?= $userPage - 1 ?>">‹ Anterior</a>
+                        <?php else: ?>
+                            <span class="pagination-btn pagination-btn--disabled">‹ Anterior</span>
+                        <?php endif; ?>
+
+                        <?php for ($p = 1; $p <= $totalUserPages; $p++): ?>
+                            <a class="pagination-btn <?= $p === $userPage ? 'pagination-btn--active' : '' ?>"
+                               href="<?= $paginationBase ?>&user_page=<?= $p ?>"><?= $p ?></a>
+                        <?php endfor; ?>
+
+                        <?php if ($userPage < $totalUserPages): ?>
+                            <a class="pagination-btn" href="<?= $paginationBase ?>&user_page=<?= $userPage + 1 ?>">Próximo ›</a>
+                        <?php else: ?>
+                            <span class="pagination-btn pagination-btn--disabled">Próximo ›</span>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </section>
 
@@ -1868,8 +1930,8 @@ if ($user) {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if ($premiumCampaigns): ?>
-                                <?php foreach ($premiumCampaigns as $adminCampaign): ?>
+                            <?php if ($pagedCampaigns): ?>
+                                <?php foreach ($pagedCampaigns as $adminCampaign): ?>
                                     <?php
                                         $adminCampaignId = (int) ($adminCampaign['id'] ?? 0);
                                         $adminCampaignName = (string) ($adminCampaign['campaign_name'] ?? 'Campanha');
@@ -1917,6 +1979,30 @@ if ($user) {
                             <?php endif; ?>
                         </tbody>
                     </table>
+
+                    <?php if ($totalCampaignPages > 1): ?>
+                    <div class="pagination-bar">
+                        <?php
+                        $campaignPaginationBase = 'premium?tab=opcoes';
+                        ?>
+                        <?php if ($campaignPage > 1): ?>
+                            <a class="pagination-btn" href="<?= $campaignPaginationBase ?>&campaign_page=<?= $campaignPage - 1 ?>">‹ Anterior</a>
+                        <?php else: ?>
+                            <span class="pagination-btn pagination-btn--disabled">‹ Anterior</span>
+                        <?php endif; ?>
+
+                        <?php for ($p = 1; $p <= $totalCampaignPages; $p++): ?>
+                            <a class="pagination-btn <?= $p === $campaignPage ? 'pagination-btn--active' : '' ?>"
+                               href="<?= $campaignPaginationBase ?>&campaign_page=<?= $p ?>"><?= $p ?></a>
+                        <?php endfor; ?>
+
+                        <?php if ($campaignPage < $totalCampaignPages): ?>
+                            <a class="pagination-btn" href="<?= $campaignPaginationBase ?>&campaign_page=<?= $campaignPage + 1 ?>">Próximo ›</a>
+                        <?php else: ?>
+                            <span class="pagination-btn pagination-btn--disabled">Próximo ›</span>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </section>
         <?php endif; ?>
@@ -1948,13 +2034,28 @@ if ($user) {
                         <label>Ano-base
                             <input type="number" name="baseline_year" value="2022" min="2018" step="4">
                         </label>
+                    </div>
+                    <div class="form-grid three-cols">
                         <label>Município-base
                             <input type="text" name="current_municipio" placeholder="Cidade principal, se houver">
                         </label>
+                        <label>Região-base
+                            <input type="text" name="current_region" placeholder="Região principal, se houver">
+                        </label>
+                        <?php if ($isAdmin): ?>
+                        <label>Responsável pela campanha
+                            <select name="target_user_id" required>
+                                <option value="">Selecione o usuário</option>
+                                <?php foreach ($premiumUsers as $pu):
+                                    if ($pu['status'] !== 'active') continue; ?>
+                                    <option value="<?= (int) $pu['id'] ?>">
+                                        <?= premium_escape_html($pu['name']) ?> — <?= premium_escape_html($pu['email']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <?php endif; ?>
                     </div>
-                    <label style="margin-top:6px;">Região-base
-                        <input type="text" name="current_region" placeholder="Região principal, se houver">
-                    </label>
                     <div class="baseline-notes-photo">
                         <label>Notas
                             <textarea name="notes" rows="3" placeholder="Contexto da campanha, público, restrições e metas."></textarea>
@@ -2082,6 +2183,9 @@ if ($user) {
                         <button class="leaders-tab-btn" type="button" id="optionsModeSecurity"
                             data-options-mode-target="security" role="tab" aria-controls="optionsSecurityBody"
                             aria-selected="false">Alterar senha</button>
+                        <button class="leaders-tab-btn" type="button" id="optionsModeMembros"
+                            data-options-mode-target="membros" role="tab" aria-controls="optionsMembrosBody"
+                            aria-selected="false">Membros do gabinete</button>
                         <button class="leaders-tab-btn" type="button" id="optionsModeDelete"
                             data-options-mode-target="delete" role="tab" aria-controls="optionsDeleteBody"
                             aria-selected="false">Excluir campanha</button>
@@ -2117,17 +2221,32 @@ if ($user) {
                                     <input type="number" name="baseline_year"
                                         value="<?= (int) ($campaign['baseline_year'] ?? 2022) ?>" min="2018" step="4">
                                 </label>
+                            </div>
+                            <div class="form-grid three-cols">
                                 <label>Município-base
                                     <input type="text" name="current_municipio"
                                         value="<?= premium_escape_html((string) ($campaign['current_municipio'] ?? '')) ?>"
                                         placeholder="Cidade principal, se houver">
                                 </label>
+                                <label>Região-base
+                                    <input type="text" name="current_region"
+                                        value="<?= premium_escape_html((string) ($campaign['current_region'] ?? '')) ?>"
+                                        placeholder="Região principal, se houver">
+                                </label>
+                                <?php if ($isAdmin): ?>
+                                <label>Responsável pela campanha
+                                    <select name="target_user_id" required>
+                                        <option value="">Selecione o usuário</option>
+                                        <?php foreach ($premiumUsers as $pu):
+                                            if ($pu['status'] !== 'active') continue; ?>
+                                            <option value="<?= (int) $pu['id'] ?>" <?= (isset($campaign['target_user_id']) && (int) $campaign['target_user_id'] === $pu['id']) ? 'selected' : '' ?>>
+                                                <?= premium_escape_html($pu['name']) ?> — <?= premium_escape_html($pu['email']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </label>
+                                <?php endif; ?>
                             </div>
-                            <label style="margin-top:6px;">Região-base
-                                <input type="text" name="current_region"
-                                    value="<?= premium_escape_html((string) ($campaign['current_region'] ?? '')) ?>"
-                                    placeholder="Região principal, se houver">
-                            </label>
                             <div class="baseline-notes-photo">
                                 <label>Notas
                                     <textarea name="notes" rows="3"><?= premium_escape_html((string) ($campaign['notes'] ?? '')) ?></textarea>
@@ -2237,6 +2356,11 @@ if ($user) {
                                 <button class="btn primary" type="submit">Salvar nova senha</button>
                             </div>
                         </form>
+                    </div>
+
+                    <div id="optionsMembrosBody" class="leaders-tab-panel" data-options-mode-panel="membros"
+                        role="tabpanel" aria-labelledby="optionsModeMembros" hidden>
+                        <?= premium_render_campaign_members_panel($campaignMembers ?? [], $campaign, $csrf) ?>
                     </div>
 
                     <div id="optionsDeleteBody" class="leaders-tab-panel" data-options-mode-panel="delete"

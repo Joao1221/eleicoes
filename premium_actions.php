@@ -346,6 +346,14 @@ switch ($action) {
             $candidateNumber = premium_parse_candidate_number($candidateBaseline['candidate_number'] ?? null);
         }
 
+        $campaignOwnerUserId = (int) $user['id'];
+        if ($isAdmin) {
+            $targetUserId = (int) ($_POST['target_user_id'] ?? 0);
+            if ($targetUserId > 0) {
+                $campaignOwnerUserId = $targetUserId;
+            }
+        }
+
         $conn->query("
             INSERT INTO premium_campaigns (
                 user_id,
@@ -358,7 +366,7 @@ switch ($action) {
                 current_municipio,
                 current_region
             ) VALUES (
-                " . (int) $user['id'] . ",
+                " . $campaignOwnerUserId . ",
                 " . premium_sql_quote($conn, $campaignName) . ",
                 " . premium_sql_quote($conn, $candidateName) . ",
                 " . premium_sql_quote($conn, $candidateCargo) . ",
@@ -1492,6 +1500,148 @@ switch ($action) {
             premium_flash('error', 'Não foi possível excluir a tarefa.');
         } else {
             premium_flash('success', 'Tarefa removida da agenda.');
+        }
+
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
+    case 'create_gabinete_user':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de adicionar membros.');
+            $redirectToCampaign();
+        }
+
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $email = strtolower(trim((string) ($_POST['email'] ?? '')));
+        $password = (string) ($_POST['password'] ?? '');
+        $passwordConfirm = (string) ($_POST['password_confirm'] ?? '');
+
+        if ($name === '' || $email === '' || $password === '' || $passwordConfirm === '') {
+            premium_flash('error', 'Preencha nome, e-mail e senha para adicionar o membro.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            premium_flash('error', 'Informe um e-mail válido para o novo membro.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if (strlen($password) < 8) {
+            premium_flash('error', 'A senha precisa ter pelo menos 8 caracteres.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if ($password !== $passwordConfirm) {
+            premium_flash('error', 'A confirmação de senha não confere.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $existing = querySingle($conn, "
+            SELECT id
+            FROM premium_users
+            WHERE email = " . premium_sql_quote($conn, $email) . "
+            LIMIT 1
+        ");
+
+        $newUserId = null;
+        if (empty($existing)) {
+            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+            if ($passwordHash === false) {
+                premium_flash('error', 'Não foi possível gerar a senha do membro.');
+                $redirectToCampaign($selectedCampaignId);
+            }
+
+            $conn->query("
+                INSERT INTO premium_users (
+                    name,
+                    email,
+                    password_hash,
+                    status
+                ) VALUES (
+                    " . premium_sql_quote($conn, $name) . ",
+                    " . premium_sql_quote($conn, $email) . ",
+                    " . premium_sql_quote($conn, $passwordHash) . ",
+                    'active'
+                )
+            ");
+
+            if ($conn->errno) {
+                premium_flash('error', 'Não foi possível criar o novo usuário.');
+                $redirectToCampaign($selectedCampaignId);
+            }
+
+            $newUserId = $conn->insert_id;
+        } else {
+            $newUserId = (int) ($existing['id'] ?? 0);
+        }
+
+        if ($newUserId <= 0) {
+            premium_flash('error', 'Não foi possível obter o ID do usuário.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $existing = querySingle($conn, "
+            SELECT id
+            FROM premium_campaign_access
+            WHERE campaign_id = " . (int) $selectedCampaignId . "
+              AND user_id = " . (int) $newUserId . "
+            LIMIT 1
+        ");
+
+        if (!empty($existing)) {
+            premium_flash('error', 'Este e-mail já é membro do gabinete.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $conn->query("
+            INSERT INTO premium_campaign_access (
+                campaign_id,
+                user_id,
+                created_by
+            ) VALUES (
+                " . (int) $selectedCampaignId . ",
+                " . (int) $newUserId . ",
+                " . (int) $user['id'] . "
+            )
+        ");
+
+        if ($conn->errno) {
+            premium_flash('error', 'Não foi possível adicionar o membro ao gabinete.');
+        } else {
+            premium_flash('success', 'Novo membro adicionado ao gabinete com sucesso.');
+        }
+
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
+    case 'revoke_gabinete_access':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de revogar acesso.');
+            $redirectToCampaign();
+        }
+
+        $targetUserId = (int) ($_POST['user_id'] ?? 0);
+        if ($targetUserId <= 0) {
+            premium_flash('error', 'Membro inválido.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if ((int) $campaign['user_id'] === $targetUserId) {
+            premium_flash('error', 'Não é possível revogar o acesso do dono da campanha.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $conn->query("
+            DELETE FROM premium_campaign_access
+            WHERE campaign_id = " . (int) $selectedCampaignId . "
+              AND user_id = " . (int) $targetUserId . "
+            LIMIT 1
+        ");
+
+        if ($conn->errno) {
+            premium_flash('error', 'Não foi possível revogar o acesso.');
+        } else {
+            premium_flash('success', 'Acesso do membro revogado com sucesso.');
         }
 
         $redirectToCampaign($selectedCampaignId);

@@ -146,6 +146,27 @@ function premium_ensure_user_trial_columns(mysqli $conn): void
     }
 }
 
+function premium_ensure_campaign_access_table(mysqli $conn): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $checked = true;
+
+    $conn->query("
+        CREATE TABLE IF NOT EXISTS premium_campaign_access (
+            id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            campaign_id INT UNSIGNED NOT NULL,
+            user_id     INT UNSIGNED NOT NULL,
+            created_by  INT UNSIGNED NOT NULL,
+            created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_access (campaign_id, user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+
 function premium_trial_end_timestamp(?array $user): ?int
 {
     $value = trim((string) ($user['trial_ends_at'] ?? ''));
@@ -904,6 +925,11 @@ function premium_get_campaigns(mysqli $conn, int $userId): array
         SELECT *
         FROM premium_campaigns
         WHERE user_id = " . (int) $userId . "
+        UNION
+        SELECT c.*
+        FROM premium_campaigns c
+        JOIN premium_campaign_access a ON a.campaign_id = c.id
+        WHERE a.user_id = " . (int) $userId . "
         ORDER BY
             CASE WHEN status = 'active' THEN 0 ELSE 1 END,
             updated_at DESC,
@@ -967,7 +993,12 @@ function premium_get_campaign(mysqli $conn, int $campaignId, int $userId): ?arra
         SELECT *
         FROM premium_campaigns
         WHERE id = " . (int) $campaignId . "
-          AND user_id = " . (int) $userId . "
+          AND (user_id = " . (int) $userId . "
+               OR EXISTS (
+                   SELECT 1 FROM premium_campaign_access a
+                   WHERE a.campaign_id = " . (int) $campaignId . "
+                     AND a.user_id = " . (int) $userId . "
+               ))
         LIMIT 1
     ");
 
@@ -976,6 +1007,111 @@ function premium_get_campaign(mysqli $conn, int $campaignId, int $userId): ?arra
     }
 
     return $campaign ?: null;
+}
+
+function premium_get_campaign_members(mysqli $conn, int $campaignId): array
+{
+    $members = queryAll($conn, "
+        SELECT
+            u.id,
+            u.name,
+            u.email,
+            u.status,
+            a.created_at,
+            a.created_by,
+            cb.name AS created_by_name
+        FROM premium_campaign_access a
+        JOIN premium_users u ON u.id = a.user_id
+        LEFT JOIN premium_users cb ON cb.id = a.created_by
+        WHERE a.campaign_id = " . (int) $campaignId . "
+        ORDER BY a.created_at ASC
+    ");
+
+    return $members ?? [];
+}
+
+function premium_render_campaign_members_panel(array $members, array $campaign, string $csrf): string
+{
+    $html = [];
+    $campaignId = (int) ($campaign['id'] ?? 0);
+    $campaignName = premium_escape_html($campaign['campaign_name'] ?? '');
+
+    $html[] = '<section class="panel" id="membersPanelBody">';
+    $html[] = '  <div class="eyebrow">Gestão de acesso</div>';
+    $html[] = '  <h3>Membros do gabinete</h3>';
+
+    if (!empty($members)) {
+        $html[] = '  <div style="margin-bottom: 2rem;">';
+        $html[] = '    <table class="admin-user-table" style="width:100%;">';
+        $html[] = '      <thead>';
+        $html[] = '        <tr>';
+        $html[] = '          <th>Nome</th>';
+        $html[] = '          <th>E-mail</th>';
+        $html[] = '          <th>Adicionado em</th>';
+        $html[] = '          <th style="text-align:right;">Ação</th>';
+        $html[] = '        </tr>';
+        $html[] = '      </thead>';
+        $html[] = '      <tbody>';
+
+        foreach ($members as $member) {
+            $memberId = (int) ($member['id'] ?? 0);
+            $memberName = premium_escape_html($member['name'] ?? '');
+            $memberEmail = premium_escape_html($member['email'] ?? '');
+            $createdAt = premium_fmt_datetime($member['created_at'] ?? '');
+            $createdByName = premium_escape_html($member['created_by_name'] ?? 'Desconhecido');
+
+            $html[] = '        <tr>';
+            $html[] = '          <td>' . $memberName . '</td>';
+            $html[] = '          <td style="opacity: 0.8; font-size: 0.9rem;">' . $memberEmail . '</td>';
+            $html[] = '          <td style="font-size: 0.9rem; opacity: 0.7;">' . $createdAt . '</td>';
+            $html[] = '          <td style="text-align:right;">';
+            $html[] = '            <form method="post" action="premium_actions.php" style="display:inline;" onsubmit="return confirm(\'Revogar acesso a ' . $memberName . '?\');">';
+            $html[] = '              <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
+            $html[] = '              <input type="hidden" name="action" value="revoke_gabinete_access">';
+            $html[] = '              <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
+            $html[] = '              <input type="hidden" name="user_id" value="' . $memberId . '">';
+            $html[] = '              <button class="btn danger btn-small" type="submit">Revogar</button>';
+            $html[] = '            </form>';
+            $html[] = '          </td>';
+            $html[] = '        </tr>';
+        }
+
+        $html[] = '      </tbody>';
+        $html[] = '    </table>';
+        $html[] = '  </div>';
+    } else {
+        $html[] = '  <p style="opacity: 0.7; margin-bottom: 1.5rem;">Nenhum membro adicionado ainda.</p>';
+    }
+
+    $html[] = '  <div style="border-top: 1px solid var(--line); padding-top: 1.5rem;">';
+    $html[] = '    <h4 style="margin-top: 0;">Adicionar novo membro</h4>';
+    $html[] = '    <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 1rem;">O novo membro terá acesso completo à campanha <strong>' . $campaignName . '</strong>.</p>';
+    $html[] = '    <form method="post" action="premium_actions.php">';
+    $html[] = '      <input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
+    $html[] = '      <input type="hidden" name="action" value="create_gabinete_user">';
+    $html[] = '      <input type="hidden" name="campaign_id" value="' . $campaignId . '">';
+    $html[] = '      <div class="form-grid">';
+    $html[] = '        <label>Nome completo';
+    $html[] = '          <input type="text" name="name" placeholder="João da Silva" required autocomplete="off">';
+    $html[] = '        </label>';
+    $html[] = '        <label>E-mail';
+    $html[] = '          <input type="email" name="email" placeholder="joao@example.com" required autocomplete="off">';
+    $html[] = '        </label>';
+    $html[] = '        <label>Senha';
+    $html[] = '          <input type="password" name="password" placeholder="••••••••" required autocomplete="new-password">';
+    $html[] = '        </label>';
+    $html[] = '        <label>Confirme a senha';
+    $html[] = '          <input type="password" name="password_confirm" placeholder="••••••••" required autocomplete="new-password">';
+    $html[] = '        </label>';
+    $html[] = '      </div>';
+    $html[] = '      <div class="action-row">';
+    $html[] = '        <button class="btn primary" type="submit">Adicionar membro</button>';
+    $html[] = '      </div>';
+    $html[] = '    </form>';
+    $html[] = '  </div>';
+    $html[] = '</section>';
+
+    return implode("\n", $html);
 }
 
 function premium_active_campaign(mysqli $conn, int $userId): ?array

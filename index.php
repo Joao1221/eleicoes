@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/premium_helpers.php';
 
+$user = premium_current_user($conn);
+
+if ($user) {
+    header('Location: premium');
+    exit;
+}
+
+$_csrf = premium_csrf_token();
 $pageTitle = 'Apoia Candidato | Inteligência eleitoral para campanhas';
 $pageDescription = 'Transforme dados de 2022, lideranças de 2024 e força territorial em estratégia de campanha. Solicite uma apresentação do Apoia Candidato.';
-
-$user = premium_current_user($conn);
 $flash = premium_pull_flash();
 $premiumWhatsappPhone = '5579999248114';
 $premiumWhatsappMessage = 'Olá! Vim pelo Apoia Candidato Premium e quero agendar uma apresentação para entender como o sistema pode ajudar minha campanha com projeções, lideranças, agenda e relatórios.';
@@ -863,6 +869,103 @@ if ($user) {
                 max-width: 100%;
             }
         }
+
+        .login-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .login-modal-overlay[hidden] {
+            display: none;
+        }
+
+        .login-modal-box {
+            background: var(--bg);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 420px;
+            position: relative;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .login-modal-close {
+            position: absolute;
+            top: 0.75rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--muted);
+            transition: color 0.2s;
+        }
+
+        .login-modal-close:hover {
+            color: var(--text);
+        }
+
+        .login-modal-sub {
+            color: var(--muted);
+            margin: 0.5rem 0 1rem;
+            font-size: 0.9rem;
+        }
+
+        .login-modal-error {
+            background: rgba(255, 109, 109, 0.1);
+            color: #ff6d6d;
+            border: 1px solid rgba(255, 109, 109, 0.3);
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .login-modal-error[hidden] {
+            display: none;
+        }
+
+        #loginModalForm label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            margin-bottom: 1rem;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        #loginModalForm input {
+            padding: 0.6rem 0.8rem;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            font-size: 1rem;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            transition: border-color 0.2s;
+        }
+
+        #loginModalForm input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        #loginModalForm .btn {
+            width: 100%;
+            padding: 0.75rem;
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        #loginModalBtn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body id="top">
@@ -1102,5 +1205,93 @@ if ($user) {
             Inteligência eleitoral para campanhas que querem decidir com método, território e dados.
         </footer>
     </div>
+
+    <!-- Modal de Login -->
+    <div id="loginModal" class="login-modal-overlay" role="dialog" aria-modal="true" aria-label="Acesso premium" hidden>
+        <div class="login-modal-box">
+            <button class="login-modal-close" id="loginModalClose" aria-label="Fechar">&times;</button>
+            <h3>Acesso premium</h3>
+            <p class="login-modal-sub">Use as credenciais premium para entrar no seu gabinete.</p>
+            <div id="loginModalError" class="login-modal-error" hidden></div>
+            <form id="loginModalForm">
+                <input type="hidden" name="csrf" value="<?= htmlspecialchars($_csrf, ENT_QUOTES) ?>">
+                <input type="hidden" name="action" value="login">
+                <label>E-mail
+                    <input type="email" name="email" placeholder="seu@email.com" required autocomplete="email">
+                </label>
+                <label>Senha
+                    <input type="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+                </label>
+                <button class="btn primary" type="submit" id="loginModalBtn">Entrar no premium</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        const modal   = document.getElementById('loginModal');
+        const form    = document.getElementById('loginModalForm');
+        const errorEl = document.getElementById('loginModalError');
+        const btn     = document.getElementById('loginModalBtn');
+
+        function closeModal() {
+            modal.setAttribute('hidden', '');
+            errorEl.setAttribute('hidden', '');
+            form.reset();
+        }
+
+        document.querySelectorAll('a[href="premium"]').forEach(function (el) {
+            el.addEventListener('click', function (e) {
+                e.preventDefault();
+                modal.removeAttribute('hidden');
+                form.querySelector('[name="email"]').focus();
+            });
+        });
+
+        document.getElementById('loginModalClose').addEventListener('click', closeModal);
+
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) closeModal();
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modal.hasAttribute('hidden')) {
+                closeModal();
+            }
+        });
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            btn.disabled = true;
+            btn.textContent = 'Verificando...';
+            errorEl.setAttribute('hidden', '');
+
+            var data = new FormData(form);
+
+            fetch('premium', {
+                method: 'POST',
+                body: data,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (json) {
+                if (json.success) {
+                    window.location.href = 'premium';
+                } else {
+                    errorEl.textContent = json.message || 'Credenciais inválidas.';
+                    errorEl.removeAttribute('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'Entrar no premium';
+                }
+            })
+            .catch(function () {
+                errorEl.textContent = 'Erro de conexão. Tente novamente.';
+                errorEl.removeAttribute('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Entrar no premium';
+            });
+        });
+    })();
+    </script>
 </body>
 </html>

@@ -2772,7 +2772,7 @@
 
     function setOptionsMode(mode) {
         const requestedMode = String(mode || '').toLowerCase();
-        const normalizedMode = ['campaign', 'settings', 'security', 'delete'].includes(requestedMode) ? requestedMode : 'campaign';
+        const normalizedMode = ['campaign', 'settings', 'security', 'membros', 'delete'].includes(requestedMode) ? requestedMode : 'campaign';
 
         if (!optionsModeButtons.length || !optionsModePanels.length) {
             return;

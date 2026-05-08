@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir c:\\\\xampp\\\\htdocs\\\\eleicoes /b)",
+      "Bash(dir c:\\\\xampp\\\\htdocs\\\\eleicoes)"
+    ]
+  }
+}
