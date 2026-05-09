@@ -8,13 +8,14 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 require_once __DIR__ . '/premium_helpers.php';
 
 $user = premium_require_user($conn, true);
+$isAdmin = premium_is_admin_user($user);
 $action = trim((string) ($_GET['action'] ?? 'summary'));
 
 $campaignId = (int) ($_GET['campaign_id'] ?? ($_SESSION['premium_campaign_id'] ?? 0));
-$campaign = $campaignId > 0 ? premium_get_campaign($conn, $campaignId, (int) $user['id']) : null;
+$campaign = $campaignId > 0 ? premium_get_campaign($conn, $campaignId, (int) $user['id'], $isAdmin) : null;
 
 if (!$campaign) {
-    $campaign = premium_active_campaign($conn, (int) $user['id']);
+    $campaign = premium_active_campaign($conn, (int) $user['id'], $isAdmin);
     if ($campaign) {
         $campaignId = (int) $campaign['id'];
     }

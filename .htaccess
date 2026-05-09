@@ -10,6 +10,15 @@ DirectoryIndex index.php premium.php
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Canonical production domain.
+    RewriteCond %{HTTP_HOST} ^www\.apoiacandidato\.com\.br$ [NC]
+    RewriteRule ^ https://apoiacandidato.com.br%{REQUEST_URI} [R=301,L]
+
+    RewriteCond %{HTTP_HOST} ^apoiacandidato\.com\.br$ [NC]
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
+    RewriteRule ^ https://apoiacandidato.com.br%{REQUEST_URI} [R=301,L]
+
     # Redirect direct .php access to the clean URL.
     RewriteCond %{THE_REQUEST} \s.+/(premium|eleicoes_municipais_se)\.php[\s?] [NC]
     RewriteRule ^ %1 [R=301,L,QSA]

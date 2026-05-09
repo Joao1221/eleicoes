@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/premium_helpers.php';
 
 $user = premium_require_user($conn);
+$isAdmin = premium_is_admin_user($user);
 $csrf = premium_csrf_token();
 $flash = premium_pull_flash();
 
@@ -17,12 +18,12 @@ if ($trialDaysRemaining !== null) {
 
 if (isset($_GET['campaign_id'])) {
     $requestedCampaignId = (int) $_GET['campaign_id'];
-    if ($requestedCampaignId > 0 && premium_get_campaign($conn, $requestedCampaignId, (int) $user['id'])) {
+    if ($requestedCampaignId > 0 && premium_get_campaign($conn, $requestedCampaignId, (int) $user['id'], $isAdmin)) {
         premium_set_active_campaign($requestedCampaignId);
     }
 }
 
-$campaign = premium_active_campaign($conn, (int) $user['id']);
+$campaign = premium_active_campaign($conn, (int) $user['id'], $isAdmin);
 $premiumSupportWhatsappUrl = premium_vip_support_whatsapp_url($user, $campaign);
 
 // ---------------------------------------------------------------------------

@@ -202,18 +202,19 @@ function advisor_render_ranking_print_report(array $rows, string $campaignTitle,
 }
 
 $user = premium_require_user($conn);
+$isAdmin = premium_is_admin_user($user);
 $csrf = premium_csrf_token();
 $flash = premium_pull_flash();
 
 if (isset($_GET['campaign_id'])) {
     $requestedCampaignId = (int) $_GET['campaign_id'];
-    if ($requestedCampaignId > 0 && premium_get_campaign($conn, $requestedCampaignId, (int) $user['id'])) {
+    if ($requestedCampaignId > 0 && premium_get_campaign($conn, $requestedCampaignId, (int) $user['id'], $isAdmin)) {
         premium_set_active_campaign($requestedCampaignId);
     }
 }
 
 $campaigns = premium_get_campaigns($conn, (int) $user['id']);
-$campaign = premium_active_campaign($conn, (int) $user['id']);
+$campaign = premium_active_campaign($conn, (int) $user['id'], $isAdmin);
 $settings = premium_default_settings();
 $baseline = [
     'candidate_name' => '',
