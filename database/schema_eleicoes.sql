@@ -414,7 +414,7 @@ CREATE TABLE premium_pesquisas (
 INSERT INTO premium_users (name, email, password_hash, status)
 VALUES (
     'Administrador Premium',
-    'premium@eleicoes.local',
+    'premium@apoiacandidato.com.br',
     '$2y$10$fIXO4PFGGluoVFjFIHF4C.k7UTqXtD46BojG8g47zIpcYs7LebYsi',
     'active'
 );

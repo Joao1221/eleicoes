@@ -688,7 +688,7 @@ function premium_admin_user_emails(): array
 {
     $raw = getenv('PREMIUM_ADMIN_EMAILS');
     if ($raw === false || trim($raw) === '') {
-        $raw = 'premium@eleicoes.local';
+        $raw = 'premium@apoiacandidato.com.br,premium@eleicoes.local,romulo@email.com';
     }
 
     $emails = preg_split('/[,\s;]+/', strtolower($raw)) ?: [];
@@ -987,18 +987,22 @@ function premium_delete_campaign(mysqli $conn, int $campaignId): bool
     }
 }
 
-function premium_get_campaign(mysqli $conn, int $campaignId, int $userId): ?array
+function premium_get_campaign(mysqli $conn, int $campaignId, int $userId, bool $isAdmin = false): ?array
 {
-    $campaign = querySingle($conn, "
-        SELECT *
-        FROM premium_campaigns
-        WHERE id = " . (int) $campaignId . "
-          AND (user_id = " . (int) $userId . "
+    $accessCondition = $isAdmin
+        ? '1 = 1'
+        : "user_id = " . (int) $userId . "
                OR EXISTS (
                    SELECT 1 FROM premium_campaign_access a
                    WHERE a.campaign_id = " . (int) $campaignId . "
                      AND a.user_id = " . (int) $userId . "
-               ))
+               )";
+
+    $campaign = querySingle($conn, "
+        SELECT *
+        FROM premium_campaigns
+        WHERE id = " . (int) $campaignId . "
+          AND (" . $accessCondition . ")
         LIMIT 1
     ");
 
@@ -1114,11 +1118,11 @@ function premium_render_campaign_members_panel(array $members, array $campaign, 
     return implode("\n", $html);
 }
 
-function premium_active_campaign(mysqli $conn, int $userId): ?array
+function premium_active_campaign(mysqli $conn, int $userId, bool $isAdmin = false): ?array
 {
     $selectedId = (int) ($_SESSION['premium_campaign_id'] ?? 0);
     if ($selectedId > 0) {
-        $campaign = premium_get_campaign($conn, $selectedId, $userId);
+        $campaign = premium_get_campaign($conn, $selectedId, $userId, $isAdmin);
         if ($campaign) {
             return $campaign;
         }

@@ -164,11 +164,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') =
 }
 
 $user = premium_current_user($conn);
+$isAdmin = premium_is_admin_user($user);
 $accessBadgeLabel = $user ? 'Acesso premium' : null;
 
 if ($user && isset($_GET['campaign_id'])) {
     $requestedCampaignId = (int) $_GET['campaign_id'];
-    if ($requestedCampaignId > 0 && premium_get_campaign($conn, $requestedCampaignId, (int) $user['id'])) {
+    if ($requestedCampaignId > 0 && premium_get_campaign($conn, $requestedCampaignId, (int) $user['id'], $isAdmin)) {
         premium_set_active_campaign($requestedCampaignId);
     }
 }
@@ -221,7 +222,6 @@ $forecast = [
 $advisor = null;
 $baselinePanelHidden = false;
 $settingsPanelHidden = false;
-$isAdmin = premium_is_admin_user($user);
 $premiumCampaigns = [];
 $campaignBaselineYear = 2022;
 $campaignBaselineLabel = premium_baseline_label($campaignBaselineYear);
@@ -238,7 +238,7 @@ if ($onboardingStudyExcerpt === '') {
 
 if ($user) {
     $campaigns = premium_get_campaigns($conn, (int) $user['id']);
-    $campaign = premium_active_campaign($conn, (int) $user['id']);
+    $campaign = premium_active_campaign($conn, (int) $user['id'], $isAdmin);
 
     if ($campaign) {
         $campaignBaselineYear = premium_resolve_baseline_year((int) ($campaign['baseline_year'] ?? 2022));
@@ -1657,7 +1657,7 @@ if ($user) {
                     <input type="hidden" name="action" value="login">
                     <div class="form-grid">
                         <label>E-mail
-                            <input type="email" name="email" placeholder="premium@eleicoes.local" required>
+                            <input type="email" name="email" placeholder="premium@apoiacandidato.com.br" required>
                         </label>
                         <label>Senha
                             <input type="password" name="password" placeholder="••••••••" required>
@@ -1956,6 +1956,7 @@ if ($user) {
                                         <td><?= premium_escape_html($adminCampaignCreatedAt) ?></td>
                                         <td>
                                             <div class="user-actions">
+                                                <a class="btn ghost btn-small" href="premium?campaign_id=<?= $adminCampaignId ?>&amp;tab=opcoes">Abrir/editar</a>
                                                 <details class="admin-danger-menu">
                                                     <summary>Avancado</summary>
                                                     <form method="post" action="premium_actions.php" onsubmit="return confirm('Excluir esta campanha permanentemente? Isso apagará os dados da campanha, lideranças, agenda e pesos.');">
@@ -2239,7 +2240,7 @@ if ($user) {
                                         <option value="">Selecione o usuário</option>
                                         <?php foreach ($premiumUsers as $pu):
                                             if ($pu['status'] !== 'active') continue; ?>
-                                            <option value="<?= (int) $pu['id'] ?>" <?= (isset($campaign['target_user_id']) && (int) $campaign['target_user_id'] === $pu['id']) ? 'selected' : '' ?>>
+                                            <option value="<?= (int) $pu['id'] ?>" <?= (int) ($campaign['user_id'] ?? 0) === (int) $pu['id'] ? 'selected' : '' ?>>
                                                 <?= premium_escape_html($pu['name']) ?> — <?= premium_escape_html($pu['email']) ?>
                                             </option>
                                         <?php endforeach; ?>

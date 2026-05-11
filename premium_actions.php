@@ -39,9 +39,9 @@ $redirectToCampaign = static function (int $campaignId = 0): void {
     exit;
 };
 
-$campaign = $selectedCampaignId > 0 ? premium_get_campaign($conn, $selectedCampaignId, (int) $user['id']) : null;
+$campaign = $selectedCampaignId > 0 ? premium_get_campaign($conn, $selectedCampaignId, (int) $user['id'], $isAdmin) : null;
 if (!$campaign && in_array($action, ['select_campaign', 'create_campaign'], true) === false) {
-    $campaign = premium_active_campaign($conn, (int) $user['id']);
+    $campaign = premium_active_campaign($conn, (int) $user['id'], $isAdmin);
     if ($campaign) {
         $selectedCampaignId = (int) $campaign['id'];
     }
@@ -349,9 +349,25 @@ switch ($action) {
         $campaignOwnerUserId = (int) $user['id'];
         if ($isAdmin) {
             $targetUserId = (int) ($_POST['target_user_id'] ?? 0);
-            if ($targetUserId > 0) {
-                $campaignOwnerUserId = $targetUserId;
+            if ($targetUserId <= 0) {
+                premium_flash('error', 'Selecione o responsavel pela campanha.');
+                $redirectToCampaign($selectedCampaignId);
             }
+
+            $targetUser = querySingle($conn, "
+                SELECT id
+                FROM premium_users
+                WHERE id = " . (int) $targetUserId . "
+                  AND status = 'active'
+                LIMIT 1
+            ");
+
+            if (!$targetUser) {
+                premium_flash('error', 'Responsavel pela campanha invalido ou inativo.');
+                $redirectToCampaign($selectedCampaignId);
+            }
+
+            $campaignOwnerUserId = $targetUserId;
         }
 
         $conn->query("
@@ -428,6 +444,27 @@ switch ($action) {
         $notes = trim((string) ($_POST['notes'] ?? ''));
         $currentMunicipio = trim((string) ($_POST['current_municipio'] ?? ''));
         $currentRegion = trim((string) ($_POST['current_region'] ?? ''));
+        $campaignOwnerSql = '';
+
+        if ($isAdmin) {
+            $targetUserId = (int) ($_POST['target_user_id'] ?? 0);
+            if ($targetUserId > 0) {
+                $targetUser = querySingle($conn, "
+                    SELECT id
+                    FROM premium_users
+                    WHERE id = " . (int) $targetUserId . "
+                      AND status = 'active'
+                    LIMIT 1
+                ");
+
+                if (!$targetUser) {
+                    premium_flash('error', 'Responsavel pela campanha invalido ou inativo.');
+                    $redirectToCampaign($selectedCampaignId);
+                }
+
+                $campaignOwnerSql = 'user_id = ' . (int) $targetUserId . ',';
+            }
+        }
 
         if ($campaignName === '' || $candidateName === '' || $candidateCargo === '') {
             premium_flash('error', 'Informe o nome da campanha, o candidato e o cargo.');
@@ -453,6 +490,7 @@ switch ($action) {
         $conn->query("
             UPDATE premium_campaigns
             SET campaign_name = " . premium_sql_quote($conn, $campaignName) . ",
+                " . $campaignOwnerSql . "
                 candidate_name = " . premium_sql_quote($conn, $candidateName) . ",
                 candidate_cargo = " . premium_sql_quote($conn, $candidateCargo) . ",
                 candidate_number = " . ($candidateNumber !== null ? (string) $candidateNumber : 'NULL') . ",
@@ -462,7 +500,6 @@ switch ($action) {
                 current_municipio = " . premium_sql_quote($conn, $currentMunicipio !== '' ? $currentMunicipio : null) . ",
                 current_region = " . premium_sql_quote($conn, $currentRegion !== '' ? $currentRegion : null) . "
             WHERE id = " . (int) $selectedCampaignId . "
-              AND user_id = " . (int) $user['id'] . "
             LIMIT 1
         ");
 
@@ -476,7 +513,7 @@ switch ($action) {
         break;
 
     case 'select_campaign':
-        if ($selectedCampaignId <= 0 || !premium_get_campaign($conn, $selectedCampaignId, (int) $user['id'])) {
+        if ($selectedCampaignId <= 0 || !premium_get_campaign($conn, $selectedCampaignId, (int) $user['id'], $isAdmin)) {
             premium_flash('error', 'Campanha inválida.');
             $redirectToCampaign($selectedCampaignId);
         }
@@ -716,7 +753,6 @@ switch ($action) {
                 current_municipio = " . premium_sql_quote($conn, $currentMunicipio !== '' ? $currentMunicipio : null) . ",
                 current_region = " . premium_sql_quote($conn, $currentRegion !== '' ? $currentRegion : null) . "
             WHERE id = " . (int) $selectedCampaignId . "
-              AND user_id = " . (int) $user['id'] . "
             LIMIT 1
         ");
 
@@ -758,7 +794,6 @@ switch ($action) {
             UPDATE premium_campaigns
             SET settings_panel_hidden = 1
             WHERE id = " . (int) $selectedCampaignId . "
-              AND user_id = " . (int) $user['id'] . "
             LIMIT 1
         ");
 
@@ -781,7 +816,6 @@ switch ($action) {
             UPDATE premium_campaigns
             SET baseline_panel_hidden = 0
             WHERE id = " . (int) $selectedCampaignId . "
-              AND user_id = " . (int) $user['id'] . "
             LIMIT 1
         ");
 
@@ -804,7 +838,6 @@ switch ($action) {
             UPDATE premium_campaigns
             SET settings_panel_hidden = 0
             WHERE id = " . (int) $selectedCampaignId . "
-              AND user_id = " . (int) $user['id'] . "
             LIMIT 1
         ");
 
