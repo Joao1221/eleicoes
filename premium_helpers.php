@@ -688,7 +688,7 @@ function premium_admin_user_emails(): array
 {
     $raw = getenv('PREMIUM_ADMIN_EMAILS');
     if ($raw === false || trim($raw) === '') {
-        $raw = 'premium@apoiacandidato.com.br,premium@eleicoes.local,romulo@email.com';
+        $raw = 'premium@apoiacandidato.com.br,premium@eleicoes.local';
     }
 
     $emails = preg_split('/[,\s;]+/', strtolower($raw)) ?: [];
