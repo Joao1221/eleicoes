@@ -12,6 +12,7 @@
 
     const searchBtn = document.getElementById('searchLeadersBtn');
     const searchQueryInput = document.getElementById('searchQuery');
+    const searchAlliedOnlyInput = document.getElementById('searchAlliedOnly');
     const resultsBody = document.getElementById('leaderSearchResults');
     const leaderSelectAll = document.getElementById('leaderSelectAll');
     const leaderBatchForm = document.getElementById('leaderBatchForm');
@@ -42,6 +43,13 @@
         settings: {},
         totals: {},
     }, premiumPageData.forecast || {});
+    const isSenateCampaign = premiumPageData?.senate?.enabled === true;
+    const senateForecast = Object.assign({
+        cities: [],
+        regions: [],
+        sources: [],
+        city_sources: [],
+    }, premiumPageData?.senate?.forecast || {});
     const onboardingData = Object.assign({
         hasCampaign: false,
         steps: [],
@@ -137,6 +145,45 @@
     let premiumThemePreference = null;
     let leaderSearchDebounceId = null;
     let leaderSearchAbortController = null;
+
+    function syncPartySelector(selector) {
+        const checkboxes = Array.from(selector.querySelectorAll('input[type="checkbox"]'));
+        const selected = checkboxes.filter((checkbox) => checkbox.checked);
+        const count = selector.querySelector('[data-party-selector-count]');
+
+        checkboxes.forEach((checkbox) => {
+            const option = checkbox.closest('.party-option');
+            if (option) {
+                option.classList.toggle('is-selected', checkbox.checked);
+            }
+        });
+
+        if (count) {
+            count.textContent = `${selected.length} selecionado${selected.length === 1 ? '' : 's'}`;
+        }
+    }
+
+    document.querySelectorAll('[data-party-selector]').forEach((selector) => {
+        syncPartySelector(selector);
+
+        selector.addEventListener('change', () => {
+            syncPartySelector(selector);
+        });
+
+        selector.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-party-selector-action]');
+            if (!button) {
+                return;
+            }
+
+            const action = String(button.dataset.partySelectorAction || '');
+            const checked = action === 'all';
+            selector.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+                checkbox.checked = checked;
+            });
+            syncPartySelector(selector);
+        });
+    });
 
     function normalizePremiumTheme(value) {
         return String(value) === 'light' ? 'light' : 'dark';
@@ -259,6 +306,26 @@
             .trim()
             .replace(/\s+/g, ' ');
     }
+
+    document.querySelectorAll('input[name="candidate_cargo"]').forEach((cargoInput) => {
+        const form = cargoInput.closest('form');
+        const baselineInput = form?.querySelector('input[name="baseline_year"]');
+        if (!baselineInput) {
+            return;
+        }
+
+        let baselineTouched = false;
+        baselineInput.addEventListener('input', () => {
+            baselineTouched = true;
+        });
+
+        cargoInput.addEventListener('input', () => {
+            const cargo = normalizeText(cargoInput.value);
+            if (cargo.includes('senador') && !baselineTouched && ['', '2022'].includes(String(baselineInput.value || ''))) {
+                baselineInput.value = '2018';
+            }
+        });
+    });
 
     function updateActiveLeadersSummary() {
         if (!activeLeadersBaselineValue || !activeLeadersForecastValue) {
@@ -428,16 +495,33 @@
 
     function findForecastCity(cityName) {
         const needle = normalizeText(cityName);
-        return (premiumForecast.cities || []).find((item) => normalizeText(item.municipio || '') === needle) || null;
+        const src = isSenateCampaign ? senateForecast : premiumForecast;
+        return (src.cities || []).find((item) => normalizeText(item.municipio || '') === needle) || null;
     }
 
     function findForecastRegion(regionName) {
         const needle = normalizeText(regionName);
-        return (premiumForecast.regions || []).find((item) => normalizeText(item.regiao || '') === needle) || null;
+        const src = isSenateCampaign ? senateForecast : premiumForecast;
+        return (src.regions || []).find((item) => normalizeText(item.regiao || '') === needle) || null;
+    }
+
+    function getSenateOverlapMode() {
+        return String(senateForecast?.totals?.overlap_mode || senateForecast?.settings?.senate_overlap_mode || 'alert_only');
     }
 
     function getScopeLeaders(scopeType, scopeName) {
         const needle = normalizeText(scopeName);
+
+        if (isSenateCampaign) {
+            const rows = (senateForecast.city_sources || []).filter((row) => {
+                if (scopeType === 'region') {
+                    return normalizeText(row.region_name || '') === needle;
+                }
+                return normalizeText(row.municipality || '') === needle;
+            });
+            return rows.sort((a, b) => Number(b.projected_votes || 0) - Number(a.projected_votes || 0));
+        }
+
         const leaders = (premiumForecast.leaders || []).filter((leader) => {
             if (scopeType === 'region') {
                 return normalizeText(leader.region_name || '') === needle;
@@ -501,7 +585,9 @@
             type: normalizedType,
             name: scopeName || '',
         };
-        scopeModalColspan = normalizedType === 'city' ? 7 : 8;
+        scopeModalColspan = isSenateCampaign
+            ? (normalizedType === 'city' ? 6 : 7)
+            : (normalizedType === 'city' ? 7 : 8);
         closeLeaderModal(false);
         closeCityComparisonModal(false);
         closeAgendaModal(false);
@@ -532,29 +618,69 @@
             const comparativeBase = Number(scopeData?.baseline_votes || 0);
             const projected = Number(scopeData?.projected_base || 0);
             const delta = projected - comparativeBase;
-            const leaderEffect = leaders.reduce((sum, leader) => sum + Number(leader.projected_votes || 0), 0);
-            const totalVotes2024 = leaders.reduce((sum, leader) => sum + Number(leader.leader_votes_2024 || 0), 0);
-            const baseTransferable = leaders.reduce((sum, leader) => sum + Number(leader.base_effect || 0), 0);
-            scopeModalSummary.innerHTML = [
-                `<span class="table-pill">${baselineYearLabel}: ${formatNumber(comparativeBase)}</span>`,
-                `<span class="table-pill">Projeção: ${formatNumber(projected)}</span>`,
-                `<span class="table-pill">Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}</span>`,
-                `<span class="table-pill">Lideranças: ${formatNumber(leaders.length)}</span>`,
-                `<span class="table-pill">Votos 2024: ${formatNumber(totalVotes2024)}</span>`,
-                `<span class="table-pill">Base transferível: ${formatNumber(baseTransferable)}</span>`,
-                `<span class="table-pill">efeito das lideranças: ${formatNumber(leaderEffect)}</span>`,
-            ].join('');
+            if (isSenateCampaign) {
+                const totalSourceVotes = leaders.reduce((s, r) => s + Number(r.source_votes || 0), 0);
+                const totalProjected = leaders.reduce((s, r) => s + Number(r.projected_votes || 0), 0);
+                scopeModalSummary.innerHTML = [
+                    `<span class="table-pill">Base 2018: ${formatNumber(comparativeBase)}</span>`,
+                    `<span class="table-pill">Projeção: ${formatNumber(projected)}</span>`,
+                    `<span class="table-pill">Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}</span>`,
+                    `<span class="table-pill">Fontes: ${formatNumber(leaders.length)}</span>`,
+                    `<span class="table-pill">Votos base: ${formatNumber(totalSourceVotes)}</span>`,
+                    `<span class="table-pill">Migrado: ${formatNumber(totalProjected)}</span>`,
+                ].join('');
+            } else {
+                const leaderEffect = leaders.reduce((sum, leader) => sum + Number(leader.projected_votes || 0), 0);
+                const totalVotes2024 = leaders.reduce((sum, leader) => sum + Number(leader.leader_votes_2024 || 0), 0);
+                const baseTransferable = leaders.reduce((sum, leader) => sum + Number(leader.base_effect || 0), 0);
+                scopeModalSummary.innerHTML = [
+                    `<span class="table-pill">${baselineYearLabel}: ${formatNumber(comparativeBase)}</span>`,
+                    `<span class="table-pill">Projeção: ${formatNumber(projected)}</span>`,
+                    `<span class="table-pill">Delta: ${delta >= 0 ? '+' : ''}${formatNumber(delta)}</span>`,
+                    `<span class="table-pill">Lideranças: ${formatNumber(leaders.length)}</span>`,
+                    `<span class="table-pill">Votos 2024: ${formatNumber(totalVotes2024)}</span>`,
+                    `<span class="table-pill">Base transferível: ${formatNumber(baseTransferable)}</span>`,
+                    `<span class="table-pill">efeito das lideranças: ${formatNumber(leaderEffect)}</span>`,
+                ].join('');
+            }
         }
 
         if (scopeModalNote) {
-            const hasLeaders = leaders.length > 0;
-            scopeModalNote.textContent = hasLeaders
-                ? `As lideranças abaixo são as cadastradas para este recorte. A projeção total da cidade ou região é calculada a partir dos votos das lideranças; o total de ${baselineYearLabel} aparece apenas como comparativo.`
-                : `Nenhuma liderança cadastrada neste recorte. Nesse caso, a projeção do território pode cair no fallback de ${baselineYearLabel} para manter a leitura estratégica.`;
+            if (isSenateCampaign) {
+                const overlapMode = getSenateOverlapMode();
+                scopeModalNote.textContent = leaders.length > 0
+                    ? (overlapMode === 'automatic'
+                        ? 'Fontes do Senado que contribuem para esta cidade ou regiao, com projecao apos redutor de sobreposicao.'
+                        : 'Fontes do Senado que contribuem para esta cidade ou regiao. O sistema mantem os valores e alerta sobre possivel sobreposicao.')
+                    : 'Nenhuma fonte cadastrada para este recorte.';
+            } else {
+                scopeModalNote.textContent = leaders.length > 0
+                    ? `As lideranças abaixo são as cadastradas para este recorte. A projeção total da cidade ou região é calculada a partir dos votos das lideranças; o total de ${baselineYearLabel} aparece apenas como comparativo.`
+                    : `Nenhuma liderança cadastrada neste recorte. Nesse caso, a projeção do território pode cair no fallback de ${baselineYearLabel} para manter a leitura estratégica.`;
+            }
         }
 
         if (scopeModalHead) {
-            if (normalizedType === 'city') {
+            if (isSenateCampaign) {
+                scopeModalHead.innerHTML = normalizedType === 'city' ? `
+                    <tr>
+                        <th>Fonte</th>
+                        <th>Cargo</th>
+                        <th>Votos base</th>
+                        <th>Projeção 2026</th>
+                        <th>Migração %</th>
+                    </tr>
+                ` : `
+                    <tr>
+                        <th>Município</th>
+                        <th>Fonte</th>
+                        <th>Cargo</th>
+                        <th>Votos base</th>
+                        <th>Projeção 2026</th>
+                        <th>Migração %</th>
+                    </tr>
+                `;
+            } else if (normalizedType === 'city') {
                 scopeModalHead.innerHTML = `
                     <tr>
                         <th>Liderança</th>
@@ -582,7 +708,21 @@
 
         if (scopeModalBody) {
             if (!leaders.length) {
-                scopeModalBody.innerHTML = `<tr><td colspan="${scopeModalColspan}" class="muted">Nenhuma liderança cadastrada neste recorte.</td></tr>`;
+                const emptyMsg = isSenateCampaign ? 'Nenhuma fonte cadastrada neste recorte.' : 'Nenhuma liderança cadastrada neste recorte.';
+                scopeModalBody.innerHTML = `<tr><td colspan="${scopeModalColspan}" class="muted">${emptyMsg}</td></tr>`;
+            } else if (isSenateCampaign) {
+                scopeModalBody.innerHTML = leaders.map((row) => {
+                    const name = escapeHtml(row.source_name || 'Fonte');
+                    const sub = row.source_party ? `<br><span class="muted small">${escapeHtml(row.source_party)}</span>` : '';
+                    const votes = formatNumber(row.source_votes || 0);
+                    const proj = formatNumber(row.projected_votes || 0);
+                    const rate = Number(row.transfer_rate || 0).toFixed(1) + '%';
+                    const mun = escapeHtml(row.municipality || scopeName || '-');
+                    if (normalizedType === 'city') {
+                        return `<tr><td>${name}${sub}</td><td>${votes}</td><td>${proj}</td><td>${rate}</td></tr>`;
+                    }
+                    return `<tr><td>${mun}</td><td>${name}${sub}</td><td>${votes}</td><td>${proj}</td><td>${rate}</td></tr>`;
+                }).join('');
             } else {
                 scopeModalBody.innerHTML = leaders.map((leader) => {
                     const leaderDisplayName = leader.leader_display_name || leader.leader_name || 'Liderança';
@@ -628,44 +768,103 @@
         }
 
         if (scopeModalSummary) {
-            const topLeader = leaders[0] || null;
-            const topLeaderName = topLeader ? (topLeader.leader_display_name || topLeader.leader_name || 'Liderança') : 'Sem liderança';
-            scopeModalSummary.innerHTML = `
-                <div class="scope-summary-grid">
-                    <div class="summary-metric summary-metric--primary">
-                        <div class="summary-metric__label">Projeção total</div>
-                        <div class="summary-metric__value">${formatNumber(projected)}</div>
-                        <div class="summary-metric__sub">Total projetado do recorte territorial</div>
+            const topItem = leaders[0] || null;
+            if (isSenateCampaign) {
+                const topName = topItem ? (topItem.source_name || 'Fonte') : 'Sem fonte';
+                const totalProjected = leaders.reduce((s, r) => s + Number(r.projected_votes || 0), 0);
+                scopeModalSummary.innerHTML = `
+                    <div class="scope-summary-grid">
+                        <div class="summary-metric summary-metric--primary">
+                            <div class="summary-metric__label">Projeção total</div>
+                            <div class="summary-metric__value">${formatNumber(projected)}</div>
+                            <div class="summary-metric__sub">Total projetado do recorte territorial</div>
+                        </div>
+                        <div class="summary-metric summary-metric--delta">
+                            <div class="summary-metric__label">Diferença para 2018</div>
+                            <div class="summary-metric__value">${delta >= 0 ? '+' : ''}${formatNumber(delta)}</div>
+                            <div class="summary-metric__sub">Comparativo sobre a base histórica</div>
+                        </div>
+                        <div class="summary-metric">
+                            <div class="summary-metric__label">Fontes</div>
+                            <div class="summary-metric__value">${formatNumber(leaders.length)}</div>
+                            <div class="summary-metric__sub">Ordenadas por projeção</div>
+                        </div>
                     </div>
-                    <div class="summary-metric summary-metric--delta">
-                        <div class="summary-metric__label">Diferença para ${baselineYearLabel}</div>
-                        <div class="summary-metric__value">${delta >= 0 ? '+' : ''}${formatNumber(delta)}</div>
-                        <div class="summary-metric__sub">Comparativo sobre a base histórica</div>
+                    <div class="scope-summary-meta">
+                        <span class="table-pill">Base 2018: ${formatNumber(comparativeBase)}</span>
+                        <span class="table-pill">Migrado: ${formatNumber(totalProjected)}</span>
+                        <span class="table-pill">Top 1: ${escapeHtml(topName)}</span>
                     </div>
-                    <div class="summary-metric">
-                        <div class="summary-metric__label">Lideranças</div>
-                        <div class="summary-metric__value">${formatNumber(leaders.length)}</div>
-                        <div class="summary-metric__sub">Ordenadas pelo ranking interno do recorte</div>
+                `;
+            } else {
+                const topLeaderName = topItem ? (topItem.leader_display_name || topItem.leader_name || 'Liderança') : 'Sem liderança';
+                scopeModalSummary.innerHTML = `
+                    <div class="scope-summary-grid">
+                        <div class="summary-metric summary-metric--primary">
+                            <div class="summary-metric__label">Projeção total</div>
+                            <div class="summary-metric__value">${formatNumber(projected)}</div>
+                            <div class="summary-metric__sub">Total projetado do recorte territorial</div>
+                        </div>
+                        <div class="summary-metric summary-metric--delta">
+                            <div class="summary-metric__label">Diferença para ${baselineYearLabel}</div>
+                            <div class="summary-metric__value">${delta >= 0 ? '+' : ''}${formatNumber(delta)}</div>
+                            <div class="summary-metric__sub">Comparativo sobre a base histórica</div>
+                        </div>
+                        <div class="summary-metric">
+                            <div class="summary-metric__label">Lideranças</div>
+                            <div class="summary-metric__value">${formatNumber(leaders.length)}</div>
+                            <div class="summary-metric__sub">Ordenadas pelo ranking interno do recorte</div>
+                        </div>
                     </div>
-                </div>
-                <div class="scope-summary-meta">
-                    <span class="table-pill">${baselineYearLabel}: ${formatNumber(comparativeBase)}</span>
-                    <span class="table-pill">Votos 2024: ${formatNumber(totalVotes2024)}</span>
-                    <span class="table-pill">Base transferível: ${formatNumber(baseTransferable)}</span>
-                    <span class="table-pill">efeito das lideranças: ${formatNumber(leaderEffect)}</span>
-                    <span class="table-pill">Top 1: ${escapeHtml(topLeaderName)}</span>
-                </div>
-            `;
+                    <div class="scope-summary-meta">
+                        <span class="table-pill">${baselineYearLabel}: ${formatNumber(comparativeBase)}</span>
+                        <span class="table-pill">Votos 2024: ${formatNumber(totalVotes2024)}</span>
+                        <span class="table-pill">Base transferível: ${formatNumber(baseTransferable)}</span>
+                        <span class="table-pill">efeito das lideranças: ${formatNumber(leaderEffect)}</span>
+                        <span class="table-pill">Top 1: ${escapeHtml(topLeaderName)}</span>
+                    </div>
+                `;
+            }
         }
 
         if (scopeModalNote) {
-            scopeModalNote.textContent = leaders.length
-                ? 'Ranking ordenado por projeção individual. A projeção total soma as lideranças cadastradas.'
-                : `Nenhuma liderança cadastrada neste recorte. A projeção pode usar o fallback de ${baselineYearLabel} para manter a leitura estratégica.`;
+            if (isSenateCampaign) {
+                const overlapMode = getSenateOverlapMode();
+                scopeModalNote.textContent = leaders.length
+                    ? (overlapMode === 'automatic'
+                        ? 'Ranking por projecao individual apos redutor de sobreposicao de bases.'
+                        : 'Ranking por projecao individual sem redutor automatico. Revise fontes sobrepostas, reduza percentuais ou aplique o redutor se necessario.')
+                    : 'Nenhuma fonte cadastrada neste recorte.';
+            } else {
+                scopeModalNote.textContent = leaders.length
+                    ? 'Ranking ordenado por projeção individual. A projeção total soma as lideranças cadastradas.'
+                    : `Nenhuma liderança cadastrada neste recorte. A projeção pode usar o fallback de ${baselineYearLabel} para manter a leitura estratégica.`;
+            }
         }
 
         if (scopeModalHead) {
-            if (normalizedType === 'city') {
+            if (isSenateCampaign) {
+                scopeModalHead.innerHTML = normalizedType === 'city' ? `
+                    <tr>
+                        <th>Pos.</th>
+                        <th>Fonte</th>
+                        <th>Cargo</th>
+                        <th>Votos base</th>
+                        <th>Migração %</th>
+                        <th>Projeção 2026</th>
+                    </tr>
+                ` : `
+                    <tr>
+                        <th>Pos.</th>
+                        <th>Município</th>
+                        <th>Fonte</th>
+                        <th>Cargo</th>
+                        <th>Votos base</th>
+                        <th>Migração %</th>
+                        <th>Projeção 2026</th>
+                    </tr>
+                `;
+            } else if (normalizedType === 'city') {
                 scopeModalHead.innerHTML = `
                     <tr>
                         <th>Posição</th>
@@ -695,7 +894,31 @@
 
         if (scopeModalBody) {
             if (!leaders.length) {
-                scopeModalBody.innerHTML = `<tr><td colspan="${scopeModalColspan}" class="muted">Nenhuma liderança cadastrada neste recorte.</td></tr>`;
+                const emptyMsg = isSenateCampaign ? 'Nenhuma fonte cadastrada neste recorte.' : 'Nenhuma liderança cadastrada neste recorte.';
+                scopeModalBody.innerHTML = `<tr><td colspan="${scopeModalColspan}" class="muted">${emptyMsg}</td></tr>`;
+            } else if (isSenateCampaign) {
+                scopeModalBody.innerHTML = leaders.map((row, index) => {
+                    const rank = String(index + 1).padStart(2, '0');
+                    const rankClass = index === 0 ? 'scope-rank-badge scope-rank-badge--top' : index === 1 ? 'scope-rank-badge scope-rank-badge--silver' : index === 2 ? 'scope-rank-badge scope-rank-badge--bronze' : 'scope-rank-badge';
+                    const rowClass = index === 0 ? 'scope-row--top' : '';
+                    const name = escapeHtml(row.source_name || 'Fonte');
+                    const sub = row.source_party ? `<br><span class="muted small">${escapeHtml(row.source_party)}</span>` : '';
+                    const cargoName = escapeHtml(row.source_cargo || '-');
+                    const year = Number(row.source_year || 0);
+                    const cargo = `${cargoName}${year > 0 ? `<br><span class="muted small">${year}</span>` : ''}`;
+                    const votes = formatNumber(row.source_votes || 0);
+                    const proj = formatNumber(row.projected_votes || 0);
+                    const rate = Number(row.transfer_rate || 0).toFixed(1) + '%';
+                    const mun = escapeHtml(row.municipality || scopeName || '-');
+                    const suggested = Number(row.suggested_projected_votes || 0);
+                    const suggestedNote = getSenateOverlapMode() !== 'automatic' && suggested > 0 && suggested !== Number(row.projected_votes || 0)
+                        ? `<br><span class="muted small">Redutor sug.: ${formatNumber(suggested)}</span>`
+                        : '';
+                    if (normalizedType === 'city') {
+                        return `<tr class="${rowClass}"><td><span class="${rankClass}">${rank}</span></td><td>${name}${sub}</td><td>${cargo}</td><td>${votes}</td><td>${rate}</td><td>${proj}${suggestedNote}</td></tr>`;
+                    }
+                    return `<tr class="${rowClass}"><td><span class="${rankClass}">${rank}</span></td><td>${mun}</td><td>${name}${sub}</td><td>${cargo}</td><td>${votes}</td><td>${rate}</td><td>${proj}${suggestedNote}</td></tr>`;
+                }).join('');
             } else {
                 scopeModalBody.innerHTML = leaders.map((leader, index) => {
                     const rank = String(index + 1).padStart(2, '0');
@@ -2984,6 +3207,7 @@
             home: 0,
             opcoes: 0,
             liderancas: 2,
+            senado: 2,
             agenda: 3,
             relatorios: 4,
         };
@@ -3244,6 +3468,7 @@
             cargo: cargoValue,
             municipio: municipalityValue,
             query: normalizedQuery,
+            allied_only: searchAlliedOnlyInput?.checked ? '1' : '0',
         });
 
         try {
@@ -3346,6 +3571,13 @@
     const searchMunicipalityInput = document.getElementById('searchMunicipality');
     if (searchMunicipalityInput) {
         searchMunicipalityInput.addEventListener('change', () => {
+            const hasTypedQuery = String(searchQueryInput?.value || '').trim().length >= 2;
+            searchLeaders({ fromTyping: hasTypedQuery });
+        });
+    }
+
+    if (searchAlliedOnlyInput) {
+        searchAlliedOnlyInput.addEventListener('change', () => {
             const hasTypedQuery = String(searchQueryInput?.value || '').trim().length >= 2;
             searchLeaders({ fromTyping: hasTypedQuery });
         });

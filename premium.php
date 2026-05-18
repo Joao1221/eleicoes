@@ -7,6 +7,7 @@ require_once __DIR__ . '/premium_advisor_helpers.php';
 
 premium_ensure_campaign_photo_column($conn);
 premium_ensure_campaign_access_table($conn);
+premium_ensure_campaign_allied_parties_table($conn);
 
 function premium_fmt_int(int $value): string
 {
@@ -74,6 +75,56 @@ function premium_render_region_select(string $name, string $id, string $selected
         . '<option value="">Selecione</option>'
         . premium_render_region_select_options($selected)
         . '</select>';
+}
+
+function premium_render_allied_party_selector(array $availableParties, array $selectedParties = [], string $fieldName = 'allied_parties'): string
+{
+    $selectedKeys = array_flip(premium_party_filter_keys($selectedParties));
+    $selectedCount = count(premium_normalize_party_list($selectedParties));
+    $fieldName = trim($fieldName) !== '' ? trim($fieldName) : 'allied_parties';
+    $html = [];
+
+    $html[] = '<fieldset class="party-selector" data-party-selector>';
+    $html[] = '  <input type="hidden" name="allied_parties_present" value="1">';
+    $html[] = '  <legend>Partidos aliados</legend>';
+    $html[] = '  <div class="party-selector__head">';
+    $html[] = '    <div>';
+    $html[] = '      <p>Opcional. A lista selecionada ajuda a filtrar lideranças e fontes por alinhamento partidário.</p>';
+    $html[] = '    </div>';
+    $html[] = '    <div class="party-selector__tools">';
+    $html[] = '      <span class="party-selector__count" data-party-selector-count>' . $selectedCount . ' selecionado' . ($selectedCount === 1 ? '' : 's') . '</span>';
+    $html[] = '      <button class="btn ghost btn-small" type="button" data-party-selector-action="all">Selecionar todos</button>';
+    $html[] = '      <button class="btn ghost btn-small" type="button" data-party-selector-action="clear">Limpar</button>';
+    $html[] = '    </div>';
+    $html[] = '  </div>';
+    $html[] = '  <div class="party-selector__grid">';
+
+    foreach ($availableParties as $party) {
+        $acronym = (string) ($party['acronym'] ?? '');
+        if ($acronym === '') {
+            continue;
+        }
+
+        $partyKey = premium_normalize_text($acronym);
+        $checked = isset($selectedKeys[$partyKey]) ? ' checked' : '';
+        $number = (string) ($party['number'] ?? '');
+        $name = (string) ($party['name'] ?? '');
+        $spectrum = (string) ($party['spectrum'] ?? '');
+
+        $html[] = '    <label class="party-option">';
+        $html[] = '      <input type="checkbox" name="' . premium_escape_html($fieldName) . '[]" value="' . premium_escape_html($acronym) . '"' . $checked . '>';
+        $html[] = '      <span class="party-option__body">';
+        $html[] = '        <span class="party-option__top"><strong>' . premium_escape_html($acronym) . '</strong><em>' . premium_escape_html($number) . '</em></span>';
+        $html[] = '        <span class="party-option__name">' . premium_escape_html($name) . '</span>';
+        $html[] = '        <span class="party-option__meta">' . premium_escape_html($spectrum) . '</span>';
+        $html[] = '      </span>';
+        $html[] = '    </label>';
+    }
+
+    $html[] = '  </div>';
+    $html[] = '</fieldset>';
+
+    return implode("\n", $html);
 }
 
 function premium_read_markdown_excerpt(string $relativePath, string $startHeading, string $endHeading, int $maxLines = 120): string
@@ -194,6 +245,9 @@ $baseline = [
     'municipality_count' => 0,
 ];
 $leaders = [];
+$availableParties = premium_available_parties($conn);
+$campaignAlliedParties = [];
+$campaignAlliedPartyAcronyms = [];
 $agenda = [];
 $agendaSummary = [
     'total' => 0,
@@ -219,6 +273,12 @@ $forecast = [
     'cities' => [],
     'leaders' => [],
 ];
+$isSenateCampaign = false;
+$senateSources = [];
+$senateSuggestions = [];
+$senateSearchResults = [];
+$senateForecast = premium_empty_senate_forecast(premium_default_settings());
+$reportForecast = $forecast;
 $advisor = null;
 $baselinePanelHidden = false;
 $settingsPanelHidden = false;
@@ -246,6 +306,11 @@ if ($user) {
         premium_set_active_campaign((int) $campaign['id']);
         $settings = premium_load_campaign_settings($conn, (int) $campaign['id']);
         $campaignMembers = premium_get_campaign_members($conn, (int) $campaign['id']);
+        $campaignAlliedParties = premium_get_campaign_allied_parties($conn, (int) $campaign['id']);
+        $campaignAlliedPartyAcronyms = array_values(array_filter(array_map(
+            static fn(array $party): string => (string) ($party['party_acronym'] ?? $party['acronym'] ?? ''),
+            $campaignAlliedParties
+        )));
         $baseline = premium_candidate_baseline($conn, (string) ($campaign['candidate_name'] ?? ''), (string) ($campaign['candidate_cargo'] ?? ''), $campaignBaselineYear);
         $leaders = premium_get_campaign_leaders($conn, (int) $campaign['id']);
         $agenda = premium_load_agenda($conn, (int) $campaign['id']);
@@ -263,6 +328,39 @@ if ($user) {
         }
         $agendaPendingPreview = array_slice($agendaPendingPreview, 0, 5);
         $forecast = premium_build_forecast($baseline, $leaders, $settings);
+        $isSenateCampaign = premium_is_senate_cargo((string) ($campaign['candidate_cargo'] ?? ''));
+        if ($isSenateCampaign) {
+            $senateSources = premium_get_senate_vote_sources($conn, (int) $campaign['id']);
+            $senateForecast = premium_build_senate_forecast($conn, $campaign, $senateSources, $settings);
+
+            $senateQuery = trim((string) ($_GET['senate_query'] ?? ''));
+            $senateSourceCargo = trim((string) ($_GET['senate_source_cargo'] ?? 'all'));
+            $senateMunicipality = trim((string) ($_GET['senate_municipality'] ?? ''));
+            $senateSourceYear = trim((string) ($_GET['senate_source_year'] ?? ''));
+            $senateAlliedOnly = (string) ($_GET['senate_allied_only'] ?? '') === '1';
+            $hasSenateSearchFilter = $senateSourceCargo !== '' && $senateSourceCargo !== 'all'
+                || $senateMunicipality !== ''
+                || ($senateAlliedOnly && $campaignAlliedPartyAcronyms !== []);
+            if ($senateQuery !== '' || $hasSenateSearchFilter) {
+                $senateYearFilter = $senateSourceYear !== '' ? [(int) $senateSourceYear] : [2018, 2020, 2022, 2024];
+                $senateCandidateSources = $senateAlliedOnly && $campaignAlliedPartyAcronyms === []
+                    ? []
+                    : premium_search_historical_candidates($conn, $senateQuery, $senateYearFilter, [
+                        'cargo_filter' => $senateSourceCargo,
+                        'municipality' => $senateMunicipality,
+                        'ally_parties' => $senateAlliedOnly ? $campaignAlliedPartyAcronyms : [],
+                    ]);
+                foreach ($senateCandidateSources as $source) {
+                    $relationshipType = premium_senate_guess_relationship($source, $campaign);
+                    $source['relationship_type'] = $relationshipType;
+                    $source['relationship_label'] = premium_senate_relationship_label($relationshipType);
+                    $source['transfer_rate'] = premium_senate_default_transfer_rate($relationshipType, (string) ($source['source_cargo'] ?? ''), (int) ($source['source_year'] ?? 0));
+                    $source['confidence_score'] = premium_senate_confidence_for_source($source, $relationshipType, $campaign);
+                    $senateSearchResults[] = $source;
+                }
+            }
+        }
+        $reportForecast = $isSenateCampaign ? $senateForecast : $forecast;
         $advisor = premium_build_campaign_advisor($campaign, $baseline, $leaders, $forecast, $settings);
         $baselinePanelHidden = !empty($campaign['baseline_panel_hidden']);
         $settingsPanelHidden = !empty($campaign['settings_panel_hidden']);
@@ -305,10 +403,15 @@ if ($isAdmin) {
     $pagedUsers = array_slice($premiumUsers, ($userPage - 1) * $userPerPage, $userPerPage);
 }
 
-$allowedTabs = ['home', 'liderancas', 'agenda', 'relatorios', 'opcoes'];
+$allowedTabs = ['home', 'agenda', 'relatorios', 'opcoes'];
+if ($isSenateCampaign) {
+    $allowedTabs[] = 'senado';
+} else {
+    $allowedTabs[] = 'liderancas';
+}
 $activeTab = trim((string) ($_GET['tab'] ?? ($campaign ? 'home' : 'opcoes')));
 if (!in_array($activeTab, $allowedTabs, true)) {
-    $activeTab = $campaign ? 'home' : 'opcoes';
+    $activeTab = $isSenateCampaign && $activeTab === 'liderancas' ? 'senado' : ($campaign ? 'home' : 'opcoes');
 }
 
 function premium_selected_campaign_label(?array $campaign): string
@@ -385,6 +488,7 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
 {
     $settings = $settings ?: premium_default_settings();
     $baselineLabel = premium_baseline_label((int) ($campaign['baseline_year'] ?? 2022));
+    $campaignBaselineYear = (int) ($campaign['baseline_year'] ?? 2022);
     $leaders = array_values($leaders);
     usort($leaders, static function (array $a, array $b): int {
         $cityCompare = strcmp(
@@ -528,7 +632,7 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
     $html[] = '<th>Região</th>';
     $html[] = '<th>Município</th>';
     $html[] = '<th>Liderança</th>';
-    $html[] = '<th>Votos ' . premium_escape_html($baselineLabel) . '</th>';
+    $html[] = '<th>Votos</th>';
     $html[] = '<th>Transferência %</th>';
     $html[] = '<th>Base transferível</th>';
     $html[] = '<th>Projeção 2026</th>';
@@ -544,6 +648,7 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
         $leaderParty = (string) ($leader['leader_party'] ?? '');
         $leaderType = (string) ($leader['leader_type'] ?? premium_leader_type_bucket($leaderCargo));
         $votes2024 = (int) ($leader['leader_votes_2024'] ?? 0);
+        $votesYear = premium_leader_votes_election_year($leaderCargo, $campaignBaselineYear);
         $transferRate = (float) ($leader['transfer_rate'] ?? 0);
         $projection = premium_apply_transfer_multiplier($leader, $settings);
         $baseEffect = (int) ($projection['base_effect'] ?? 0);
@@ -564,7 +669,7 @@ function premium_render_leaders_table(array $leaders, int $baselineVotes = 0, in
             $html[] = '<span class="leaders-table-leader-meta">' . premium_escape_html($leaderParty) . '</span>';
         }
         $html[] = '</span></td>';
-        $html[] = '<td>' . (!empty($leader['is_manual_projection']) ? '-' : premium_fmt_int($votes2024)) . '</td>';
+        $html[] = '<td>' . (!empty($leader['is_manual_projection']) ? '-' : premium_fmt_int($votes2024) . '<span class="leaders-table-leader-cargo">Eleição ' . $votesYear . '</span>') . '</td>';
         $html[] = '<td>' . premium_fmt_percent($transferRate) . '</td>';
         $html[] = '<td>' . premium_fmt_int($baseEffect) . '</td>';
         $html[] = '<td>' . premium_fmt_int($projectedVotes) . '</td>';
@@ -731,6 +836,134 @@ function premium_render_scope_modal(int $baselineYear = 2022): string
     return implode('', $html);
 }
 
+function premium_render_city_delta_report(array $forecast, int $baselineYear, ?array $campaign): string
+{
+    $cities = (array) ($forecast['cities'] ?? []);
+    if (!$cities) {
+        return '<div class="empty-state">Sem dados de projeção disponíveis. Cadastre lideranças para gerar o comparativo.</div>';
+    }
+
+    $rows = [];
+    foreach ($cities as $city) {
+        $baselineVotes  = (int) ($city['baseline_votes'] ?? 0);
+        $projectedVotes = (int) ($city['projected_base'] ?? 0);
+        $leaderCount    = (int) ($city['leader_count'] ?? $city['source_count'] ?? 0);
+        $delta          = $projectedVotes - $baselineVotes;
+        $deltaPercent   = $baselineVotes > 0 ? ($delta / $baselineVotes) * 100 : 0;
+        $suggestion     = premium_city_suggestion($baselineVotes, $projectedVotes, $leaderCount);
+
+        $rows[] = [
+            'municipio'      => (string) ($city['municipio'] ?? ''),
+            'regiao'         => (string) ($city['regiao'] ?? ''),
+            'baseline_votes' => $baselineVotes,
+            'projected'      => $projectedVotes,
+            'delta'          => $delta,
+            'delta_pct'      => $deltaPercent,
+            'leader_count'   => $leaderCount,
+            'suggestion'     => $suggestion,
+            'alert_level'         => (string) ($city['alert_level'] ?? 'ok'),
+            'pct_eleitorado'      => (float) ($city['pct_eleitorado'] ?? 0.0),
+            'capped'              => (bool) ($city['capped'] ?? false),
+            'cap_suggested'       => (bool) ($city['cap_suggested'] ?? false),
+            'growth_warning'      => (bool) ($city['growth_warning'] ?? false),
+            'growth_pct'          => (float) ($city['growth_pct'] ?? 0.0),
+            'suggested_reduction' => (int) ($city['suggested_overlap_discount'] ?? 0),
+        ];
+    }
+
+    usort($rows, static function (array $a, array $b): int {
+        $p = ($a['suggestion']['priority'] ?? 5) <=> ($b['suggestion']['priority'] ?? 5);
+        if ($p !== 0) {
+            return $p;
+        }
+        return abs((int) $b['delta']) <=> abs((int) $a['delta']);
+    });
+
+    $countGrowth = $countStable = $countRisk = 0;
+    foreach ($rows as $r) {
+        $c = $r['suggestion']['class'];
+        if (in_array($c, ['positive', 'positive-strong', 'opportunity'], true)) {
+            $countGrowth++;
+        } elseif ($c === 'neutral') {
+            $countStable++;
+        } else {
+            $countRisk++;
+        }
+    }
+
+    $html = [];
+    $html[] = '<div class="grid-3 city-delta-summary">';
+    $html[] = premium_render_stat('Em queda', (string) $countRisk, 'Projeção abaixo do histórico');
+    $html[] = premium_render_stat('Estável', (string) $countStable, 'Variação próxima ao histórico');
+    $html[] = premium_render_stat('Crescimento', (string) $countGrowth, 'Projeção acima do histórico');
+    $html[] = '</div>';
+    $html[] = '<div class="table-wrap city-delta-report-wrap">';
+    $html[] = '<table class="leaders-table city-delta-table">';
+    $html[] = '<thead><tr><th>Município</th><th>Região</th><th>Votos ' . (int) $baselineYear . '</th><th>Projeção 2026</th><th>Diferença</th><th>Situação</th><th>Sugestão</th></tr></thead>';
+    $html[] = '<tbody>';
+
+    foreach ($rows as $r) {
+        $delta   = $r['delta'];
+        $pct     = $r['delta_pct'];
+        $sugg    = $r['suggestion'];
+        $cls     = premium_escape_html($sugg['class']);
+        $sign    = $delta >= 0 ? '+' : '';
+        $pctFmt  = $r['baseline_votes'] > 0
+            ? $sign . number_format(abs($pct), 1, ',', '.') . '%'
+            : ($r['projected'] > 0 ? 'novo' : '—');
+        $deltaFmt = $r['baseline_votes'] > 0 || $delta !== 0
+            ? $sign . premium_fmt_int($delta)
+            : '—';
+
+        $html[] = '<tr>';
+        $html[] = '<td><strong>' . premium_escape_html($r['municipio']) . '</strong>'
+            . ($r['leader_count'] > 0
+                ? '<span class="leaders-table-leader-cargo">' . $r['leader_count'] . ' liderança' . ($r['leader_count'] > 1 ? 's' : '') . '</span>'
+                : '<span class="leaders-table-leader-cargo city-delta-no-leaders">Sem lideranças</span>')
+            . '</td>';
+        $html[] = '<td>' . premium_escape_html($r['regiao']) . '</td>';
+        $html[] = '<td>' . premium_fmt_int($r['baseline_votes']) . '</td>';
+        $alertLevel = $r['alert_level'] ?? 'ok';
+        $alertBadge = '';
+        if ($alertLevel !== 'ok') {
+            $alertLabels      = ['warning' => 'Revisão', 'caution' => 'Atenção', 'danger' => 'Alerta'];
+            $baselineVotesFmt = premium_fmt_int($r['baseline_votes']);
+            $proj2026Fmt      = premium_fmt_int($r['projected']);
+            $pctEleit         = number_format((float) ($r['pct_eleitorado'] ?? 0), 1, ',', '');
+            $reductionFmt     = premium_fmt_int($r['suggested_reduction'] ?? 0);
+            $cappedNote       = !empty($r['capped'])
+                ? ' Projeção já limitada automaticamente ao teto de comparecimento.'
+                : (!empty($r['cap_suggested'])
+                    ? ' O teto foi sinalizado; a projeção exibida não foi reduzida (modo manual ativo).'
+                    : '');
+            $alertMessages = [
+                'warning' => "Projeção de {$proj2026Fmt} votos = {$pctEleit}% do comparecimento 2024 — acima do limiar de 25%. Redutor sugerido: −{$reductionFmt} votos (excesso acima do limiar).{$cappedNote}",
+                'caution' => "Projeção de {$proj2026Fmt} votos = {$pctEleit}% do comparecimento 2024 — nível elevado. Redutor sugerido: −{$reductionFmt} votos (excesso acima do limiar de 25%).{$cappedNote}",
+                'danger'  => "Projeção de {$proj2026Fmt} votos = {$pctEleit}% do comparecimento 2024 — nível crítico. Redutor sugerido: −{$reductionFmt} votos (excesso acima do limiar de 25%). Corrija as taxas de migração.{$cappedNote}",
+            ];
+            $alertTip   = $alertMessages[$alertLevel] ?? "{$pctEleit}% do comparecimento.{$cappedNote}";
+            $alertBadge = ' <span class="senate-rate-warning" tabindex="0" aria-label="' . premium_escape_html($alertTip) . '" data-tooltip="' . premium_escape_html($alertTip) . '">' . premium_escape_html($alertLabels[$alertLevel] ?? $alertLevel) . '</span>';
+        } elseif (!empty($r['growth_warning'])) {
+            $growthPctFmt = number_format((float) ($r['growth_pct'] ?? 0), 1, ',', '');
+            $baselineFmt  = premium_fmt_int($r['baseline_votes']);
+            $projFmt      = premium_fmt_int($r['projected']);
+            $growthTip    = "Crescimento de {$growthPctFmt}% sobre a última eleição ({$baselineFmt} → {$projFmt} votos). Projeção ainda dentro do limiar aceitável, mas vale monitorar.";
+            $alertBadge   = ' <span class="senate-rate-warning senate-rate-warning--growth" tabindex="0" aria-label="' . premium_escape_html($growthTip) . '" data-tooltip="' . premium_escape_html($growthTip) . '">Crescimento</span>';
+        }
+        $html[] = '<td>' . premium_fmt_int($r['projected']) . $alertBadge . '</td>';
+        $html[] = '<td class="city-delta-cell city-delta-cell--' . $cls . '">'
+            . '<strong>' . premium_escape_html($deltaFmt) . '</strong>'
+            . '<span class="leaders-table-leader-cargo">' . premium_escape_html($pctFmt) . '</span>'
+            . '</td>';
+        $html[] = '<td><span class="city-delta-badge city-delta-badge--' . $cls . '">' . premium_escape_html($sugg['label']) . '</span></td>';
+        $html[] = '<td class="city-delta-tip">' . premium_escape_html($sugg['tip']) . '</td>';
+        $html[] = '</tr>';
+    }
+
+    $html[] = '</tbody></table></div>';
+    return implode('', $html);
+}
+
 function premium_render_city_comparison_modal(array $forecast, int $baselineYear = 2022): string
 {
     $baselineLabel = premium_baseline_label($baselineYear);
@@ -768,7 +1001,7 @@ function premium_render_city_comparison_modal(array $forecast, int $baselineYear
         $systemTotal += (int) ($city['system_projection'] ?? $city['projected_base'] ?? 0);
         $leaderVotesTotal += (int) ($city['leader_projection'] ?? $city['leader_effect'] ?? 0);
         $independentTotal += (int) ($city['independent_votes'] ?? 0);
-        $leaderCount = (int) ($city['leader_count'] ?? 0);
+        $leaderCount = (int) ($city['leader_count'] ?? $city['source_count'] ?? 0);
         $leaderCountTotal += $leaderCount;
         if ($leaderCount > 0) {
             $withLeaders++;
@@ -853,7 +1086,7 @@ function premium_render_city_comparison_modal(array $forecast, int $baselineYear
             $municipality = (string) ($city['municipio'] ?? '');
             $region = (string) ($city['regiao'] ?? 'Sem região');
             $baselineVotes = (int) ($city['baseline_votes'] ?? 0);
-            $leaderCount = (int) ($city['leader_count'] ?? 0);
+            $leaderCount = (int) ($city['leader_count'] ?? $city['source_count'] ?? 0);
             $leaderVotes = (int) ($city['leader_projection'] ?? $city['leader_effect'] ?? 0);
             $independentVotes = (int) ($city['independent_votes'] ?? max(0, (int) ($city['system_projection'] ?? $city['projected_base'] ?? 0) - $leaderVotes));
             $systemProjection = (int) ($city['system_projection'] ?? $city['projected_base'] ?? 0);
@@ -863,6 +1096,38 @@ function premium_render_city_comparison_modal(array $forecast, int $baselineYear
             $statusLabel = $hasLeaders ? 'Com lideranças' : 'Sem lideranças';
             $statusClass = $hasLeaders ? 'comparison-mode-pill comparison-mode-pill--leaders' : 'comparison-mode-pill comparison-mode-pill--fallback';
             $rowClass = $hasLeaders ? 'comparison-row--leaders' : 'comparison-row--fallback';
+            $cityAlertLevel    = (string) ($city['alert_level'] ?? 'ok');
+            $cityPctEleitorado = (float) ($city['pct_eleitorado'] ?? 0.0);
+            $cityCapped        = (bool) ($city['capped'] ?? false);
+            $cityCapSuggested  = (bool) ($city['cap_suggested'] ?? false);
+            $cityGrowthWarning = (bool) ($city['growth_warning'] ?? false);
+            $cityGrowthPct     = (float) ($city['growth_pct'] ?? 0.0);
+            $citySugReduction  = (int) ($city['suggested_overlap_discount'] ?? 0);
+            $cityAlertBadge    = '';
+            if ($cityAlertLevel !== 'ok') {
+                $aLabels   = ['warning' => 'Revisão', 'caution' => 'Atenção', 'danger' => 'Alerta'];
+                $aProj     = premium_fmt_int($systemProjection);
+                $aPct      = number_format($cityPctEleitorado, 1, ',', '');
+                $aRedFmt   = premium_fmt_int($citySugReduction);
+                $aCapped   = $cityCapped
+                    ? ' Projeção já limitada automaticamente ao teto de comparecimento.'
+                    : ($cityCapSuggested
+                        ? ' O teto foi sinalizado; a projeção exibida não foi reduzida (modo manual ativo).'
+                        : '');
+                $aMsgs = [
+                    'warning' => "Projeção de {$aProj} votos = {$aPct}% do comparecimento 2024 — acima do limiar de 25%. Redutor sugerido: −{$aRedFmt} votos (excesso acima do limiar).{$aCapped}",
+                    'caution' => "Projeção de {$aProj} votos = {$aPct}% do comparecimento 2024 — nível elevado. Redutor sugerido: −{$aRedFmt} votos (excesso acima do limiar de 25%).{$aCapped}",
+                    'danger'  => "Projeção de {$aProj} votos = {$aPct}% do comparecimento 2024 — nível crítico. Redutor sugerido: −{$aRedFmt} votos (excesso acima do limiar de 25%). Corrija as taxas de migração.{$aCapped}",
+                ];
+                $aTip           = $aMsgs[$cityAlertLevel] ?? "{$aPct}% do comparecimento.{$aCapped}";
+                $cityAlertBadge = ' <span class="senate-rate-warning" tabindex="0" aria-label="' . premium_escape_html($aTip) . '" data-tooltip="' . premium_escape_html($aTip) . '">' . premium_escape_html($aLabels[$cityAlertLevel] ?? $cityAlertLevel) . '</span>';
+            } elseif ($cityGrowthWarning) {
+                $aGrowthFmt     = number_format($cityGrowthPct, 1, ',', '');
+                $aBase          = premium_fmt_int($baselineVotes);
+                $aProj          = premium_fmt_int($systemProjection);
+                $growthTip      = "Crescimento de {$aGrowthFmt}% sobre a última eleição ({$aBase} → {$aProj} votos). Projeção dentro do limiar aceitável, mas vale monitorar.";
+                $cityAlertBadge = ' <span class="senate-rate-warning senate-rate-warning--growth" tabindex="0" aria-label="' . premium_escape_html($growthTip) . '" data-tooltip="' . premium_escape_html($growthTip) . '">Crescimento</span>';
+            }
             $actionButton = '<button type="button" class="btn ghost btn-small scope-open-btn" data-scope-type="city" data-scope-name="' . premium_escape_html($municipality) . '">Abrir</button>';
 
             $html[] = '          <tr class="' . $rowClass . '" data-city-comparison-row data-city-mode="' . $rowMode . '">';
@@ -872,7 +1137,7 @@ function premium_render_city_comparison_modal(array $forecast, int $baselineYear
             $html[] = '            <td>' . premium_fmt_int($leaderCount) . '</td>';
             $html[] = '            <td>' . premium_fmt_int($leaderVotes) . '</td>';
             $html[] = '            <td>' . premium_fmt_int($independentVotes) . '</td>';
-            $html[] = '            <td>' . premium_fmt_int($systemProjection) . '</td>';
+            $html[] = '            <td>' . premium_fmt_int($systemProjection) . $cityAlertBadge . '</td>';
             $html[] = '            <td>' . ($delta >= 0 ? '+' : '') . premium_fmt_int($delta) . '</td>';
             $html[] = '            <td><span class="' . $statusClass . '">' . premium_escape_html($statusLabel) . '</span></td>';
             $html[] = '            <td>' . $actionButton . '</td>';
@@ -893,12 +1158,14 @@ function premium_render_city_comparison_modal(array $forecast, int $baselineYear
 function premium_build_onboarding_steps(?array $campaign): array
 {
     $hasCampaign = $campaign !== null;
+    $isSenateCampaign = $hasCampaign && premium_is_senate_cargo((string) ($campaign['candidate_cargo'] ?? ''));
     $opcoesHref = premium_tab_href('opcoes', $campaign);
     $liderancasHref = premium_tab_href('liderancas', $campaign);
+    $senadoHref = premium_tab_href('senado', $campaign);
     $agendaHref = premium_tab_href('agenda', $campaign);
     $relatoriosHref = premium_tab_href('relatorios', $campaign);
 
-    return [
+    $steps = [
         [
             'number' => '1',
             'title' => $hasCampaign ? 'Dados da campanha' : 'Criar a campanha',
@@ -947,6 +1214,17 @@ function premium_build_onboarding_steps(?array $campaign): array
             'locked' => !$hasCampaign,
         ],
     ];
+
+    if ($isSenateCampaign) {
+        $steps[2]['title'] = 'Adicionar fontes ao Senado';
+        $steps[2]['descriptionHtml'] = 'Use <strong>Projeção Senado</strong> para cadastrar base própria, deputados aliados, prefeitos, vereadores e fontes manuais. Esse é o único fluxo que alimenta a projeção de senador.';
+        $steps[2]['buttonLabel'] = 'Abrir Senado';
+        $steps[2]['href'] = $senadoHref;
+        $steps[2]['statusLabel'] = 'Fontes do Senado';
+        $steps[4]['descriptionHtml'] = 'Veja as <strong>fontes do Senado</strong>, as regiões e cidades com maior projeção e abra o relatório territorial completo.';
+    }
+
+    return $steps;
 }
 
 function premium_render_onboarding_panel(?array $campaign, string $activeTab, string $studyExcerpt): string
@@ -1530,6 +1808,503 @@ function premium_render_agenda_list_modal(array $items): string
     return implode('', $html);
 }
 
+function premium_render_senate_relationship_options(string $selected = ''): string
+{
+    $selected = $selected === 'familiar' ? 'aliado' : $selected;
+    $html = [];
+    foreach (premium_senate_relationship_choices() as $value => $label) {
+        if ($value === 'familiar') {
+            continue;
+        }
+
+        $selectedAttr = $value === $selected ? ' selected' : '';
+        $html[] = '<option value="' . premium_escape_html($value) . '"' . $selectedAttr . '>' . premium_escape_html($label) . '</option>';
+    }
+
+    return implode('', $html);
+}
+
+function premium_render_senate_source_hidden_fields(array $source): string
+{
+    $fields = [
+        'source_year' => (int) ($source['source_year'] ?? 2022),
+        'source_cargo' => (string) ($source['source_cargo'] ?? ''),
+        'source_candidate_name' => (string) ($source['source_candidate_name'] ?? ''),
+        'source_ballot_name' => (string) ($source['source_ballot_name'] ?? ''),
+        'source_party' => (string) ($source['source_party'] ?? ''),
+        'source_number' => premium_fmt_candidate_number_plain(premium_parse_candidate_number($source['source_number'] ?? null)),
+        'source_sq_candidato' => (string) ($source['source_sq_candidato'] ?? ''),
+        'source_scope_label' => (string) ($source['source_scope_label'] ?? premium_senate_scope_label((string) ($source['source_cargo'] ?? ''))),
+        'source_total_votes' => (int) ($source['source_total_votes'] ?? 0),
+        'source_vote_percent' => ($source['source_vote_percent'] ?? null) !== null ? (float) $source['source_vote_percent'] : '',
+        'confidence_score' => (float) ($source['confidence_score'] ?? 50),
+        'notes' => (string) ($source['suggestion_reason'] ?? $source['notes'] ?? ''),
+    ];
+
+    $html = [];
+    foreach ($fields as $name => $value) {
+        $html[] = '<input type="hidden" name="' . premium_escape_html($name) . '" value="' . premium_escape_html((string) $value) . '">';
+    }
+
+    return implode('', $html);
+}
+
+function premium_render_senate_votes_cell(array $source): string
+{
+    $votes   = premium_fmt_int((int) ($source['source_total_votes'] ?? 0));
+    $percent = $source['source_vote_percent'] ?? null;
+    $year    = (int) ($source['source_year'] ?? 0);
+
+    $html = '<strong>' . premium_escape_html($votes) . '</strong>';
+    if ($percent !== null && $percent !== '') {
+        $html .= '<span class="senate-source-sub">(' . premium_escape_html(premium_fmt_percent((float) $percent)) . ')</span>';
+    }
+    $html .= '<span class="senate-source-sub">' . $year . '</span>';
+
+    return $html;
+}
+
+function premium_render_senate_source_add_controls(array $source, ?array $campaign, string $csrf, string $buttonLabel = 'Adicionar'): string
+{
+    $relationshipType = premium_senate_normalize_relationship_type(
+        (string) ($source['relationship_type'] ?? 'manual'),
+        (string) ($source['source_cargo'] ?? ''),
+        (int) ($source['source_year'] ?? 0)
+    );
+    $transferRate = (float) ($source['transfer_rate'] ?? premium_senate_default_transfer_rate($relationshipType, (string) ($source['source_cargo'] ?? ''), (int) ($source['source_year'] ?? 0)));
+
+    $html = [];
+    $html[] = '<form method="post" action="premium_actions.php" class="senate-source-inline-form">';
+    $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
+    $html[] = '<input type="hidden" name="action" value="add_senate_source">';
+    $html[] = '<input type="hidden" name="redirect_tab" value="senado">';
+    $html[] = '<input type="hidden" name="campaign_id" value="' . (int) ($campaign['id'] ?? 0) . '">';
+    $html[] = premium_render_senate_source_hidden_fields($source);
+    $html[] = '<label><span>Relação</span><select name="relationship_type">' . premium_render_senate_relationship_options($relationshipType) . '</select></label>';
+    $html[] = '<label><span>Migração %</span><input type="number" name="transfer_rate" value="' . premium_escape_html(number_format($transferRate, 2, '.', '')) . '" min="0" max="100" step="0.01"></label>';
+    $html[] = '<button class="btn primary btn-small" type="submit">' . premium_escape_html($buttonLabel) . '</button>';
+    $html[] = '</form>';
+
+    return implode('', $html);
+}
+
+function premium_render_senate_candidate_rows(array $sources, ?array $campaign, string $csrf, string $emptyText): string
+{
+    if (!$sources) {
+        return '<div class="empty-state">' . premium_escape_html($emptyText) . '</div>';
+    }
+
+    // Unique suffix per call so two renders on the same page never share IDs
+    static $callCounter = 0;
+    $callCounter++;
+    $uid = 'src' . $callCounter;
+
+    $campaignId = (int) ($campaign['id'] ?? 0);
+
+    // Build JS data array (one object per source, indexed by row position)
+    $jsSourceData = [];
+    foreach ($sources as $source) {
+        $jsSourceData[] = [
+            'source_year'          => (int) ($source['source_year'] ?? 2022),
+            'source_cargo'         => (string) ($source['source_cargo'] ?? ''),
+            'source_candidate_name'=> (string) ($source['source_candidate_name'] ?? ''),
+            'source_ballot_name'   => (string) ($source['source_ballot_name'] ?? ''),
+            'source_party'         => (string) ($source['source_party'] ?? ''),
+            'source_number'        => premium_fmt_candidate_number_plain(premium_parse_candidate_number($source['source_number'] ?? null)),
+            'source_sq_candidato'  => (string) ($source['source_sq_candidato'] ?? ''),
+            'source_scope_label'   => (string) ($source['source_scope_label'] ?? premium_senate_scope_label((string) ($source['source_cargo'] ?? ''))),
+            'source_total_votes'   => (int) ($source['source_total_votes'] ?? 0),
+            'source_vote_percent'  => ($source['source_vote_percent'] ?? null) !== null ? (float) $source['source_vote_percent'] : null,
+            'confidence_score'     => (float) ($source['confidence_score'] ?? 50),
+            'notes'                => (string) ($source['suggestion_reason'] ?? $source['notes'] ?? ''),
+        ];
+    }
+
+    // Scope all IDs and classes to this render instance
+    $idBar      = 'senate-bulk-bar-'   . $uid;
+    $idCount    = 'senate-bulk-count-' . $uid;
+    $idRel      = 'senate-bulk-rel-'   . $uid;
+    $idRate     = 'senate-bulk-rate-'  . $uid;
+    $idSubmit   = 'senate-bulk-sub-'   . $uid;
+    $idCheckAll = 'senate-check-all-'  . $uid;
+    $clsCheck   = 'senate-row-check-'  . $uid;
+
+    $html = [];
+
+    // Bulk action bar (hidden until at least one row is checked)
+    $html[] = '<div class="senate-bulk-bar" id="' . $idBar . '" hidden>';
+    $html[] = '<span class="senate-bulk-count"><span id="' . $idCount . '">0</span> selecionada(s)</span>';
+    $html[] = '<label class="senate-bulk-field"><span>Relação</span><select id="' . $idRel . '">' . premium_render_senate_relationship_options('aliado') . '</select></label>';
+    $html[] = '<label class="senate-bulk-field"><span>Migração %</span><input type="number" id="' . $idRate . '" value="35.00" min="0" max="100" step="0.01"></label>';
+    $html[] = '<button type="button" class="btn primary btn-small" id="' . $idSubmit . '">Adicionar selecionadas</button>';
+    $html[] = '</div>';
+
+    $html[] = '<div class="table-wrap senate-table-wrap">';
+    $html[] = '<table class="leaders-table senate-source-table">';
+    $html[] = '<thead><tr>';
+    $html[] = '<th><input type="checkbox" id="' . $idCheckAll . '" title="Selecionar todos"></th>';
+    $html[] = '<th class="senate-col-year">Ano</th><th>Fonte</th><th class="senate-col-cargo">Cargo</th><th class="senate-col-votes">Votos</th><th class="senate-col-reason">Motivo</th><th>Ação</th>';
+    $html[] = '</tr></thead><tbody>';
+
+    foreach ($sources as $idx => $source) {
+        $displayName = trim((string) ($source['source_ballot_name'] ?? ''));
+        if ($displayName === '') {
+            $displayName = (string) ($source['source_candidate_name'] ?? 'Fonte');
+        }
+        $scopeLabel = trim((string) ($source['source_scope_label'] ?? ''));
+        if ($scopeLabel === '') {
+            $scopeLabel = premium_senate_scope_label((string) ($source['source_cargo'] ?? ''));
+        }
+        $reason = (string) ($source['suggestion_reason'] ?? '');
+        if ($reason === '') {
+            $reason = premium_senate_relationship_label((string) ($source['relationship_type'] ?? 'manual'));
+        }
+
+        $html[] = '<tr>';
+        $html[] = '<td><input type="checkbox" class="' . $clsCheck . '" data-idx="' . $idx . '"></td>';
+        $searchParty = trim((string) ($source['source_party'] ?? ''));
+        $html[] = '<td class="senate-col-year"><strong>' . (int) ($source['source_year'] ?? 0) . '</strong></td>';
+        $html[] = '<td><strong>' . premium_escape_html($displayName) . '</strong>'
+            . '<span class="senate-source-sub senate-source-sub--scope">' . premium_escape_html($scopeLabel) . '</span>'
+            . ($searchParty !== '' ? '<span class="senate-source-sub senate-source-sub--party">' . premium_escape_html($searchParty) . '</span>' : '')
+            . '</td>';
+        $situacao = trim((string) ($source['source_situacao'] ?? ''));
+        $cargoCell = premium_escape_html((string) ($source['source_cargo'] ?? ''));
+        if ($situacao !== '') {
+            $cargoCell .= '<span class="senate-source-sub">' . premium_escape_html($situacao) . '</span>';
+        }
+        $html[] = '<td>' . $cargoCell . '</td>';
+        $html[] = '<td class="senate-col-votes">' . premium_render_senate_votes_cell($source) . '</td>';
+        $html[] = '<td class="senate-col-reason">' . premium_escape_html($reason) . '</td>';
+        $html[] = '<td>' . premium_render_senate_source_add_controls($source, $campaign, $csrf) . '</td>';
+        $html[] = '</tr>';
+    }
+
+    $html[] = '</tbody></table></div>';
+
+    // Inline JS — all IDs and class names scoped to this $uid
+    $jsData    = json_encode($jsSourceData, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    $jsCsrf    = json_encode($csrf, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    $jsCampId  = json_encode((string) $campaignId, JSON_THROW_ON_ERROR);
+    $jsBar      = json_encode($idBar,      JSON_THROW_ON_ERROR);
+    $jsCount    = json_encode($idCount,    JSON_THROW_ON_ERROR);
+    $jsRel      = json_encode($idRel,      JSON_THROW_ON_ERROR);
+    $jsRate     = json_encode($idRate,     JSON_THROW_ON_ERROR);
+    $jsSubmit   = json_encode($idSubmit,   JSON_THROW_ON_ERROR);
+    $jsCheckAll = json_encode($idCheckAll, JSON_THROW_ON_ERROR);
+    $jsCls      = json_encode('.' . $clsCheck, JSON_THROW_ON_ERROR);
+    $jsClsChk   = json_encode('.' . $clsCheck . ':checked', JSON_THROW_ON_ERROR);
+
+    $html[] = <<<JS
+<script>
+(function(){
+  var data={$jsData};
+  var bar=document.getElementById({$jsBar});
+  var countEl=document.getElementById({$jsCount});
+  var checkAll=document.getElementById({$jsCheckAll});
+  var sel=function(q){return document.querySelectorAll(q);};
+  function updateBar(){
+    var n=sel({$jsClsChk}).length;
+    countEl.textContent=n;
+    bar.hidden=n===0;
+    var total=sel({$jsCls}).length;
+    checkAll.indeterminate=n>0&&n<total;
+    checkAll.checked=n>0&&n===total;
+  }
+  checkAll.addEventListener('change',function(){
+    sel({$jsCls}).forEach(function(c){c.checked=checkAll.checked;});
+    updateBar();
+  });
+  sel({$jsCls}).forEach(function(c){c.addEventListener('change',updateBar);});
+  document.getElementById({$jsSubmit}).addEventListener('click',function(){
+    var selected=sel({$jsClsChk});
+    if(!selected.length){return;}
+    var rel=document.getElementById({$jsRel}).value;
+    var rate=document.getElementById({$jsRate}).value;
+    var f=document.createElement('form');
+    f.method='post';f.action='premium_actions.php';
+    function hi(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v;f.appendChild(i);}
+    hi('csrf',{$jsCsrf});
+    hi('action','add_senate_sources_bulk');
+    hi('redirect_tab','senado');
+    hi('campaign_id',{$jsCampId});
+    hi('bulk_relationship_type',rel);
+    hi('bulk_transfer_rate',rate);
+    selected.forEach(function(c,i){
+      hi('sources_json['+i+']',JSON.stringify(data[parseInt(c.dataset.idx)]));
+    });
+    document.body.appendChild(f);f.submit();
+  });
+})();
+</script>
+JS;
+
+    return implode('', $html);
+}
+
+function premium_render_senate_registered_sources_table(array $sources, ?array $campaign, string $csrf): string
+{
+    if (!$sources) {
+        return '<div class="empty-state">Nenhuma fonte cadastrada ainda. Adicione a base própria, aliados ou fontes manuais para montar a projeção.</div>';
+    }
+
+    $campaignId = (int) ($campaign['id'] ?? 0);
+    $jsCsrf     = json_encode($csrf, JSON_THROW_ON_ERROR);
+    $jsCampId   = json_encode((string) $campaignId, JSON_THROW_ON_ERROR);
+
+    $html = [];
+
+    // Bulk delete bar
+    $html[] = '<div class="senate-bulk-bar" id="senate-reg-bulk-bar" hidden>';
+    $html[] = '<span class="senate-bulk-count"><span id="senate-reg-bulk-count">0</span> selecionada(s)</span>';
+    $html[] = '<button type="button" class="btn danger btn-small" id="senate-reg-bulk-delete">Excluir selecionadas</button>';
+    $html[] = '</div>';
+
+    $html[] = '<div class="table-wrap senate-table-wrap">';
+    $html[] = '<table class="leaders-table senate-source-table">';
+    $html[] = '<thead><tr><th><input type="checkbox" id="senate-reg-check-all" title="Selecionar todos"></th><th>Fonte</th><th>Ano / Cargo</th><th>Votos</th><th>Projeção 2026</th><th>Ações</th></tr></thead><tbody>';
+    foreach ($sources as $source) {
+        $sourceId = (int) ($source['id'] ?? 0);
+        $displayName = trim((string) ($source['source_ballot_name'] ?? ''));
+        if ($displayName === '') {
+            $displayName = (string) ($source['source_candidate_name'] ?? 'Fonte');
+        }
+        $scopeLabel = trim((string) ($source['source_scope_label'] ?? ''));
+        if ($scopeLabel === '') {
+            $scopeLabel = premium_senate_scope_label((string) ($source['source_cargo'] ?? ''));
+        }
+        $relationshipType = (string) ($source['relationship_type'] ?? 'manual');
+        $transferRate = number_format((float) ($source['transfer_rate'] ?? 0), 2, '.', '');
+        $confidenceScore = number_format((float) ($source['confidence_score'] ?? 50), 2, '.', '');
+        $notes = (string) ($source['notes'] ?? '');
+        $adjRowId = 'senate-adj-' . $sourceId;
+
+        $html[] = '<tr>';
+        $html[] = '<td><input type="checkbox" class="senate-reg-check" data-id="' . $sourceId . '"></td>';
+        $html[] = '<td><strong>' . premium_escape_html($displayName) . '</strong><span class="senate-source-sub">' . premium_escape_html($scopeLabel) . '</span><span class="senate-source-sub">' . premium_escape_html(premium_senate_relationship_label($relationshipType)) . '</span></td>';
+        $srcParty = trim((string) ($source['source_party'] ?? ''));
+        $html[] = '<td>'
+            . '<strong>' . (int) ($source['source_year'] ?? 0) . '</strong>'
+            . '<span class="senate-source-sub">' . premium_escape_html((string) ($source['source_cargo'] ?? '')) . '</span>'
+            . ($srcParty !== '' ? '<span class="senate-source-sub">' . premium_escape_html($srcParty) . '</span>' : '')
+            . '</td>';
+        $html[] = '<td>' . premium_render_senate_votes_cell($source) . '</td>';
+        $transferRateVal     = (float) ($source['transfer_rate'] ?? 0);
+        $transferRateDisplay = number_format($transferRateVal, 2, ',', '') . '%';
+        $rateAlertLevel      = premium_senate_transfer_rate_alert($transferRateVal, $relationshipType);
+        $rateBounds          = premium_senate_transfer_rate_bounds($relationshipType);
+        $rateWarn            = '';
+        $projectionCellClass = '';
+        $projectionSubClass  = 'senate-source-sub';
+        if ($rateAlertLevel === 'warning') {
+            $rateTip = 'Taxa fora do intervalo esperado para ' . premium_escape_html(premium_senate_relationship_label($relationshipType))
+                . ' (' . $rateBounds['warn_low'] . '–' . $rateBounds['warn_high'] . '%). Considere revisar.';
+            $rateWarn = ' <span class="senate-rate-warning" title="' . $rateTip . '">⚠</span>';
+        }
+        if ($rateAlertLevel === 'warning') {
+            $projectionCellClass = ' class="senate-projection-cell senate-projection-cell--warning"';
+            $projectionSubClass .= ' senate-source-sub--warning';
+            $rateTip = 'Atenção: taxa fora do intervalo esperado para ' . premium_senate_relationship_label($relationshipType)
+                . '. Faixa recomendada: ' . $rateBounds['warn_low'] . '% a ' . $rateBounds['warn_high']
+                . '%. Taxa atual: ' . $transferRateDisplay . '. Revise antes de confiar na projeção.';
+            $rateWarn = ' <span class="senate-rate-warning" tabindex="0" aria-label="' . premium_escape_html($rateTip) . '" data-tooltip="' . premium_escape_html($rateTip) . '">Revisar taxa</span>';
+        }
+        $html[] = '<td' . $projectionCellClass . '><strong>' . premium_fmt_int((int) ($source['projected_votes'] ?? 0)) . '</strong><span class="' . $projectionSubClass . '">' . premium_escape_html($transferRateDisplay) . $rateWarn . '</span></td>';
+        $html[] = '<td class="senate-source-actions">';
+        $html[] = '<button type="button" class="btn ghost btn-small" onclick="var r=document.getElementById(\'' . $adjRowId . '\');r.hidden=!r.hidden;">Ajustes</button>';
+        $html[] = '<form method="post" action="premium_actions.php" onsubmit="return confirm(\'Remover esta fonte da projeção do Senado?\');" style="display:inline">';
+        $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
+        $html[] = '<input type="hidden" name="action" value="delete_senate_source">';
+        $html[] = '<input type="hidden" name="redirect_tab" value="senado">';
+        $html[] = '<input type="hidden" name="campaign_id" value="' . $campaignId . '">';
+        $html[] = '<input type="hidden" name="source_id" value="' . $sourceId . '">';
+        $html[] = '<button class="btn danger btn-small" type="submit">Excluir</button>';
+        $html[] = '</form>';
+        $html[] = '</td>';
+        $html[] = '</tr>';
+
+        $html[] = '<tr id="' . $adjRowId . '" hidden class="senate-source-adj-row">';
+        $html[] = '<td colspan="6">';
+        $html[] = '<form method="post" action="premium_actions.php" class="senate-source-edit-form">';
+        $html[] = '<input type="hidden" name="csrf" value="' . premium_escape_html($csrf) . '">';
+        $html[] = '<input type="hidden" name="action" value="update_senate_source">';
+        $html[] = '<input type="hidden" name="redirect_tab" value="senado">';
+        $html[] = '<input type="hidden" name="campaign_id" value="' . $campaignId . '">';
+        $html[] = '<input type="hidden" name="source_id" value="' . $sourceId . '">';
+        $html[] = premium_render_senate_source_hidden_fields($source);
+        $html[] = '<label><span>Relação</span><select name="relationship_type">' . premium_render_senate_relationship_options($relationshipType) . '</select></label>';
+        $html[] = '<label><span>Migração %</span><input type="number" name="transfer_rate" value="' . premium_escape_html($transferRate) . '" min="0" max="100" step="0.01"></label>';
+        $html[] = '<label><span>Confiança</span><input type="number" name="confidence_score" value="' . premium_escape_html($confidenceScore) . '" min="0" max="100" step="0.01"></label>';
+        $html[] = '<label class="senate-source-edit-form__notes"><span>Notas</span><textarea name="notes" rows="1">' . premium_escape_html($notes) . '</textarea></label>';
+        $html[] = '<button class="btn ghost btn-small" type="submit">Salvar</button>';
+        $html[] = '</form>';
+        $html[] = '</td>';
+        $html[] = '</tr>';
+    }
+    $html[] = '</tbody></table></div>';
+
+    $html[] = <<<JS
+<script>
+(function(){
+  var bar=document.getElementById('senate-reg-bulk-bar');
+  var countEl=document.getElementById('senate-reg-bulk-count');
+  var checkAll=document.getElementById('senate-reg-check-all');
+  var checks=function(){return document.querySelectorAll('.senate-reg-check');};
+  function updateBar(){
+    var n=document.querySelectorAll('.senate-reg-check:checked').length;
+    countEl.textContent=n;
+    bar.hidden=n===0;
+    checkAll.indeterminate=n>0&&n<checks().length;
+    checkAll.checked=n>0&&n===checks().length;
+  }
+  checkAll.addEventListener('change',function(){
+    checks().forEach(function(c){c.checked=checkAll.checked;});
+    updateBar();
+  });
+  checks().forEach(function(c){c.addEventListener('change',updateBar);});
+  document.getElementById('senate-reg-bulk-delete').addEventListener('click',function(){
+    var selected=document.querySelectorAll('.senate-reg-check:checked');
+    if(!selected.length){return;}
+    if(!confirm('Remover '+selected.length+' fonte(s) da projeção do Senado?')){return;}
+    var f=document.createElement('form');
+    f.method='post';f.action='premium_actions.php';
+    function hi(n,v){var i=document.createElement('input');i.type='hidden';i.name=n;i.value=v;f.appendChild(i);}
+    hi('csrf',{$jsCsrf});
+    hi('action','delete_senate_sources_bulk');
+    hi('redirect_tab','senado');
+    hi('campaign_id',{$jsCampId});
+    selected.forEach(function(c,i){hi('source_ids['+i+']',c.dataset.id);});
+    document.body.appendChild(f);f.submit();
+  });
+})();
+</script>
+JS;
+
+    return implode('', $html);
+}
+
+function premium_render_senate_sources_leaders_view(array $sources, array $senateForecast): string
+{
+    if (!$sources) {
+        return '';
+    }
+
+    $forecastBySourceId = [];
+    foreach ((array) ($senateForecast['sources'] ?? []) as $fs) {
+        $sid = (int) ($fs['id'] ?? 0);
+        if ($sid > 0) {
+            $forecastBySourceId[$sid] = $fs;
+        }
+    }
+
+    $html = [];
+    $html[] = '<div class="senate-leaders-view">';
+    $html[] = '<h3 class="senate-leaders-view__title">Fontes cadastradas (Senado)</h3>';
+    $html[] = '<p class="senate-leaders-view__desc muted">Fontes registradas no módulo Senado. Gerencie-as em <a href="?campaign_id=' . (int) ($sources[0]['campaign_id'] ?? 0) . '&tab=senado">Senado</a>.</p>';
+    $html[] = '<div class="table-wrap"><table class="leaders-table senate-leaders-table">';
+    $html[] = '<thead><tr>';
+    $html[] = '<th>Fonte</th>';
+    $html[] = '<th>Ano / Cargo</th>';
+    $html[] = '<th class="num">Votos</th>';
+    $html[] = '<th class="num">Migração %</th>';
+    $html[] = '<th class="num">Projeção 2026</th>';
+    $html[] = '</tr></thead>';
+    $html[] = '<tbody>';
+
+    foreach ($sources as $source) {
+        $sourceId      = (int) ($source['id'] ?? 0);
+        $displayName   = trim((string) ($source['source_ballot_name'] ?? ''));
+        if ($displayName === '') {
+            $displayName = trim((string) ($source['source_candidate_name'] ?? ''));
+        }
+        $party         = trim((string) ($source['source_party'] ?? ''));
+        $relLabel      = (string) ($source['relationship_label'] ?? '');
+        $year          = (int) ($source['source_year'] ?? 0);
+        $cargo         = trim((string) ($source['source_cargo'] ?? ''));
+        $totalVotes    = (int) ($source['source_total_votes'] ?? 0);
+        $transferRate  = (float) ($source['transfer_rate'] ?? 0);
+        $relType       = (string) ($source['relationship_type'] ?? 'manual');
+        $rateAlert     = premium_senate_transfer_rate_alert($transferRate, $relType);
+
+        $forecastedVotes = (int) ($forecastBySourceId[$sourceId]['projected_votes'] ?? 0);
+
+        $rateClass = '';
+        $rateIcon  = '';
+        $projectionClass = 'num';
+        $projectionAlert = '';
+        if ($rateAlert === 'warning') {
+            $rateClass = ' senate-rate-warning';
+            $projectionClass .= ' senate-projection-cell senate-projection-cell--warning';
+            $rateBounds = premium_senate_transfer_rate_bounds($relType);
+            $rateTip = 'Atenção: taxa fora do intervalo esperado para ' . premium_senate_relationship_label($relType)
+                . '. Faixa recomendada: ' . $rateBounds['warn_low'] . '% a ' . $rateBounds['warn_high']
+                . '%. Taxa atual: ' . number_format($transferRate, 1, ',', '') . '%. Revise antes de confiar na projeção.';
+            $projectionAlert = '<br><span class="senate-rate-warning senate-rate-warning--under" tabindex="0" aria-label="' . premium_escape_html($rateTip) . '" data-tooltip="' . premium_escape_html($rateTip) . '">Revisar taxa</span>';
+            $rateIcon  = ' <span class="senate-rate-warning-icon" title="Taxa fora do intervalo recomendado">⚠</span>';
+        }
+
+        $html[] = '<tr>';
+        $html[] = '<td>';
+        $html[] = '<strong>' . premium_escape_html($displayName) . '</strong>';
+        if ($relLabel !== '') {
+            $html[] = '<br><span class="muted small">' . premium_escape_html($relLabel) . '</span>';
+        }
+        if ($party !== '') {
+            $html[] = '<br><span class="muted small">' . premium_escape_html($party) . '</span>';
+        }
+        $html[] = '</td>';
+        $html[] = '<td>';
+        if ($year > 0) {
+            $html[] = '<span class="senate-col-year">' . $year . '</span>';
+        }
+        if ($cargo !== '') {
+            $html[] = '<br><span class="muted small">' . premium_escape_html($cargo) . '</span>';
+        }
+        $html[] = '</td>';
+        $html[] = '<td class="num">' . premium_fmt_int($totalVotes) . '</td>';
+        $html[] = '<td class="num' . $rateClass . '">' . premium_escape_html(number_format($transferRate, 1)) . '%' . $rateIcon . '</td>';
+        $html[] = '<td class="' . $projectionClass . '">' . ($forecastedVotes > 0 ? premium_fmt_int($forecastedVotes) : '<span class="muted">—</span>') . $projectionAlert . '</td>';
+        $html[] = '</tr>';
+    }
+
+    $html[] = '</tbody></table></div>';
+    $html[] = '</div>';
+
+    return implode('', $html);
+}
+
+function premium_render_senate_forecast_tables(array $senateForecast): string
+{
+    $cities = array_slice((array) ($senateForecast['cities'] ?? []), 0, 20);
+    $regions = (array) ($senateForecast['regions'] ?? []);
+    $overlapMode = premium_senate_overlap_mode($senateForecast['totals']['overlap_mode'] ?? ($senateForecast['settings']['senate_overlap_mode'] ?? 'alert_only'));
+    $overlapColumnLabel = $overlapMode === 'automatic' ? 'Redutor' : 'Sugestao redutor';
+    $overlapField = $overlapMode === 'automatic' ? 'overlap_discount' : 'suggested_overlap_discount';
+    $html = [];
+
+    $html[] = '<div class="grid-2 senate-results-grid">';
+    $html[] = '<div><h3 class="senate-block-title">Regiões</h3><div class="table-wrap senate-table-wrap"><table class="leaders-table"><thead><tr><th>Região</th><th>Base 2018</th><th>Migrado</th><th>Projeção</th></tr></thead><tbody>';
+    foreach ($regions as $region) {
+        $html[] = '<tr><td>' . premium_escape_html((string) ($region['regiao'] ?? '')) . '</td><td>' . premium_fmt_int((int) ($region['baseline_votes'] ?? 0)) . '</td><td>' . premium_fmt_int((int) ($region['source_projected_votes'] ?? 0)) . '</td><td>' . premium_fmt_int((int) ($region['projected_base'] ?? 0)) . '</td></tr>';
+    }
+    if (!$regions) {
+        $html[] = '<tr><td colspan="4" class="muted">Nenhuma região calculada ainda.</td></tr>';
+    }
+    $html[] = '</tbody></table></div></div>';
+
+    $html[] = '<div><h3 class="senate-block-title">Municípios</h3><div class="table-wrap senate-table-wrap"><table class="leaders-table"><thead><tr><th>Município</th><th>Base 2018</th><th>Top fonte</th><th>' . premium_escape_html($overlapColumnLabel) . '</th><th>Projeção</th></tr></thead><tbody>';
+    foreach ($cities as $city) {
+        $html[] = '<tr><td>' . premium_escape_html((string) ($city['municipio'] ?? '')) . '</td><td>' . premium_fmt_int((int) ($city['baseline_votes'] ?? 0)) . '</td><td>' . premium_escape_html((string) ($city['top_source'] ?? '')) . '</td><td>' . premium_fmt_int((int) ($city[$overlapField] ?? 0)) . '</td><td>' . premium_fmt_int((int) ($city['projected_base'] ?? 0)) . '</td></tr>';
+    }
+    if (!$cities) {
+        $html[] = '<tr><td colspan="5" class="muted">Nenhum município calculado ainda.</td></tr>';
+    }
+    $html[] = '</tbody></table></div></div>';
+    $html[] = '</div>';
+
+    return implode('', $html);
+}
+
 function premium_tab_href(string $tab, ?array $campaign = null): string
 {
     $params = ['tab=' . urlencode($tab)];
@@ -1566,6 +2341,7 @@ if ($user) {
     <script src="assets/js/premium-bootstrap.js"></script>
     <title>Escritório Premium | Eleições Sergipe</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">
+    <?= premium_render_pwa_tags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -1608,7 +2384,6 @@ if ($user) {
             </div>
             <?php if ($premiumSupportWhatsappUrl !== ''): ?>
                 <div class="vip-support">
-                    <span>Atendimento VIP para clientes premium</span>
                     <a class="btn vip-support__btn" href="<?= premium_escape_html($premiumSupportWhatsappUrl) ?>" target="_blank" rel="noopener">
                         Pedir ajuda no WhatsApp
                     </a>
@@ -1698,12 +2473,16 @@ if ($user) {
                 </div>
                 <nav class="premium-sidebar__nav" aria-label="Seções do premium">
                     <a class="premium-sidebar__link<?= $activeTab === 'home' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('home', $campaign)) ?>">Home</a>
+                    <?php if ($isSenateCampaign): ?>
+                    <a class="premium-sidebar__link<?= $activeTab === 'senado' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('senado', $campaign)) ?>">Projeção Senado</a>
+                    <?php else: ?>
                     <a class="premium-sidebar__link<?= $activeTab === 'liderancas' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('liderancas', $campaign)) ?>">Lideranças</a>
-                    <a class="premium-sidebar__link<?= $activeTab === 'agenda' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('agenda', $campaign)) ?>">Agenda de campanha</a>
+                    <?php endif; ?>
                     <a class="premium-sidebar__link<?= $activeTab === 'relatorios' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('relatorios', $campaign)) ?>">Relatórios</a>
+                    <a class="premium-sidebar__link" href="premium_pesquisas.php<?= $campaign ? '?campaign_id=' . (int)$campaign['id'] : '' ?>">Pesquisas eleitorais</a>
+                    <a class="premium-sidebar__link<?= $activeTab === 'agenda' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('agenda', $campaign)) ?>">Agenda de campanha</a>
                     <a class="premium-sidebar__link" href="premium_dicas_campanha.php<?= $campaign ? '?campaign_id=' . (int)$campaign['id'] : '' ?>">Estratégias de campanha</a>
                     <a class="premium-sidebar__link" href="premium_perfil_eleitor.php<?= $campaign ? '?campaign_id=' . (int)$campaign['id'] : '' ?>">Perfil do eleitorado</a>
-                    <a class="premium-sidebar__link" href="premium_pesquisas.php<?= $campaign ? '?campaign_id=' . (int)$campaign['id'] : '' ?>">Pesquisas eleitorais</a>
                     <a class="premium-sidebar__link<?= $activeTab === 'opcoes' ? ' is-active' : '' ?>" href="<?= premium_escape_html(premium_tab_href('opcoes', $campaign)) ?>">Opções avançadas</a>
                 </nav>
                 <?php if ($user && !$isAdmin): ?>
@@ -2066,6 +2845,7 @@ if ($user) {
                             <span class="field-help">JPG, PNG ou WEBP até 3 MB.</span>
                         </label>
                     </div>
+                    <?= premium_render_allied_party_selector($availableParties) ?>
                     <div class="action-row">
                         <button class="btn primary" type="submit">Criar campanha</button>
                     </div>
@@ -2073,11 +2853,20 @@ if ($user) {
             </section>
         <?php elseif ($campaign): ?>
             <?php if ($activeTab === 'home'): ?>
+            <?php
+                $homeForecast = $isSenateCampaign ? $senateForecast : $forecast;
+                $homeProjectionSub = $isSenateCampaign ? 'Cálculo específico do Senado' : 'Cenário com os pesos atuais';
+                $homeSourceLabel = $isSenateCampaign ? 'Fontes Senado' : 'Lideranças ativas';
+                $homeSourceValue = $isSenateCampaign ? count($senateSources) : count($leaders);
+                $homeSourceSub = $isSenateCampaign ? 'Fontes adicionadas ao módulo Senado' : 'Lideranças adicionadas ao escritório';
+                $homeBaselineLabel = $isSenateCampaign ? 'Senado 2018' : $campaignBaselineLabel;
+                $homeBaselineVotes = $isSenateCampaign ? (int) ($senateForecast['baseline']['total_votes'] ?? 0) : (int) ($baseline['total_votes'] ?? 0);
+            ?>
             <section class="stats-grid campaign-stats-grid">
-                <?= premium_render_stat('Dados da campanha ' . $campaignBaselineLabel, premium_fmt_int((int) ($baseline['total_votes'] ?? 0)), 'Votação histórica do candidato'); ?>
-                <?= premium_render_stat('Projeção base', premium_fmt_int((int) ($forecast['totals']['projected_base'] ?? 0)), 'Cenário com os pesos atuais'); ?>
-                <?= premium_render_stat('Delta vs ' . $campaignBaselineLabel, premium_fmt_int((int) ($forecast['totals']['delta_base'] ?? 0)), 'Diferença absoluta sobre a base'); ?>
-                <?= premium_render_stat('Lideranças ativas', premium_fmt_int(count($leaders)), 'Lideranças adicionadas ao escritório'); ?>
+                <?= premium_render_stat('Dados da campanha ' . $homeBaselineLabel, premium_fmt_int($homeBaselineVotes), 'Votação histórica do candidato'); ?>
+                <?= premium_render_stat('Projeção base', premium_fmt_int((int) ($homeForecast['totals']['projected_base'] ?? 0)), $homeProjectionSub); ?>
+                <?= premium_render_stat('Delta vs ' . $homeBaselineLabel, premium_fmt_int((int) (($homeForecast['totals']['projected_base'] ?? 0) - ($homeForecast['totals']['baseline_votes'] ?? $homeBaselineVotes))), 'Diferença absoluta sobre a base'); ?>
+                <?= premium_render_stat($homeSourceLabel, premium_fmt_int($homeSourceValue), $homeSourceSub); ?>
             </section>
 
             <?php if ($advisor): ?>
@@ -2126,6 +2915,9 @@ if ($user) {
                 </div>
                     <div class="campaign-shortcuts__actions premium-home-shortcuts">
                     <a class="btn ghost" href="<?= premium_escape_html(premium_tab_href('agenda', $campaign)) ?>">Agenda de campanha</a>
+                    <?php if ($isSenateCampaign): ?>
+                    <a class="btn ghost" href="<?= premium_escape_html(premium_tab_href('senado', $campaign)) ?>">Projeção Senado</a>
+                    <?php endif; ?>
                     <button class="btn comparison-cta" type="button" data-city-comparison-open>Comparar cidades</button>
                     <a class="btn ghost" href="premium_conselheiro.php?campaign_id=<?= (int) $campaign['id'] ?>">Abrir Conselheiro</a>
                 </div>
@@ -2257,6 +3049,7 @@ if ($user) {
                                     <span class="field-help">JPG, PNG ou WEBP até 3 MB.</span>
                                 </label>
                             </div>
+                            <?= premium_render_allied_party_selector($availableParties, $campaignAlliedPartyAcronyms) ?>
                             <div class="action-row">
                                 <button class="btn primary" type="submit">Salvar dados da campanha</button>
                             </div>
@@ -2384,6 +3177,209 @@ if ($user) {
                 </section>
             <?php endif; ?>
 
+            <?php if ($isSenateCampaign && $activeTab === 'senado'): ?>
+            <?php
+                $senateTotals = (array) ($senateForecast['totals'] ?? []);
+                $senateBaseline = (array) ($senateForecast['baseline'] ?? []);
+                $senateQueryValue = trim((string) ($_GET['senate_query'] ?? ''));
+                $senateSourceCargoValue = trim((string) ($_GET['senate_source_cargo'] ?? 'all'));
+                $senateMunicipalityValue = trim((string) ($_GET['senate_municipality'] ?? ''));
+                $senateSourceYearValue = trim((string) ($_GET['senate_source_year'] ?? ''));
+                $senateAlliedOnlyValue = (string) ($_GET['senate_allied_only'] ?? '') === '1';
+                $hasSenateSearchOutput = $senateQueryValue !== ''
+                    || ($senateSourceCargoValue !== '' && $senateSourceCargoValue !== 'all')
+                    || $senateMunicipalityValue !== ''
+                    || ($senateAlliedOnlyValue && $campaignAlliedPartyAcronyms !== []);
+                $senateGovernmentSupport = !empty($settings['senate_state_government_support']);
+                $senateGovernmentMultiplier = max(1.00, min(1.30, (float) ($settings['senate_government_multiplier'] ?? 1.08)));
+                $senateOverlapMode = premium_senate_overlap_mode($settings['senate_overlap_mode'] ?? ($senateTotals['overlap_mode'] ?? 'alert_only'));
+                $senateOverlapMetricLabel = $senateOverlapMode === 'automatic' ? 'Redutor aplicado' : 'Redutor sugerido';
+                $senateOverlapMetricValue = $senateOverlapMode === 'automatic'
+                    ? (int) ($senateTotals['overlap_discount'] ?? 0)
+                    : (int) ($senateTotals['suggested_overlap_discount'] ?? 0);
+                $senateOverlapMetricSub = $senateOverlapMode === 'automatic'
+                    ? 'Controle automatico de bases duplicadas'
+                    : 'Possivel reducao se o modo automatico for usado';
+            ?>
+            <section class="panel panel-tint panel-tint--leaders-search senate-panel">
+                <div class="section-title">
+                    <div>
+                        <div class="eyebrow">Projeção Senado</div>
+                        <h2>Fontes de voto e cenários majoritários</h2>
+                    </div>
+                </div>
+
+                <div class="grid-3 senate-metrics">
+                    <?= premium_render_stat('Base Senado 2018', premium_fmt_int((int) ($senateBaseline['total_votes'] ?? 0)), !empty($senateBaseline['found']) ? 'Base propria encontrada' : 'Base propria nao encontrada'); ?>
+                    <?= premium_render_stat('Cenario base', premium_fmt_int((int) ($senateTotals['projected_base'] ?? 0)), $senateOverlapMode === 'automatic' ? 'Com redutor automatico e teto municipal' : 'Sem redutor automatico; alertas ativos'); ?>
+                    <?= premium_render_stat($senateOverlapMetricLabel, premium_fmt_int($senateOverlapMetricValue), $senateOverlapMetricSub); ?>
+                </div>
+
+                <div class="grid-3 senate-metrics senate-metrics--scenarios">
+                    <?= premium_render_stat('Conservador', premium_fmt_int((int) ($senateTotals['projected_conservative'] ?? 0)), 'Multiplicador ' . premium_escape_html((string) ($settings['scenario_conservative'] ?? 0.90))); ?>
+                    <?= premium_render_stat('Base', premium_fmt_int((int) ($senateTotals['projected_base'] ?? 0)), 'Leitura principal'); ?>
+                    <?= premium_render_stat('Otimista', premium_fmt_int((int) ($senateTotals['projected_optimistic'] ?? 0)), 'Multiplicador ' . premium_escape_html((string) ($settings['scenario_optimistic'] ?? 1.12))); ?>
+                </div>
+
+                <form method="post" action="premium_actions.php" class="senate-context-form">
+                    <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                    <input type="hidden" name="action" value="update_senate_context">
+                    <input type="hidden" name="redirect_tab" value="senado">
+                    <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                    <label class="senate-context-form__check">
+                        <input type="checkbox" name="senate_state_government_support" value="1" <?= $senateGovernmentSupport ? 'checked' : '' ?>>
+                        <span>Apoio do governo estadual</span>
+                    </label>
+                    <label>Multiplicador
+                        <input type="number" name="senate_government_multiplier" value="<?= premium_escape_html(number_format($senateGovernmentMultiplier, 2, '.', '')) ?>" min="1" max="1.3" step="0.01">
+                    </label>
+                    <label>Sobreposicao de bases
+                        <select name="senate_overlap_mode">
+                            <?php foreach (premium_senate_overlap_modes() as $modeValue => $modeMeta): ?>
+                                <option value="<?= premium_escape_html($modeValue) ?>" <?= $senateOverlapMode === $modeValue ? 'selected' : '' ?>>
+                                    <?= premium_escape_html((string) ($modeMeta['label'] ?? $modeValue)) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <span class="field-help"><?= premium_escape_html(premium_senate_overlap_mode_description($senateOverlapMode)) ?></span>
+                    </label>
+                    <button class="btn ghost btn-small" type="submit">Salvar contexto</button>
+                </form>
+
+                <?php if (empty($senateBaseline['found'])): ?>
+                    <div class="empty-state senate-warning">Não encontrei votação própria de Senado em 2018 para este nome. Use a busca ou cadastre uma fonte manual para alimentar a projeção.</div>
+                <?php endif; ?>
+            </section>
+
+            <section class="panel senate-panel">
+                <div class="section-title">
+                    <div>
+                        <div class="eyebrow">Busca multiano</div>
+                        <h2>Adicionar fonte de votos</h2>
+                    </div>
+                </div>
+                <form method="get" action="premium" class="senate-search-form">
+                    <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                    <input type="hidden" name="tab" value="senado">
+                    <label>Nome, urna, número ou SQ
+                        <input type="text" name="senate_query" value="<?= premium_escape_html($senateQueryValue) ?>" placeholder="Ex.: Yandra, André Moura, 555">
+                    </label>
+                    <label>Cargo
+                        <select name="senate_source_cargo">
+                            <option value="all" <?= $senateSourceCargoValue === 'all' || $senateSourceCargoValue === '' ? 'selected' : '' ?>>Todos os cargos</option>
+                            <option value="deputado_federal" <?= $senateSourceCargoValue === 'deputado_federal' ? 'selected' : '' ?>>Deputados Federais</option>
+                            <option value="deputado_estadual" <?= $senateSourceCargoValue === 'deputado_estadual' ? 'selected' : '' ?>>Deputados Estaduais</option>
+                            <option value="prefeito" <?= $senateSourceCargoValue === 'prefeito' ? 'selected' : '' ?>>Prefeitos</option>
+                            <option value="vereador" <?= $senateSourceCargoValue === 'vereador' ? 'selected' : '' ?>>Vereadores</option>
+                        </select>
+                    </label>
+                    <label>Municipio
+                        <select name="senate_municipality">
+                            <option value="">Todos</option>
+                            <?= premium_render_municipality_options($senateMunicipalityValue) ?>
+                        </select>
+                    </label>
+                    <label>Ano Eleição
+                        <select name="senate_source_year">
+                            <option value="">Todos</option>
+                            <option value="2018" <?= $senateSourceYearValue === '2018' ? 'selected' : '' ?>>2018</option>
+                            <option value="2020" <?= $senateSourceYearValue === '2020' ? 'selected' : '' ?>>2020</option>
+                            <option value="2022" <?= $senateSourceYearValue === '2022' ? 'selected' : '' ?>>2022</option>
+                            <option value="2024" <?= $senateSourceYearValue === '2024' ? 'selected' : '' ?>>2024</option>
+                        </select>
+                    </label>
+                    <?php if ($campaignAlliedPartyAcronyms): ?>
+                    <label class="checkbox senate-search-form__check">
+                        <input type="checkbox" name="senate_allied_only" value="1" <?= $senateAlliedOnlyValue ? 'checked' : '' ?>>
+                        <span>Apenas partidos aliados</span>
+                    </label>
+                    <?php endif; ?>
+                    <button class="btn primary" type="submit">Buscar fontes</button>
+                </form>
+
+                <?php if ($hasSenateSearchOutput): ?>
+                    <div class="senate-block">
+                        <h3 class="senate-block-title">Resultados da busca</h3>
+                        <?= premium_render_senate_candidate_rows($senateSearchResults, $campaign, $csrf, 'Nenhuma fonte encontrada para a busca informada.') ?>
+                    </div>
+                <?php endif; ?>
+
+                <details class="senate-manual-source">
+                    <summary>Adicionar fonte manual</summary>
+                    <form method="post" action="premium_actions.php" class="campaign-form senate-manual-source__form">
+                        <input type="hidden" name="csrf" value="<?= premium_escape_html($csrf) ?>">
+                        <input type="hidden" name="action" value="add_senate_source">
+                        <input type="hidden" name="redirect_tab" value="senado">
+                        <input type="hidden" name="campaign_id" value="<?= (int) $campaign['id'] ?>">
+                        <div class="form-grid compact">
+                            <label>Ano
+                                <select name="source_year">
+                                    <option value="2018">2018</option>
+                                    <option value="2020">2020</option>
+                                    <option value="2022" selected>2022</option>
+                                    <option value="2024">2024</option>
+                                </select>
+                            </label>
+                            <label>Cargo
+                                <input type="text" name="source_cargo" placeholder="Deputado Federal, Prefeito...">
+                            </label>
+                            <label>Nome da fonte
+                                <input type="text" name="source_candidate_name" required placeholder="Nome do candidato ou liderança">
+                            </label>
+                            <label>Nome de urna
+                                <input type="text" name="source_ballot_name" placeholder="Opcional">
+                            </label>
+                            <label>Partido
+                                <input type="text" name="source_party" maxlength="20" placeholder="Opcional">
+                            </label>
+                            <label>Número
+                                <input type="text" name="source_number" inputmode="numeric" placeholder="Opcional">
+                            </label>
+                            <label>SQ candidato
+                                <input type="text" name="source_sq_candidato" placeholder="Opcional">
+                            </label>
+                            <label>Município/escopo
+                                <input type="text" name="source_scope_label" placeholder="Cidade ou Votação Estadual">
+                            </label>
+                            <label>Total de votos
+                                <input type="number" name="source_total_votes" value="0" min="0" step="1">
+                            </label>
+                            <label>% dos votos
+                                <input type="number" name="source_vote_percent" min="0" max="100" step="0.01" placeholder="Opcional">
+                            </label>
+                            <label>Relação
+                                <select name="relationship_type">
+                                    <?= premium_render_senate_relationship_options('manual') ?>
+                                </select>
+                            </label>
+                            <label>Migração %
+                                <input type="number" name="transfer_rate" value="30.00" min="0" max="100" step="0.01">
+                            </label>
+                            <label>Confiança
+                                <input type="number" name="confidence_score" value="50.00" min="0" max="100" step="0.01">
+                            </label>
+                        </div>
+                        <label>Notas
+                            <textarea name="notes" rows="2" placeholder="Ex.: filha, aliado estadual, base do agrupamento..."></textarea>
+                        </label>
+                        <div class="action-row">
+                            <button class="btn primary" type="submit">Adicionar fonte manual</button>
+                        </div>
+                    </form>
+                </details>
+            </section>
+
+            <section class="panel senate-panel">
+                <div class="section-title">
+                    <div>
+                        <div class="eyebrow">Fontes cadastradas</div>
+                        <h2>Base própria, aliados e lideranças</h2>
+                    </div>
+                </div>
+                <?= premium_render_senate_registered_sources_table($senateSources, $campaign, $csrf) ?>
+            </section>
+            <?php endif; ?>
+
             <?php if ($activeTab === 'liderancas'): ?>
             <section class="panel panel-tint panel-tint--leaders-search">
                 <div class="section-title">
@@ -2423,6 +3419,12 @@ if ($user) {
                     </div>
                     <div class="action-row">
                         <button class="btn primary" type="button" id="searchLeadersBtn">Buscar lideranças</button>
+                        <?php if ($campaignAlliedPartyAcronyms): ?>
+                        <label class="checkbox leader-search-allied-filter">
+                            <input type="checkbox" id="searchAlliedOnly" value="1">
+                            <span>Apenas partidos aliados</span>
+                        </label>
+                        <?php endif; ?>
                     </div>
                     <div class="table-wrap leader-search-scroll leader-search-scroll--compact" style="margin-top: 14px;">
                         <table class="leader-search-table">
@@ -2512,8 +3514,13 @@ if ($user) {
                     </div>
                     <?php if ($leaders): ?>
                         <?= premium_render_leaders_table($leaders, (int) ($baseline['total_votes'] ?? 0), (int) ($forecast['totals']['projected_base'] ?? 0), (array) ($forecast['settings'] ?? $settings ?? []), $campaign, $csrf) ?>
-                    <?php else: ?>
+                    <?php elseif (!$isSenateCampaign): ?>
                         <div class="empty-state">Ainda não há lideranças cadastradas. Use a busca para adicionar prefeitos e vereadores à campanha.</div>
+                    <?php endif; ?>
+                    <?php if ($isSenateCampaign && !empty($senateSources)): ?>
+                        <?= premium_render_senate_sources_leaders_view($senateSources, $senateForecast) ?>
+                    <?php elseif ($isSenateCampaign && !$leaders): ?>
+                        <div class="empty-state">Ainda não há fontes cadastradas. Acesse a aba <a href="?campaign_id=<?= (int) ($campaign['id'] ?? 0) ?>&tab=senado">Senado</a> para adicionar fontes à campanha.</div>
                     <?php endif; ?>
                 </div>
             </section>
@@ -2521,7 +3528,7 @@ if ($user) {
 
             <?= premium_render_leader_modal($campaign, $csrf) ?>
             <?= premium_render_scope_modal($campaignBaselineYear) ?>
-            <?= premium_render_city_comparison_modal($forecast, $campaignBaselineYear) ?>
+            <?= premium_render_city_comparison_modal($reportForecast, $campaignBaselineYear) ?>
             <?= premium_render_agenda_list_modal($agenda) ?>
             <?= premium_render_agenda_detail_modal($campaign, $csrf) ?>
             <?= premium_render_study_modal($onboardingStudyExcerpt) ?>
@@ -2538,9 +3545,9 @@ if ($user) {
                         <button class="btn comparison-cta" type="button" data-city-comparison-open>Comparar cidades</button>
                     </div>
                     <div class="grid-3">
-                        <?= premium_render_stat('Conservador', premium_fmt_int((int) ($forecast['totals']['projected_conservative'] ?? 0)), 'Peso mais cauteloso'); ?>
-                        <?= premium_render_stat('Base', premium_fmt_int((int) ($forecast['totals']['projected_base'] ?? 0)), 'Cálculo principal'); ?>
-                        <?= premium_render_stat('Otimista', premium_fmt_int((int) ($forecast['totals']['projected_optimistic'] ?? 0)), 'Hipótese de maior conversão'); ?>
+                        <?= premium_render_stat('Conservador', premium_fmt_int((int) ($reportForecast['totals']['projected_conservative'] ?? 0)), 'Peso mais cauteloso'); ?>
+                        <?= premium_render_stat('Base', premium_fmt_int((int) ($reportForecast['totals']['projected_base'] ?? 0)), 'Cálculo principal'); ?>
+                        <?= premium_render_stat('Otimista', premium_fmt_int((int) ($reportForecast['totals']['projected_optimistic'] ?? 0)), 'Hipótese de maior conversão'); ?>
                     </div>
                     <div class="leaders-tabs" role="tablist" aria-label="Escolher relatório territorial" style="margin-top: 14px;">
                         <button class="leaders-tab-btn is-active" type="button" id="reportModeRegions"
@@ -2564,7 +3571,7 @@ if ($user) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ((array) ($forecast['regions'] ?? []) as $regionRow): ?>
+                                    <?php foreach ((array) ($reportForecast['regions'] ?? []) as $regionRow): ?>
                                         <tr>
                                             <td><?= premium_escape_html((string) ($regionRow['regiao'] ?? '')) ?></td>
                                             <td><?= premium_fmt_int((int) ($regionRow['baseline_votes'] ?? 0)) ?></td>
@@ -2597,7 +3604,7 @@ if ($user) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ((array) ($forecast['cities'] ?? []) as $cityRow): ?>
+                                    <?php foreach ((array) ($reportForecast['cities'] ?? []) as $cityRow): ?>
                                         <tr>
                                             <td><?= premium_escape_html((string) ($cityRow['municipio'] ?? '')) ?></td>
                                             <td><?= premium_fmt_int((int) ($cityRow['baseline_votes'] ?? 0)) ?></td>
@@ -2608,7 +3615,7 @@ if ($user) {
                                                     class="btn ghost btn-small scope-open-btn"
                                                     data-scope-type="city"
                                                     data-scope-name="<?= premium_escape_html((string) ($cityRow['municipio'] ?? '')) ?>"
-                                                >Relatórios de líderes</button>
+                                                ><?= $isSenateCampaign ? 'Detalhes' : 'Relatórios de líderes' ?></button>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -2739,6 +3746,18 @@ if ($user) {
                 </div>
                 <?php endif; ?>
             </section>
+            <?php if ($activeTab === 'relatorios'): ?>
+            <section class="panel" id="cityDeltaReportPanel">
+                <div class="section-title">
+                    <div>
+                        <div class="eyebrow">Relatório</div>
+                        <h2>Comparativo por cidade &mdash; <?= premium_escape_html($campaignBaselineLabel) ?> × 2026</h2>
+                    </div>
+                    <a class="btn comparison-cta btn-small" href="premium_relatorio_cidades.php?campaign_id=<?= (int) $campaign['id'] ?>" target="_blank" rel="noopener">Imprimir relatório</a>
+                </div>
+                <p class="panel-note">Votos do candidato na última eleição comparados com a projeção para 2026, com diferença e sugestão estratégica por cidade.</p>
+                <?= premium_render_city_delta_report($reportForecast, $campaignBaselineYear, $campaign) ?>
+            </section>
             <?php endif; ?>
             </div>
         </section>
@@ -2764,6 +3783,12 @@ if ($user) {
             'steps' => premium_build_onboarding_steps($campaign),
         ],
         'leaders' => $leaders,
+        'alliedParties' => $campaignAlliedPartyAcronyms,
+        'senate' => [
+            'enabled' => $isSenateCampaign,
+            'sources' => $senateSources,
+            'forecast' => $senateForecast,
+        ],
         'agenda' => $agenda,
         'forecast' => $forecast,
     ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)
@@ -2771,3 +3796,4 @@ if ($user) {
     <script src="assets/js/premium.js" defer></script>
 </body>
 </html>
+<?php endif; ?>

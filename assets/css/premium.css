@@ -1369,6 +1369,144 @@
             line-height: 1.5;
         }
 
+        .party-selector {
+            grid-column: 1 / -1;
+            margin: 14px 0 0;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.035);
+            min-inline-size: 0;
+        }
+
+        html[data-theme="light"] .party-selector {
+            background: rgba(248, 250, 252, 0.88);
+        }
+
+        .party-selector legend {
+            padding: 0;
+            color: var(--text);
+            font-size: 0.94rem;
+            font-weight: 800;
+        }
+
+        .party-selector p {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-size: 0.78rem;
+            line-height: 1.45;
+        }
+
+        .party-selector__head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .party-selector__tools {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .party-selector__count {
+            color: var(--muted);
+            font-size: 0.74rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .party-selector__grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+            gap: 8px;
+            max-height: 310px;
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .party-option {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 9px;
+            align-items: flex-start;
+            padding: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.20);
+            color: var(--text);
+            cursor: pointer;
+            min-width: 0;
+        }
+
+        html[data-theme="light"] .party-option {
+            background: #ffffff;
+        }
+
+        .party-option.is-selected,
+        .party-option:has(input:checked) {
+            border-color: rgba(22, 163, 74, 0.50);
+            background: rgba(22, 163, 74, 0.09);
+        }
+
+        .party-option input {
+            width: 16px;
+            height: 16px;
+            margin-top: 3px;
+        }
+
+        .party-option__body,
+        .party-option__top {
+            display: flex;
+            min-width: 0;
+        }
+
+        .party-option__body {
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .party-option__top {
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .party-option__top strong {
+            color: var(--text);
+            font-size: 0.84rem;
+            line-height: 1.2;
+        }
+
+        .party-option__top em {
+            color: #15803d;
+            font-style: normal;
+            font-size: 0.72rem;
+            font-weight: 800;
+        }
+
+        .party-option__name,
+        .party-option__meta {
+            overflow-wrap: anywhere;
+            line-height: 1.25;
+        }
+
+        .party-option__name {
+            color: var(--muted);
+            font-size: 0.73rem;
+            font-weight: 700;
+        }
+
+        .party-option__meta {
+            color: #2563eb;
+            font-size: 0.68rem;
+            font-weight: 800;
+        }
+
         #settingsBody .panel-note {
             font-size: 0.78rem;
             line-height: 1.38;
@@ -3574,6 +3712,115 @@
             border-color: var(--comparison-cta-border);
         }
 
+        /* ── City delta report ────────────────────────────── */
+
+        .city-delta-summary {
+            margin-bottom: 16px;
+        }
+
+        .city-delta-report-wrap {
+            max-height: 560px;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
+        .city-delta-report-wrap thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: var(--leaders-table-shell-bg, #fff);
+        }
+
+        .city-delta-table .city-delta-cell {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .city-delta-cell--positive-strong strong,
+        .city-delta-cell--positive strong,
+        .city-delta-cell--opportunity strong {
+            color: #0f766e;
+        }
+
+        .city-delta-cell--neutral strong {
+            color: var(--muted);
+        }
+
+        .city-delta-cell--warning strong {
+            color: #b45309;
+        }
+
+        .city-delta-cell--danger strong {
+            color: var(--danger);
+        }
+
+        .city-delta-badge {
+            display: inline-block;
+            padding: 2px 9px;
+            border-radius: 20px;
+            font-size: 0.70rem;
+            font-weight: 700;
+            white-space: nowrap;
+            letter-spacing: 0.01em;
+        }
+
+        .city-delta-badge--positive-strong {
+            background: rgba(16, 185, 129, 0.13);
+            color: #0f766e;
+        }
+
+        .city-delta-badge--positive {
+            background: rgba(16, 185, 129, 0.10);
+            color: #0f766e;
+        }
+
+        .city-delta-badge--neutral {
+            background: rgba(100, 116, 139, 0.10);
+            color: #64748b;
+        }
+
+        .city-delta-badge--warning {
+            background: rgba(245, 158, 11, 0.13);
+            color: #b45309;
+        }
+
+        .city-delta-badge--danger {
+            background: rgba(239, 68, 68, 0.12);
+            color: #dc2626;
+        }
+
+        .city-delta-badge--opportunity {
+            background: rgba(14, 165, 233, 0.12);
+            color: #0369a1;
+        }
+
+        .city-delta-tip {
+            font-size: 0.76rem;
+            color: var(--muted);
+            max-width: 300px;
+            line-height: 1.45;
+        }
+
+        .city-delta-no-leaders {
+            color: var(--danger) !important;
+            opacity: 0.8;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .city-delta-badge--positive-strong,
+            .city-delta-badge--positive { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
+            .city-delta-badge--neutral   { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
+            .city-delta-badge--warning   { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
+            .city-delta-badge--danger    { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
+            .city-delta-badge--opportunity { background: rgba(14, 165, 233, 0.18); color: #7dd3fc; }
+            .city-delta-cell--positive-strong strong,
+            .city-delta-cell--positive strong,
+            .city-delta-cell--opportunity strong { color: #6ee7b7; }
+            .city-delta-cell--warning strong { color: #fcd34d; }
+            .city-delta-cell--danger strong  { color: #fca5a5; }
+        }
+
+        /* ── /City delta report ───────────────────────────── */
+
         .advisor-table-wrap {
             max-height: 520px;
             overflow-y: auto;
@@ -4026,6 +4273,16 @@
         .leaders-search-grid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
             width: 100%;
+        }
+
+        .leader-search-allied-filter {
+            min-height: 44px;
+            padding: 0 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.035);
+            color: var(--text);
+            font-size: 0.78rem;
         }
 
         .leaders-tabs {
@@ -4821,5 +5078,435 @@
             opacity: 0.35;
             pointer-events: none;
             cursor: default;
+        }
+
+        .senate-panel + .senate-panel {
+            margin-top: 18px;
+        }
+
+        .senate-metrics {
+            margin-top: 16px;
+        }
+
+        .senate-metrics--scenarios {
+            margin-top: 12px;
+        }
+
+        .senate-warning {
+            margin-top: 14px;
+            border-color: rgba(245, 158, 11, 0.28);
+            background: rgba(245, 158, 11, 0.08);
+        }
+
+        .senate-search-form {
+            display: grid;
+            grid-template-columns: minmax(160px, 1fr) minmax(150px, 0.75fr) minmax(170px, 0.8fr) minmax(130px, 0.6fr) minmax(160px, 0.7fr) auto;
+            gap: 12px;
+            align-items: end;
+            margin-top: 14px;
+        }
+
+        .senate-search-form__check {
+            min-height: 44px;
+            padding: 0 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.035);
+            color: var(--text);
+            font-size: 0.78rem;
+        }
+
+        .senate-search-form__check input {
+            width: auto;
+        }
+
+        .senate-context-form {
+            display: grid;
+            grid-template-columns: minmax(180px, 0.8fr) minmax(130px, 170px) minmax(260px, 1.2fr) auto;
+            gap: 12px;
+            align-items: end;
+            margin-top: 14px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .senate-context-form__check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 38px;
+        }
+
+        .senate-context-form__check input {
+            width: auto;
+        }
+
+        .senate-block {
+            margin-top: 18px;
+        }
+
+        .senate-block-title {
+            margin: 0 0 10px;
+            font-size: 1rem;
+            line-height: 1.25;
+        }
+
+        .senate-table-wrap {
+            max-height: 540px;
+            overflow: auto;
+        }
+
+        .senate-source-table th,
+        .senate-source-table td {
+            vertical-align: middle;
+        }
+
+        .senate-source-table th:first-child,
+        .senate-source-table td:first-child {
+            width: 28px;
+            padding-left: 8px;
+            padding-right: 4px;
+        }
+
+        .senate-col-year {
+            width: 56px;
+            white-space: nowrap;
+            padding-right: 6px;
+        }
+
+        .senate-col-cargo {
+            width: 110px;
+            white-space: nowrap;
+        }
+
+        .senate-col-votes {
+            width: 90px;
+            padding-right: 2px;
+            white-space: nowrap;
+        }
+
+        .senate-col-reason {
+            width: 260px;
+            padding-left: 2px;
+        }
+
+        .senate-source-table input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .senate-bulk-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: var(--bg-soft);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .senate-bulk-count {
+            font-weight: 600;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            margin-right: 4px;
+        }
+
+        .senate-bulk-field {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .senate-bulk-field span {
+            white-space: nowrap;
+        }
+
+        .senate-bulk-field select,
+        .senate-bulk-field input[type="number"] {
+            font-size: 0.84rem;
+            min-height: 32px;
+            padding: 0 8px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--panel);
+            color: var(--text);
+        }
+
+        .senate-bulk-field input[type="number"] {
+            width: 80px;
+        }
+
+        .senate-source-actions {
+            white-space: nowrap;
+        }
+
+        .senate-source-actions .btn {
+            margin-right: 6px;
+        }
+
+        .senate-source-actions .btn:last-child {
+            margin-right: 0;
+        }
+
+        .senate-source-adj-row td {
+            background: var(--bg-soft);
+            border-top: none;
+            padding-top: 12px;
+            padding-bottom: 14px;
+        }
+
+        .senate-source-sub {
+            display: block;
+            color: var(--muted);
+            font-size: 0.76rem;
+            margin-top: 4px;
+            line-height: 1.35;
+        }
+
+        .senate-source-sub--scope {
+            color: #2563eb;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .senate-source-sub--party {
+            color: #15803d;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .senate-projection-cell--warning {
+            color: #b45309;
+            background: rgba(245, 158, 11, 0.08);
+            box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.7);
+        }
+
+        .senate-projection-cell--warning strong {
+            color: #9a3412;
+        }
+
+        .senate-source-sub--warning {
+            color: #c2410c;
+            font-weight: 700;
+        }
+
+        td.senate-rate-warning {
+            color: #b45309;
+            font-weight: 700;
+        }
+
+        span.senate-rate-warning,
+        .senate-rate-warning-icon {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 6px;
+            padding: 3px 8px;
+            border: 1px solid rgba(234, 88, 12, 0.35);
+            border-radius: 999px;
+            background: #fff7ed;
+            color: #9a3412;
+            font-size: 0.7rem;
+            font-weight: 800;
+            line-height: 1.15;
+            cursor: help;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        .senate-rate-warning--under {
+            margin-top: 6px;
+            margin-left: 0;
+        }
+
+        span.senate-rate-warning--growth {
+            border-color: rgba(37, 99, 235, 0.3);
+            background: #eff6ff;
+            color: #1e40af;
+        }
+
+        span.senate-rate-warning--growth::before {
+            content: "↑";
+            background: #1e40af;
+        }
+
+        span.senate-rate-warning::before,
+        .senate-rate-warning-icon::before {
+            content: "!";
+            display: inline-grid;
+            place-items: center;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #f97316;
+            color: #fff;
+            font-size: 0.62rem;
+            line-height: 1;
+        }
+
+        span.senate-rate-warning::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            right: 0;
+            top: calc(100% + 10px);
+            z-index: 30;
+            width: min(330px, 70vw);
+            padding: 11px 12px;
+            border-radius: 8px;
+            background: #7c2d12;
+            color: #fff;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.28);
+            font-size: 0.78rem;
+            font-weight: 700;
+            line-height: 1.35;
+            text-align: left;
+            white-space: normal;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(4px);
+            transition: opacity 0.16s ease, transform 0.16s ease;
+        }
+
+        span.senate-rate-warning:hover::after,
+        span.senate-rate-warning:focus-visible::after {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .city-alert-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            vertical-align: middle;
+            margin-left: 5px;
+            cursor: help;
+        }
+
+        .city-alert-badge--warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: #b45309;
+        }
+
+        .city-alert-badge--caution {
+            background: rgba(234, 88, 12, 0.14);
+            color: #c2410c;
+        }
+
+        .city-alert-badge--danger {
+            background: rgba(220, 38, 38, 0.14);
+            color: #b91c1c;
+        }
+
+        .senate-leaders-view {
+            margin-top: 24px;
+            border-top: 1px solid var(--line);
+            padding-top: 18px;
+        }
+
+        .senate-leaders-view__title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 4px;
+        }
+
+        .senate-leaders-view__desc {
+            font-size: 0.8rem;
+            margin: 0 0 12px;
+        }
+
+        .senate-leaders-table .num {
+            text-align: right;
+        }
+
+        .senate-source-inline-form,
+        .senate-source-edit-form {
+            display: grid;
+            gap: 8px;
+            min-width: 220px;
+        }
+
+        .senate-source-inline-form label,
+        .senate-source-edit-form label {
+            display: grid;
+            gap: 4px;
+            font-size: 0.74rem;
+            color: var(--muted);
+        }
+
+        .senate-source-inline-form select,
+        .senate-source-inline-form input,
+        .senate-source-edit-form select,
+        .senate-source-edit-form input,
+        .senate-source-edit-form textarea {
+            min-height: 34px;
+            font-size: 0.84rem;
+        }
+
+        .senate-source-edit-form {
+            grid-template-columns: repeat(4, minmax(120px, 1fr)) auto;
+            align-items: end;
+            min-width: 720px;
+        }
+
+        .senate-source-edit-form__notes {
+            grid-column: span 1;
+        }
+
+        .senate-manual-source {
+            margin-top: 18px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .senate-manual-source summary {
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .senate-manual-source__form {
+            margin-top: 14px;
+        }
+
+        .senate-results-grid {
+            margin-top: 8px;
+            align-items: start;
+        }
+
+        @media (max-width: 960px) {
+            .senate-search-form,
+            .senate-context-form {
+                grid-template-columns: 1fr;
+            }
+
+            .senate-source-edit-form {
+                grid-template-columns: 1fr 1fr;
+                min-width: 420px;
+            }
+        }
+
+        @media (max-width: 540px) {
+            .senate-source-inline-form,
+            .senate-source-edit-form {
+                min-width: 260px;
+            }
+
+            .senate-source-edit-form {
+                grid-template-columns: 1fr;
+            }
         }
 

@@ -131,6 +131,7 @@ if ($user) {
     <meta name="color-scheme" content="dark light">
     <title><?= premium_escape_html($pageTitle) ?></title>
     <link rel="icon" type="image/png" href="assets/favicon.png">
+    <?= premium_render_pwa_tags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">

@@ -7,6 +7,10 @@
 
 DirectoryIndex index.php premium.php
 
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 

@@ -2,11 +2,17 @@
 
 mysqli_report(MYSQLI_REPORT_OFF);
 
-$host = getenv('DB_HOST') ?: '127.0.0.1';
-$user = getenv('DB_USER') ?: 'apoiacandidato';
-$pass = getenv('DB_PASS') ?: '';
-$db = getenv('DB_NAME') ?: 'apoiacandidato';
-$port = (int) (getenv('DB_PORT') ?: 3306);
+$hostEnv = getenv('DB_HOST');
+$userEnv = getenv('DB_USER');
+$passEnv = getenv('DB_PASS');
+$dbEnv = getenv('DB_NAME');
+$portEnv = getenv('DB_PORT');
+
+$host = $hostEnv !== false && $hostEnv !== '' ? $hostEnv : 'apoiacandidato.mysql.dbaas.com.br';
+$user = $userEnv !== false && $userEnv !== '' ? $userEnv : 'apoiacandidato';
+$pass = $passEnv !== false ? ($passEnv === '__EMPTY__' ? '' : $passEnv) : 'Jo@o7462503814';
+$db = $dbEnv !== false && $dbEnv !== '' ? $dbEnv : 'apoiacandidato';
+$port = (int) ($portEnv !== false && $portEnv !== '' ? $portEnv : 3306);
 
 $conn = mysqli_init();
 $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);

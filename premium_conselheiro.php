@@ -338,6 +338,7 @@ if ($advisor && (string) ($_GET['print'] ?? '') === 'advisor-ranking') {
     <script src="assets/js/premium-bootstrap.js"></script>
     <title>Conselheiro de Campanha | Apoia Candidato</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">
+    <?= premium_render_pwa_tags() ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -365,7 +366,6 @@ if ($advisor && (string) ($_GET['print'] ?? '') === 'advisor-ranking') {
             </div>
             <?php if ($premiumSupportWhatsappUrl !== ''): ?>
                 <div class="vip-support">
-                    <span>Atendimento VIP para clientes premium</span>
                     <a class="btn vip-support__btn" href="<?= premium_escape_html($premiumSupportWhatsappUrl) ?>" target="_blank" rel="noopener">
                         Pedir ajuda no WhatsApp
                     </a>

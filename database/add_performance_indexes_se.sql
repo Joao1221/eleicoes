@@ -16,9 +16,14 @@ ALTER TABLE votacao_secao_2024_se
 ALTER TABLE candidatos_situacao_2024
     ADD KEY idx_turno_cargo_nome (nr_turno, ds_cargo, nm_municipio),
     ADD KEY idx_turno_cargo_cand (nr_turno, ds_cargo, nr_cand),
-    ADD KEY idx_turno_cargo_sq (nr_turno, ds_cargo, sq_candidato);
+    ADD KEY idx_turno_cargo_sq (nr_turno, ds_cargo, sq_candidato),
+    ADD KEY idx_partido (nr_turno, ds_cargo, sg_partido);
 
 ANALYZE TABLE resumo_votacao_2024_se,
               resumo_municipio_2024_se,
               votacao_secao_2024_se,
-              candidatos_situacao_2024;
+              candidatos_situacao_2024,
+              resumo_votacao_2020_se,
+              resumo_municipio_2020_se,
+              votacao_candidato_munzona_2020_se,
+              candidatos_situacao_2020;

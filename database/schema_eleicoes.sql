@@ -72,6 +72,149 @@ CREATE TABLE votacao_2018 (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
+-- TABELAS DE VOTAÇÃO 2020 (Sergipe)
+-- ============================================================
+
+DROP TABLE IF EXISTS votacao_candidato_munzona_2020_se;
+
+CREATE TABLE votacao_candidato_munzona_2020_se (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    source_line INT UNSIGNED NOT NULL,
+    dt_geracao DATE DEFAULT NULL,
+    hh_geracao TIME DEFAULT NULL,
+    ano_eleicao SMALLINT NOT NULL,
+    cd_tipo_eleicao SMALLINT DEFAULT NULL,
+    nm_tipo_eleicao VARCHAR(80) DEFAULT NULL,
+    nr_turno TINYINT NOT NULL,
+    cd_eleicao INT DEFAULT NULL,
+    ds_eleicao VARCHAR(120) DEFAULT NULL,
+    dt_eleicao DATE DEFAULT NULL,
+    tp_abrangencia CHAR(1) DEFAULT NULL,
+    sg_uf CHAR(2) DEFAULT NULL,
+    sg_ue VARCHAR(10) DEFAULT NULL,
+    nm_ue VARCHAR(120) DEFAULT NULL,
+    cd_municipio INT NOT NULL,
+    nm_municipio VARCHAR(120) NOT NULL,
+    nr_zona SMALLINT NOT NULL,
+    cd_cargo SMALLINT NOT NULL,
+    ds_cargo VARCHAR(30) NOT NULL,
+    sq_candidato_raw VARCHAR(50) DEFAULT NULL,
+    nr_candidato INT NOT NULL,
+    nm_candidato VARCHAR(200) NOT NULL,
+    nm_urna_candidato VARCHAR(200) DEFAULT NULL,
+    nm_social_candidato VARCHAR(200) DEFAULT NULL,
+    cd_situacao_candidatura SMALLINT DEFAULT NULL,
+    ds_situacao_candidatura VARCHAR(80) DEFAULT NULL,
+    cd_detalhe_situacao_cand SMALLINT DEFAULT NULL,
+    ds_detalhe_situacao_cand VARCHAR(120) DEFAULT NULL,
+    cd_situacao_julgamento SMALLINT DEFAULT NULL,
+    ds_situacao_julgamento VARCHAR(80) DEFAULT NULL,
+    cd_situacao_cassacao SMALLINT DEFAULT NULL,
+    ds_situacao_cassacao VARCHAR(80) DEFAULT NULL,
+    cd_situacao_dconst_diploma SMALLINT DEFAULT NULL,
+    ds_situacao_dconst_diploma VARCHAR(80) DEFAULT NULL,
+    tp_agremiacao VARCHAR(60) DEFAULT NULL,
+    nr_partido SMALLINT DEFAULT NULL,
+    sg_partido VARCHAR(20) DEFAULT NULL,
+    nm_partido VARCHAR(120) DEFAULT NULL,
+    nr_federacao VARCHAR(30) DEFAULT NULL,
+    nm_federacao VARCHAR(200) DEFAULT NULL,
+    sg_federacao VARCHAR(20) DEFAULT NULL,
+    ds_composicao_federacao TEXT DEFAULT NULL,
+    sq_coligacao_raw VARCHAR(50) DEFAULT NULL,
+    nm_coligacao VARCHAR(190) DEFAULT NULL,
+    ds_composicao_coligacao TEXT DEFAULT NULL,
+    st_voto_em_transito CHAR(1) DEFAULT NULL,
+    qt_votos_nominais INT NOT NULL DEFAULT 0,
+    nm_tipo_destinacao_votos VARCHAR(40) DEFAULT NULL,
+    qt_votos_nominais_validos INT NOT NULL DEFAULT 0,
+    cd_sit_tot_turno SMALLINT DEFAULT NULL,
+    ds_sit_tot_turno VARCHAR(100) DEFAULT NULL,
+    KEY idx_turno_cargo_municipio (nr_turno, ds_cargo, cd_municipio),
+    KEY idx_candidato (nr_candidato, nm_candidato),
+    KEY idx_sq_candidato (sq_candidato_raw),
+    KEY idx_partido (sg_partido),
+    KEY idx_coligacao (sq_coligacao_raw),
+    KEY idx_municipio_nome (nr_turno, ds_cargo, nm_municipio)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS resumo_votacao_2020_se;
+
+CREATE TABLE resumo_votacao_2020_se (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    nr_turno TINYINT NOT NULL,
+    ds_cargo VARCHAR(30) NOT NULL,
+    cd_municipio INT NOT NULL,
+    nm_municipio VARCHAR(120) NOT NULL,
+    nr_zona SMALLINT NOT NULL,
+    nr_votavel INT NOT NULL,
+    nm_votavel VARCHAR(200) NOT NULL,
+    tipo_voto VARCHAR(20) NOT NULL,
+    sq_candidato VARCHAR(50) DEFAULT NULL,
+    total_votos INT NOT NULL,
+    secoes_com_votos INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uniq_resumo (nr_turno, ds_cargo, cd_municipio, nr_zona, nr_votavel, tipo_voto),
+    KEY idx_rank (nr_turno, ds_cargo, tipo_voto, total_votos),
+    KEY idx_municipio (nr_turno, ds_cargo, cd_municipio, tipo_voto),
+    KEY idx_votavel (nr_turno, ds_cargo, nr_votavel),
+    KEY idx_sq_candidato (sq_candidato),
+    KEY idx_municipio_nome (nr_turno, ds_cargo, nm_municipio),
+    KEY idx_zona (nr_turno, ds_cargo, nr_zona)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS resumo_municipio_2020_se;
+
+CREATE TABLE resumo_municipio_2020_se (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    nr_turno TINYINT NOT NULL,
+    ds_cargo VARCHAR(30) NOT NULL,
+    cd_municipio INT NOT NULL,
+    nm_municipio VARCHAR(120) NOT NULL,
+    total_votos INT NOT NULL,
+    total_zonas INT NOT NULL,
+    total_secoes INT NOT NULL,
+    total_votaveis INT NOT NULL,
+    votos_candidato INT NOT NULL,
+    votos_legenda INT NOT NULL DEFAULT 0,
+    votos_branco INT NOT NULL DEFAULT 0,
+    votos_nulo INT NOT NULL DEFAULT 0,
+    UNIQUE KEY uniq_resumo_municipio (nr_turno, ds_cargo, cd_municipio),
+    KEY idx_total (nr_turno, ds_cargo, total_votos),
+    KEY idx_nome (nm_municipio),
+    KEY idx_lookup (nr_turno, ds_cargo, nm_municipio)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS candidatos_situacao_2020;
+
+CREATE TABLE candidatos_situacao_2020 (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    nr_turno INT DEFAULT NULL,
+    ds_cargo VARCHAR(50) DEFAULT NULL,
+    cd_municipio INT DEFAULT NULL,
+    nm_municipio VARCHAR(150) DEFAULT NULL,
+    nr_zona INT DEFAULT NULL,
+    nr_cand VARCHAR(20) DEFAULT NULL,
+    nm_candidato VARCHAR(200) DEFAULT NULL,
+    nm_urna_candidato VARCHAR(200) DEFAULT NULL,
+    sg_partido VARCHAR(20) DEFAULT NULL,
+    ds_sit_tot_turno VARCHAR(100) DEFAULT NULL,
+    ds_situacao_candidatura VARCHAR(100) DEFAULT NULL,
+    sq_candidato VARCHAR(50) DEFAULT NULL,
+    sq_coligacao VARCHAR(50) DEFAULT NULL,
+    nm_coligacao VARCHAR(190) DEFAULT NULL,
+    ds_composicao_coligacao TEXT DEFAULT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    KEY idx_cargo_municipio (ds_cargo, nm_municipio),
+    KEY idx_cand (nr_cand, nm_candidato),
+    KEY idx_partido (nr_turno, ds_cargo, sg_partido),
+    KEY idx_sq_candidato (sq_candidato),
+    KEY idx_turno_cargo_nome (nr_turno, ds_cargo, nm_municipio),
+    KEY idx_turno_cargo_cand (nr_turno, ds_cargo, nr_cand),
+    KEY idx_turno_cargo_sq (nr_turno, ds_cargo, sq_candidato),
+    KEY idx_coligacao (sq_coligacao)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
 -- TABELAS DE VOTAÇÃO 2024 (Serqipe)
 -- ============================================================
 
@@ -184,6 +327,7 @@ CREATE TABLE candidatos_situacao_2024 (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
     KEY idx_cargo_municipio (ds_cargo, nm_municipio),
     KEY idx_cand (nr_cand, nm_candidato),
+    KEY idx_partido (nr_turno, ds_cargo, sg_partido),
     KEY idx_sq_candidato (sq_candidato),
     KEY idx_turno_cargo_nome (nr_turno, ds_cargo, nm_municipio),
     KEY idx_turno_cargo_cand (nr_turno, ds_cargo, nr_cand),
@@ -311,6 +455,19 @@ CREATE TABLE premium_campaign_settings (
     UNIQUE KEY uniq_campaign (campaign_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS premium_campaign_allied_parties;
+
+CREATE TABLE premium_campaign_allied_parties (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    campaign_id INT UNSIGNED NOT NULL,
+    party_acronym VARCHAR(20) NOT NULL,
+    party_name VARCHAR(120) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_campaign_party (campaign_id, party_acronym),
+    KEY idx_party_acronym (party_acronym)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DROP TABLE IF EXISTS premium_campaign_leaders;
 
 CREATE TABLE premium_campaign_leaders (
@@ -338,6 +495,68 @@ CREATE TABLE premium_campaign_leaders (
     KEY idx_municipality (municipality),
     KEY idx_region (region_name),
     KEY idx_source_sq (source_sq_candidato)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS premium_senate_vote_source_municipios;
+DROP TABLE IF EXISTS premium_senate_vote_sources;
+
+CREATE TABLE premium_senate_vote_sources (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    campaign_id INT UNSIGNED NOT NULL,
+    source_year SMALLINT NOT NULL,
+    source_cargo VARCHAR(60) NOT NULL,
+    source_candidate_name VARCHAR(190) NOT NULL,
+    source_ballot_name VARCHAR(190) DEFAULT NULL,
+    source_party VARCHAR(20) DEFAULT NULL,
+    source_number INT DEFAULT NULL,
+    source_sq_candidato VARCHAR(50) DEFAULT NULL,
+    source_scope_label VARCHAR(120) DEFAULT NULL,
+    source_total_votes INT NOT NULL DEFAULT 0,
+    source_vote_percent DECIMAL(6,2) DEFAULT NULL,
+    relationship_type VARCHAR(40) NOT NULL DEFAULT 'manual',
+    transfer_rate DECIMAL(6,2) NOT NULL DEFAULT 40.00,
+    confidence_score DECIMAL(6,2) NOT NULL DEFAULT 50.00,
+    notes TEXT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_campaign (campaign_id),
+    KEY idx_source_year (source_year),
+    KEY idx_source_candidate (source_candidate_name),
+    KEY idx_source_sq (source_sq_candidato)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE premium_senate_vote_source_municipios (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    source_id INT UNSIGNED NOT NULL,
+    municipality VARCHAR(120) NOT NULL,
+    region_name VARCHAR(120) DEFAULT NULL,
+    source_votes INT NOT NULL DEFAULT 0,
+    projected_votes INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_source (source_id),
+    KEY idx_municipality (municipality),
+    CONSTRAINT fk_senate_vote_source_municipios_source
+        FOREIGN KEY (source_id) REFERENCES premium_senate_vote_sources(id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS premium_party_alliances;
+
+CREATE TABLE premium_party_alliances (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    election_year SMALLINT NOT NULL,
+    scope_type VARCHAR(20) NOT NULL DEFAULT 'state',
+    municipality VARCHAR(120) DEFAULT NULL,
+    anchor_party VARCHAR(20) NOT NULL,
+    ally_party VARCHAR(20) NOT NULL,
+    alliance_name VARCHAR(190) DEFAULT NULL,
+    source_notes TEXT DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_year_anchor (election_year, anchor_party),
+    KEY idx_scope_city (scope_type, municipality),
+    KEY idx_ally_party (ally_party)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS premium_agenda;

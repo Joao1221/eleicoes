@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/premium_helpers.php';
 
 premium_ensure_campaign_photo_column($conn);
+premium_ensure_campaign_allied_parties_table($conn);
 
 $user = premium_require_user($conn);
 $isAdmin = premium_is_admin_user($user);
@@ -336,6 +337,10 @@ switch ($action) {
         $currentMunicipio = trim((string) ($_POST['current_municipio'] ?? ''));
         $currentRegion = trim((string) ($_POST['current_region'] ?? ''));
 
+        if (premium_is_senate_cargo($candidateCargo) && (int) ($_POST['baseline_year'] ?? 2022) === 2022) {
+            $baselineYear = 2018;
+        }
+
         if ($campaignName === '' || $candidateName === '' || $candidateCargo === '') {
             premium_flash('error', 'Informe o nome da campanha, o candidato e o cargo.');
             $redirectToCampaign($selectedCampaignId);
@@ -400,6 +405,7 @@ switch ($action) {
         }
 
         $campaignId = (int) $conn->insert_id;
+        $alliedParties = (array) ($_POST['allied_parties'] ?? []);
         try {
             $candidatePhotoPath = premium_store_candidate_photo_upload($campaignId, null);
         } catch (RuntimeException $exception) {
@@ -426,7 +432,11 @@ switch ($action) {
             )
         ");
 
-        premium_flash('success', 'Campanha premium criada com sucesso.');
+        if (!premium_save_campaign_allied_parties($conn, $campaignId, $alliedParties)) {
+            premium_flash('warning', 'Campanha criada, mas não foi possível salvar os partidos aliados.');
+        } else {
+            premium_flash('success', 'Campanha premium criada com sucesso.');
+        }
         $redirectToCampaign($campaignId);
         break;
 
@@ -506,7 +516,12 @@ switch ($action) {
         if ($conn->errno) {
             premium_flash('error', 'Não foi possível atualizar a campanha.');
         } else {
-            premium_flash('success', 'Campanha atualizada.');
+            $alliedParties = (array) ($_POST['allied_parties'] ?? []);
+            if (!premium_save_campaign_allied_parties($conn, $selectedCampaignId, $alliedParties)) {
+                premium_flash('warning', 'Campanha atualizada, mas não foi possível salvar os partidos aliados.');
+            } else {
+                premium_flash('success', 'Campanha atualizada.');
+            }
         }
 
         $redirectToCampaign($selectedCampaignId);
@@ -583,6 +598,12 @@ switch ($action) {
         if ($selectedCampaignId <= 0 || !$campaign) {
             premium_flash('error', 'Selecione uma campanha antes de adicionar lideranças.');
             $redirectToCampaign();
+        }
+
+        if (premium_is_senate_cargo((string) ($campaign['candidate_cargo'] ?? ''))) {
+            $redirectTab = 'senado';
+            premium_flash('error', 'Para campanhas de senador, adicione fontes pela aba Projeção Senado.');
+            $redirectToCampaign($selectedCampaignId);
         }
 
         $leadersJson = trim((string) ($_POST['leaders_json'] ?? ''));
@@ -771,10 +792,17 @@ switch ($action) {
             $redirectToCampaign();
         }
 
-        $settings = premium_default_settings();
-        foreach ($settings as $key => $value) {
+        $defaults = premium_default_settings();
+        $settings = premium_load_campaign_settings($conn, $selectedCampaignId);
+        foreach ($defaults as $key => $value) {
             if (isset($_POST[$key]) && $_POST[$key] !== '') {
-                $settings[$key] = is_float($value) ? (float) $_POST[$key] : (int) $_POST[$key];
+                if ($key === 'senate_overlap_mode') {
+                    $settings[$key] = premium_senate_overlap_mode($_POST[$key]);
+                } elseif (is_string($value) && !is_numeric($value)) {
+                    $settings[$key] = trim((string) $_POST[$key]);
+                } else {
+                    $settings[$key] = is_float($value) ? (float) $_POST[$key] : (int) $_POST[$key];
+                }
             }
         }
 
@@ -801,6 +829,50 @@ switch ($action) {
             premium_flash('error', 'Não foi possível salvar os pesos do modelo.');
         } else {
             premium_flash('success', 'Pesos do modelo salvos.');
+        }
+
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
+    case 'update_senate_context':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de salvar o contexto do Senado.');
+            $redirectToCampaign();
+        }
+
+        if (!premium_is_senate_cargo((string) ($campaign['candidate_cargo'] ?? ''))) {
+            premium_flash('error', 'O contexto de apoio estadual so fica disponivel para campanhas de senador.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $settings = premium_load_campaign_settings($conn, $selectedCampaignId);
+        $governmentMultiplier = (float) ($_POST['senate_government_multiplier'] ?? ($settings['senate_government_multiplier'] ?? 1.08));
+        if ($governmentMultiplier <= 0) {
+            $governmentMultiplier = 1.08;
+        }
+        $governmentMultiplier = max(1.00, min(1.30, $governmentMultiplier));
+        $overlapMode = premium_senate_overlap_mode($_POST['senate_overlap_mode'] ?? ($settings['senate_overlap_mode'] ?? 'alert_only'));
+
+        $settings['senate_state_government_support'] = isset($_POST['senate_state_government_support']) ? 1 : 0;
+        $settings['senate_government_multiplier'] = round($governmentMultiplier, 4);
+        $settings['senate_overlap_mode'] = $overlapMode;
+
+        $settingsJson = json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $conn->query("
+            INSERT INTO premium_campaign_settings (campaign_id, settings_json)
+            VALUES (
+                " . (int) $selectedCampaignId . ",
+                " . premium_sql_quote($conn, $settingsJson) . "
+            )
+            ON DUPLICATE KEY UPDATE
+                settings_json = VALUES(settings_json),
+                updated_at = CURRENT_TIMESTAMP
+        ");
+
+        if ($conn->errno) {
+            premium_flash('error', 'Nao foi possivel salvar o contexto do Senado.');
+        } else {
+            premium_flash('success', 'Contexto do Senado salvo.');
         }
 
         $redirectToCampaign($selectedCampaignId);
@@ -903,10 +975,204 @@ switch ($action) {
         $redirectToCampaign($selectedCampaignId);
         break;
 
+    case 'add_senate_source':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de adicionar fontes ao Senado.');
+            $redirectToCampaign();
+        }
+
+        if (!premium_is_senate_cargo((string) ($campaign['candidate_cargo'] ?? ''))) {
+            premium_flash('error', 'As fontes de voto do Senado só ficam disponíveis para campanhas de senador.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $payload = [
+            'source_year' => $_POST['source_year'] ?? 2022,
+            'source_cargo' => $_POST['source_cargo'] ?? '',
+            'source_candidate_name' => $_POST['source_candidate_name'] ?? '',
+            'source_ballot_name' => $_POST['source_ballot_name'] ?? '',
+            'source_party' => $_POST['source_party'] ?? '',
+            'source_number' => $_POST['source_number'] ?? null,
+            'source_sq_candidato' => $_POST['source_sq_candidato'] ?? '',
+            'source_scope_label' => $_POST['source_scope_label'] ?? '',
+            'source_total_votes' => $_POST['source_total_votes'] ?? 0,
+            'source_vote_percent' => $_POST['source_vote_percent'] ?? null,
+            'relationship_type' => $_POST['relationship_type'] ?? 'manual',
+            'transfer_rate' => $_POST['transfer_rate'] ?? null,
+            'confidence_score' => $_POST['confidence_score'] ?? 50,
+            'notes' => $_POST['notes'] ?? '',
+        ];
+
+        $sourceId = premium_save_senate_vote_source($conn, $selectedCampaignId, $payload);
+        if ($sourceId === null) {
+            premium_flash('error', 'Não foi possível salvar a fonte de votos do Senado.');
+        } else {
+            premium_flash('success', 'Fonte de votos adicionada à projeção do Senado.');
+        }
+
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
+    case 'add_senate_sources_bulk':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de adicionar fontes ao Senado.');
+            $redirectToCampaign();
+        }
+
+        if (!premium_is_senate_cargo((string) ($campaign['candidate_cargo'] ?? ''))) {
+            premium_flash('error', 'As fontes de voto do Senado só ficam disponíveis para campanhas de senador.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $sourcesJson        = (array) ($_POST['sources_json'] ?? []);
+        $bulkRelType        = (string) ($_POST['bulk_relationship_type'] ?? 'aliado');
+        $bulkTransferRate   = isset($_POST['bulk_transfer_rate']) && $_POST['bulk_transfer_rate'] !== '' ? (float) $_POST['bulk_transfer_rate'] : null;
+
+        $addedCount = 0;
+        foreach ($sourcesJson as $rawJson) {
+            $decoded = json_decode((string) $rawJson, true);
+            if (!is_array($decoded) || trim((string) ($decoded['source_candidate_name'] ?? '')) === '') {
+                continue;
+            }
+            $payload = [
+                'source_year'          => $decoded['source_year'] ?? 2022,
+                'source_cargo'         => $decoded['source_cargo'] ?? '',
+                'source_candidate_name'=> $decoded['source_candidate_name'] ?? '',
+                'source_ballot_name'   => $decoded['source_ballot_name'] ?? '',
+                'source_party'         => $decoded['source_party'] ?? '',
+                'source_number'        => $decoded['source_number'] ?? null,
+                'source_sq_candidato'  => $decoded['source_sq_candidato'] ?? '',
+                'source_scope_label'   => $decoded['source_scope_label'] ?? '',
+                'source_total_votes'   => $decoded['source_total_votes'] ?? 0,
+                'source_vote_percent'  => $decoded['source_vote_percent'] ?? null,
+                'relationship_type'    => $bulkRelType,
+                'transfer_rate'        => $bulkTransferRate,
+                'confidence_score'     => $decoded['confidence_score'] ?? 50,
+                'notes'                => $decoded['notes'] ?? '',
+            ];
+            if (premium_save_senate_vote_source($conn, $selectedCampaignId, $payload) !== null) {
+                $addedCount++;
+            }
+        }
+
+        if ($addedCount > 0) {
+            premium_flash('success', $addedCount . ' fonte(s) adicionada(s) à projeção do Senado.');
+        } else {
+            premium_flash('error', 'Nenhuma fonte pôde ser adicionada. Verifique se já estão cadastradas.');
+        }
+
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
+    case 'update_senate_source':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de atualizar fontes do Senado.');
+            $redirectToCampaign();
+        }
+
+        if (!premium_is_senate_cargo((string) ($campaign['candidate_cargo'] ?? ''))) {
+            premium_flash('error', 'As fontes de voto do Senado só ficam disponíveis para campanhas de senador.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $sourceId = (int) ($_POST['source_id'] ?? 0);
+        if ($sourceId <= 0) {
+            premium_flash('error', 'Fonte de votos inválida.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $payload = [
+            'source_year' => $_POST['source_year'] ?? 2022,
+            'source_cargo' => $_POST['source_cargo'] ?? '',
+            'source_candidate_name' => $_POST['source_candidate_name'] ?? '',
+            'source_ballot_name' => $_POST['source_ballot_name'] ?? '',
+            'source_party' => $_POST['source_party'] ?? '',
+            'source_number' => $_POST['source_number'] ?? null,
+            'source_sq_candidato' => $_POST['source_sq_candidato'] ?? '',
+            'source_scope_label' => $_POST['source_scope_label'] ?? '',
+            'source_total_votes' => $_POST['source_total_votes'] ?? 0,
+            'source_vote_percent' => $_POST['source_vote_percent'] ?? null,
+            'relationship_type' => $_POST['relationship_type'] ?? 'manual',
+            'transfer_rate' => $_POST['transfer_rate'] ?? null,
+            'confidence_score' => $_POST['confidence_score'] ?? 50,
+            'notes' => $_POST['notes'] ?? '',
+        ];
+
+        $updatedSourceId = premium_save_senate_vote_source($conn, $selectedCampaignId, $payload, $sourceId);
+        if ($updatedSourceId === null) {
+            premium_flash('error', 'Não foi possível atualizar a fonte de votos do Senado.');
+        } else {
+            premium_flash('success', 'Fonte de votos do Senado atualizada.');
+        }
+
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
+    case 'delete_senate_source':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de excluir fontes do Senado.');
+            $redirectToCampaign();
+        }
+
+        if (!premium_is_senate_cargo((string) ($campaign['candidate_cargo'] ?? ''))) {
+            premium_flash('error', 'As fontes de voto do Senado só ficam disponíveis para campanhas de senador.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $sourceId = (int) ($_POST['source_id'] ?? 0);
+        if ($sourceId <= 0) {
+            premium_flash('error', 'Fonte de votos inválida.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        if (premium_delete_senate_vote_source($conn, $selectedCampaignId, $sourceId)) {
+            premium_flash('success', 'Fonte de votos removida da projeção do Senado.');
+        } else {
+            premium_flash('error', 'Não foi possível remover a fonte de votos.');
+        }
+
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
+    case 'delete_senate_sources_bulk':
+        if ($selectedCampaignId <= 0 || !$campaign) {
+            premium_flash('error', 'Selecione uma campanha antes de excluir fontes do Senado.');
+            $redirectToCampaign();
+        }
+
+        if (!premium_is_senate_cargo((string) ($campaign['candidate_cargo'] ?? ''))) {
+            premium_flash('error', 'As fontes de voto do Senado só ficam disponíveis para campanhas de senador.');
+            $redirectToCampaign($selectedCampaignId);
+        }
+
+        $sourceIds   = array_map('intval', (array) ($_POST['source_ids'] ?? []));
+        $sourceIds   = array_filter($sourceIds, static fn(int $id): bool => $id > 0);
+        $deletedCount = 0;
+        foreach ($sourceIds as $sid) {
+            if (premium_delete_senate_vote_source($conn, $selectedCampaignId, $sid)) {
+                $deletedCount++;
+            }
+        }
+
+        if ($deletedCount > 0) {
+            premium_flash('success', $deletedCount . ' fonte(s) removida(s) da projeção do Senado.');
+        } else {
+            premium_flash('error', 'Nenhuma fonte pôde ser removida.');
+        }
+
+        $redirectToCampaign($selectedCampaignId);
+        break;
+
     case 'add_leader':
         if ($selectedCampaignId <= 0 || !$campaign) {
             premium_flash('error', 'Selecione uma campanha antes de adicionar lideranças.');
             $redirectToCampaign();
+        }
+
+        if (premium_is_senate_cargo((string) ($campaign['candidate_cargo'] ?? ''))) {
+            $redirectTab = 'senado';
+            premium_flash('error', 'Para campanhas de senador, adicione fontes pela aba Projeção Senado.');
+            $redirectToCampaign($selectedCampaignId);
         }
 
         $municipality = trim((string) ($_POST['municipality'] ?? ''));
